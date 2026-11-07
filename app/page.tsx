@@ -47,39 +47,39 @@ interface CurrentUser {
 const DEFAULT_GROUPS: Group[] = [
   {
     id: '11111111-1111-1111-1111-111111111111',
-    name: 'LMC Main Lounge',
-    description: 'Public squad hangout for general discussions, memes, music and announcements.',
-    avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=LMC',
-    created_by: 'Kai Renner',
+    name: 'LMC Lounge',
+    description: 'General squad chat, memes, music and media.',
+    avatar: '/avatars/avatar-1.png',
+    created_by: 'Alex',
     is_private: false,
-    members: ['Kai Renner', 'Ana Vidal', 'Marcus Webb'],
+    members: ['Alex', 'Sam', 'Kira'],
     join_requests: [],
     created_at: new Date(Date.now() - 86400000).toISOString(),
     unreadCount: 0,
   },
   {
     id: '22222222-2222-2222-2222-222222222222',
-    name: 'LMC Core Devs 🔒',
-    description: 'Confidential project planning, architecture reviews and private release secrets.',
-    avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Devs',
-    created_by: 'Kai Renner',
-    is_private: true,
-    members: ['Kai Renner', 'Ana Vidal'],
+    name: 'Gaming & Chill 🎮',
+    description: 'Valorant, tournaments and late-night sessions.',
+    avatar: '/avatars/avatar-3.png',
+    created_by: 'Sam',
+    is_private: false,
+    members: ['Sam', 'Alex'],
     join_requests: [],
     created_at: new Date(Date.now() - 43200000).toISOString(),
-    unreadCount: 2,
+    unreadCount: 0,
   },
   {
     id: '33333333-3333-3333-3333-333333333333',
-    name: 'Gaming & Chill 🎮',
-    description: 'Open squad for Valorant, Steam tournaments and late-night gaming sessions.',
-    avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Gaming',
-    created_by: 'Marcus Webb',
-    is_private: false,
-    members: ['Marcus Webb', 'Ana Vidal'],
+    name: 'Private Vault 🔒',
+    description: 'Confidential channel for invited members only.',
+    avatar: '/avatars/avatar-4.png',
+    created_by: 'Alex',
+    is_private: true,
+    members: ['Alex', 'Sam'],
     join_requests: [],
     created_at: new Date(Date.now() - 21600000).toISOString(),
-    unreadCount: 0,
+    unreadCount: 1,
   },
 ];
 
@@ -87,9 +87,9 @@ const INITIAL_MESSAGES: Message[] = [
   {
     id: 'init-1',
     group_id: '11111111-1111-1111-1111-111111111111',
-    sender_name: 'Ana Vidal',
-    sender_avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ana',
-    content: 'Welcome to **LMC Chats**! We now support both Public open squads and Private confidential channels 🚀',
+    sender_name: 'Alex',
+    sender_avatar: '/avatars/avatar-1.png',
+    content: 'Welcome to **LMC Chats**! Pick your avatar and invite the squad 🚀',
     msg_type: 'text',
     reactions: { '🔥': 4, '👀': 2 },
     created_at: new Date(Date.now() - 3600000).toISOString(),
@@ -97,19 +97,19 @@ const INITIAL_MESSAGES: Message[] = [
   {
     id: 'init-2',
     group_id: '11111111-1111-1111-1111-111111111111',
-    sender_name: 'Marcus Webb',
-    sender_avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Marcus',
-    content: 'Private groups are strictly invisible unless the creator invites you. Super safe!',
+    sender_name: 'Sam',
+    sender_avatar: '/avatars/avatar-2.png',
+    content: 'Loving the clean doodle aesthetic. Stickers & GIFs work seamlessly too!',
     msg_type: 'text',
     reactions: { '💯': 5 },
     created_at: new Date(Date.now() - 2800000).toISOString(),
   },
   {
     id: 'init-3',
-    group_id: '22222222-2222-2222-2222-222222222222',
-    sender_name: 'Kai Renner',
-    sender_avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kai',
-    content: 'Welcome to LMC Core Devs 🔒. This is a private room visible only to invited members.',
+    group_id: '33333333-3333-3333-3333-333333333333',
+    sender_name: 'Alex',
+    sender_avatar: '/avatars/avatar-1.png',
+    content: 'This room is private. Only creator and invited friends have access 🔒',
     msg_type: 'text',
     reactions: { '🚀': 3 },
     created_at: new Date(Date.now() - 1800000).toISOString(),
@@ -119,11 +119,13 @@ const INITIAL_MESSAGES: Message[] = [
 export default function Home() {
   // Current user state
   const [user, setUser] = useState<CurrentUser>({
-    name: 'Kai Renner',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Kai',
+    name: '',
+    avatar: AVATAR_OPTIONS[0],
     status: 'online',
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileNameInput, setProfileNameInput] = useState('');
+  const [profileAvatarSelected, setProfileAvatarSelected] = useState(AVATAR_OPTIONS[0]);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
 
   // App Layout
@@ -158,6 +160,7 @@ export default function Home() {
   const [customStickerUrl, setCustomStickerUrl] = useState('');
   const [reactionPopForMsg, setReactionPopForMsg] = useState<string | null>(null);
   const [reactionPopCoords, setReactionPopCoords] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [infoMediaTab, setInfoMediaTab] = useState<'media' | 'links'>('media');
 
@@ -177,13 +180,19 @@ export default function Home() {
       const stored = localStorage.getItem('lmc_user');
       if (stored) {
         try {
-          setUser(JSON.parse(stored));
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.name) {
+            setUser(parsed);
+            setProfileNameInput(parsed.name);
+            setProfileAvatarSelected(parsed.avatar || AVATAR_OPTIONS[0]);
+            return;
+          }
         } catch {
           // ignore
         }
-      } else {
-        setShowProfileModal(true);
       }
+      // If no valid stored user, trigger setup modal
+      setShowProfileModal(true);
     }
   }, []);
 
@@ -323,27 +332,32 @@ export default function Home() {
   const visibleGroups = useMemo(() => {
     return groups.filter((g) => {
       if (!g.is_private) return true;
+      if (!user.name) return false;
       const isCreator = g.created_by?.toLowerCase() === user.name.toLowerCase();
       const isMember = (g.members || []).some((m) => m.toLowerCase() === user.name.toLowerCase());
       return isCreator || isMember;
     });
   }, [groups, user.name]);
 
-  // Is current user a member or admin of active group?
+  // Can user chat in active group?
+  // - In Public groups: YES, everyone can chat!
+  // - In Private groups: ONLY if creator or member.
   const isMemberOfActiveGroup = useMemo(() => {
     if (!activeGroup) return false;
+    if (!activeGroup.is_private) return true;
+    if (!user.name) return false;
     const isCreator = activeGroup.created_by?.toLowerCase() === user.name.toLowerCase();
     const isMember = (activeGroup.members || []).some((m) => m.toLowerCase() === user.name.toLowerCase());
     return isCreator || isMember;
   }, [activeGroup, user.name]);
 
   const isAdminOfActiveGroup = useMemo(() => {
-    if (!activeGroup) return false;
+    if (!activeGroup || !user.name) return false;
     return activeGroup.created_by?.toLowerCase() === user.name.toLowerCase();
   }, [activeGroup, user.name]);
 
   const hasPendingJoinRequest = useMemo(() => {
-    if (!activeGroup || !activeGroup.join_requests) return false;
+    if (!activeGroup || !activeGroup.join_requests || !user.name) return false;
     return activeGroup.join_requests.some((r) => r.toLowerCase() === user.name.toLowerCase());
   }, [activeGroup, user.name]);
 
@@ -390,14 +404,52 @@ export default function Home() {
     return links;
   }, [messages, activeGroupId]);
 
+  // Save / Update User Profile
+  const handleSaveProfile = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = profileNameInput.trim();
+    if (!trimmed) {
+      triggerToast('Please enter your name');
+      return;
+    }
+
+    const updatedUser: CurrentUser = {
+      name: trimmed,
+      avatar: profileAvatarSelected,
+      status: user.status || 'online',
+    };
+
+    saveUser(updatedUser);
+    setShowProfileModal(false);
+
+    // Auto-add user to public channels so they are registered members
+    setGroups((prev) =>
+      prev.map((g) => {
+        if (!g.is_private && !(g.members || []).some((m) => m.toLowerCase() === trimmed.toLowerCase())) {
+          return { ...g, members: [...(g.members || []), trimmed] };
+        }
+        return g;
+      })
+    );
+
+    triggerToast(`Welcome, ${trimmed}!`);
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 150);
+  };
+
   // Send message
   const handleSendMessage = async (
     content: string,
     msg_type: 'text' | 'sticker' | 'gif' | 'image' = 'text',
     media_url: string = ''
   ) => {
+    if (!user.name) {
+      setShowProfileModal(true);
+      return;
+    }
     if (!isMemberOfActiveGroup) {
-      triggerToast('You must join this squad to send messages!');
+      triggerToast('This channel is private. Invite required.');
       return;
     }
     if (msg_type === 'text' && !content.trim()) return;
@@ -406,7 +458,7 @@ export default function Home() {
       id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `msg-${Date.now()}`,
       group_id: activeGroupId,
       sender_name: user.name,
-      sender_avatar: user.avatar,
+      sender_avatar: user.avatar || AVATAR_OPTIONS[0],
       content,
       msg_type,
       media_url,
@@ -476,7 +528,8 @@ export default function Home() {
     e.preventDefault();
     if (!newGroupName.trim()) return;
 
-    const initialMembers = [user.name];
+    const creatorName = user.name || 'Anonymous';
+    const initialMembers = [creatorName];
     if (newGroupInviteMember.trim()) {
       newGroupInviteMember
         .split(',')
@@ -487,12 +540,14 @@ export default function Home() {
         });
     }
 
+    // Pick an avatar for the new group from our pack
+    const groupAvatarIndex = Math.floor(Math.random() * 8);
     const newGroup: Group = {
       id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `group-${Date.now()}`,
       name: newGroupName.trim(),
-      description: newGroupDesc.trim() || (newGroupIsPrivate ? 'Private confidential squad.' : 'Public community squad.'),
-      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(newGroupName)}`,
-      created_by: user.name,
+      description: newGroupDesc.trim() || (newGroupIsPrivate ? 'Private squad room' : 'Public channel'),
+      avatar: AVATAR_OPTIONS[groupAvatarIndex],
+      created_by: creatorName,
       is_private: newGroupIsPrivate,
       members: initialMembers,
       join_requests: [],
@@ -507,7 +562,7 @@ export default function Home() {
     setNewGroupDesc('');
     setNewGroupIsPrivate(false);
     setNewGroupInviteMember('');
-    triggerToast(newGroup.is_private ? `Private Group "${newGroup.name}" created! 🔒` : `Public Group "${newGroup.name}" created! 🌐`);
+    triggerToast(newGroup.is_private ? `Private Channel "${newGroup.name}" created` : `Channel "${newGroup.name}" created`);
 
     if (typeof window !== 'undefined') {
       const channel = new BroadcastChannel('lmc_chat_sync');
@@ -520,111 +575,6 @@ export default function Home() {
         await supabase.from('groups').insert([newGroup]);
       } catch (err) {
         console.error('Supabase group error:', err);
-      }
-    }
-  };
-
-  // Join Request for Public Group
-  const handleRequestToJoin = async () => {
-    if (!activeGroup || activeGroup.is_private) return;
-    if (hasPendingJoinRequest) return;
-
-    const updatedRequests = [...(activeGroup.join_requests || []), user.name];
-    const updatedGroup = { ...activeGroup, join_requests: updatedRequests };
-
-    setGroups((prev) =>
-      prev.map((g) => (g.id === activeGroup.id ? updatedGroup : g))
-    );
-    triggerToast(`Join request sent to ${activeGroup.created_by}! ⏳`);
-
-    if (typeof window !== 'undefined') {
-      const channel = new BroadcastChannel('lmc_chat_sync');
-      channel.postMessage({ type: 'UPDATE_GROUP', payload: updatedGroup });
-      channel.close();
-    }
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from('groups')
-          .update({ join_requests: updatedRequests })
-          .eq('id', activeGroup.id);
-      } catch (err) {
-        console.error('Join request error:', err);
-      }
-    }
-  };
-
-  // Admin accepts join request
-  const handleAcceptRequest = async (requestUserName: string) => {
-    if (!activeGroup || !isAdminOfActiveGroup) return;
-
-    const updatedRequests = (activeGroup.join_requests || []).filter(
-      (r) => r.toLowerCase() !== requestUserName.toLowerCase()
-    );
-    const updatedMembers = [...(activeGroup.members || [])];
-    if (!updatedMembers.some((m) => m.toLowerCase() === requestUserName.toLowerCase())) {
-      updatedMembers.push(requestUserName);
-    }
-
-    const updatedGroup = {
-      ...activeGroup,
-      members: updatedMembers,
-      join_requests: updatedRequests,
-    };
-
-    setGroups((prev) =>
-      prev.map((g) => (g.id === activeGroup.id ? updatedGroup : g))
-    );
-    triggerToast(`${requestUserName} added to the squad! 🎉`);
-
-    if (typeof window !== 'undefined') {
-      const channel = new BroadcastChannel('lmc_chat_sync');
-      channel.postMessage({ type: 'UPDATE_GROUP', payload: updatedGroup });
-      channel.close();
-    }
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from('groups')
-          .update({ members: updatedMembers, join_requests: updatedRequests })
-          .eq('id', activeGroup.id);
-      } catch (err) {
-        console.error('Accept request error:', err);
-      }
-    }
-  };
-
-  // Admin declines join request
-  const handleDeclineRequest = async (requestUserName: string) => {
-    if (!activeGroup || !isAdminOfActiveGroup) return;
-
-    const updatedRequests = (activeGroup.join_requests || []).filter(
-      (r) => r.toLowerCase() !== requestUserName.toLowerCase()
-    );
-
-    const updatedGroup = { ...activeGroup, join_requests: updatedRequests };
-
-    setGroups((prev) =>
-      prev.map((g) => (g.id === activeGroup.id ? updatedGroup : g))
-    );
-    triggerToast(`Declined request from ${requestUserName}`);
-
-    if (typeof window !== 'undefined') {
-      const channel = new BroadcastChannel('lmc_chat_sync');
-      channel.postMessage({ type: 'UPDATE_GROUP', payload: updatedGroup });
-      channel.close();
-    }
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from('groups')
-          .update({ join_requests: updatedRequests })
-          .eq('id', activeGroup.id);
-      } catch (err) {
-        console.error('Decline request error:', err);
       }
     }
   };
@@ -646,7 +596,7 @@ export default function Home() {
       prev.map((g) => (g.id === activeGroup.id ? updatedGroup : g))
     );
     setAdminAddMemberInput('');
-    triggerToast(`Added ${memberName} to ${activeGroup.name}!`);
+    triggerToast(`Added ${memberName} to channel`);
 
     if (typeof window !== 'undefined') {
       const channel = new BroadcastChannel('lmc_chat_sync');
@@ -708,7 +658,7 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen h-[100dvh] w-full overflow-hidden bg-[#0B0E14] text-[#E9ECF4] relative font-sans">
+    <div className="flex h-screen h-[100dvh] w-full overflow-hidden bg-[#0B0E14] text-[#E9ECF4] relative font-sans select-text">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 bg-[#1A1F2A]/95 backdrop-blur-md border border-white/10 px-4 py-2.5 rounded-xl shadow-2xl text-xs sm:text-sm animate-msg-in">
@@ -719,74 +669,107 @@ export default function Home() {
 
       {/* Profile Setup / Edit Modal */}
       {showProfileModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-[#151922] border border-[#1F2430] rounded-2xl p-6 shadow-2xl animate-msg-in">
-            <h2 className="text-lg font-bold flex items-center gap-2 mb-1">
-              <User className="w-5 h-5 text-[#818CF8]" /> Welcome to LMC Chats
-            </h2>
-            <p className="text-xs text-[#77808F] mb-4">Set your squad identity to start chatting.</p>
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <form
+            onSubmit={handleSaveProfile}
+            className="w-full max-w-sm bg-[#131720] border border-[#202635] rounded-3xl p-6 shadow-2xl animate-msg-in flex flex-col"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-bold text-white tracking-tight">Your Profile</h2>
+                <p className="text-xs text-[#7A8396]">Choose your character and username</p>
+              </div>
+              {user.name && (
+                <button
+                  type="button"
+                  onClick={() => setShowProfileModal(false)}
+                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Avatar Selector Grid (16 Clean Doodle Avatars) */}
             <div className="mb-4">
-              <label className="text-xs font-semibold text-[#AEB6C8] block mb-2">Select Avatar</label>
-              <div className="grid grid-cols-4 gap-2 mb-3">
-                {AVATAR_OPTIONS.map((av, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => saveUser({ ...user, avatar: av })}
-                    className={`p-1 rounded-xl border transition-all ${
-                      user.avatar === av ? 'border-[#6366F1] bg-[#6366F1]/20 scale-105' : 'border-[#1F2430] hover:border-white/20'
-                    }`}
-                  >
-                    <img src={av} alt="Avatar" className="w-full aspect-square rounded-lg object-cover" />
-                  </button>
-                ))}
+              <label className="text-xs font-semibold text-[#A8B2C7] block mb-2">Select Avatar</label>
+              <div className="grid grid-cols-4 gap-2.5 max-h-52 overflow-y-auto scroll p-1 bg-[#0D1017] rounded-2xl border border-white/5">
+                {AVATAR_OPTIONS.map((av, idx) => {
+                  const isSelected = profileAvatarSelected === av;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setProfileAvatarSelected(av)}
+                      className={`relative aspect-square rounded-xl p-1 transition-all overflow-hidden bg-[#F5F6F8] border-2 ${
+                        isSelected
+                          ? 'border-[#6366F1] ring-2 ring-[#6366F1]/50 scale-105 shadow-md'
+                          : 'border-transparent hover:border-white/30 opacity-85 hover:opacity-100'
+                      }`}
+                    >
+                      <img src={av} alt={`Avatar ${idx + 1}`} className="w-full h-full object-contain" />
+                      {isSelected && (
+                        <span className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-[#6366F1] text-white grid place-items-center text-[10px] shadow">
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
+
+            {/* Username input */}
             <div className="mb-5">
-              <label className="text-xs font-semibold text-[#AEB6C8] block mb-1">Your Display Name</label>
+              <label className="text-xs font-semibold text-[#A8B2C7] block mb-1.5">Username</label>
               <input
                 type="text"
-                value={user.name}
-                onChange={(e) => saveUser({ ...user, name: e.target.value })}
-                placeholder="e.g. Kai or Alex"
-                className="w-full bg-[#11151E] border border-[#1F2430] rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-[#6366F1]"
+                value={profileNameInput}
+                onChange={(e) => setProfileNameInput(e.target.value)}
+                placeholder="Enter your username"
+                className="w-full bg-[#0D1017] border border-[#202635] focus:border-[#6366F1] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-[#5A6376] outline-none transition-all"
+                autoFocus
+                required
               />
             </div>
+
             <button
-              onClick={() => {
-                if (!user.name.trim()) return;
-                saveUser(user);
-                setShowProfileModal(false);
-                triggerToast(`Identity set as ${user.name}`);
-              }}
-              className="w-full bg-gradient-to-r from-[#6366F1] to-[#4338CA] hover:brightness-110 text-white font-semibold py-2.5 rounded-xl text-sm transition-all shadow-lg"
+              type="submit"
+              className="w-full bg-[#6366F1] hover:bg-[#5457E5] active:scale-[0.98] text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-lg shadow-[#6366F1]/20 flex items-center justify-center gap-2"
             >
-              Enter LMC Chats
+              Start Chatting <Send className="w-4 h-4" />
             </button>
-          </div>
+          </form>
         </div>
       )}
 
-      {/* New Group Modal (Public vs Private) */}
+      {/* New Group Modal */}
       {showNewGroupModal && (
-        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <form onSubmit={handleCreateGroup} className="w-full max-w-sm bg-[#151922] border border-[#1F2430] rounded-2xl p-6 shadow-2xl animate-msg-in">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold flex items-center gap-2">
-                <Plus className="w-4 h-4 text-[#818CF8]" /> Create Squad Group
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <form
+            onSubmit={handleCreateGroup}
+            className="w-full max-w-sm bg-[#131720] border border-[#202635] rounded-3xl p-6 shadow-2xl animate-msg-in"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <Plus className="w-4 h-4 text-[#818CF8]" /> Create Channel
               </h2>
-              <button type="button" onClick={() => setShowNewGroupModal(false)} className="text-[#77808F] hover:text-white">
+              <button
+                type="button"
+                onClick={() => setShowNewGroupModal(false)}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Public vs Private Selector */}
-            <div className="grid grid-cols-2 gap-2 mb-3 bg-[#11151E] p-1.5 rounded-xl border border-[#1F2430]">
+            <div className="grid grid-cols-2 gap-2 mb-3 bg-[#0D1017] p-1.5 rounded-xl border border-[#202635]">
               <button
                 type="button"
                 onClick={() => setNewGroupIsPrivate(false)}
-                className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                  !newGroupIsPrivate ? 'bg-[#6366F1] text-white shadow' : 'text-[#77808F] hover:text-white'
+                className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  !newGroupIsPrivate ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
                 }`}
               >
                 <Globe className="w-3.5 h-3.5" /> Public
@@ -794,96 +777,97 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setNewGroupIsPrivate(true)}
-                className={`py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                  newGroupIsPrivate ? 'bg-[#6366F1] text-white shadow' : 'text-[#77808F] hover:text-white'
+                className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  newGroupIsPrivate ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
                 }`}
               >
                 <Lock className="w-3.5 h-3.5" /> Private 🔒
               </button>
             </div>
-            <p className="text-[11px] text-[#77808F] mb-3">
+
+            <p className="text-[11px] text-[#7A8396] mb-3">
               {newGroupIsPrivate
-                ? '🔒 Private: Completely hidden. Only invited members can see & chat.'
-                : '🌐 Public: Visible to everyone. Users can request to join.'}
+                ? 'Only members invited by you can see and chat here.'
+                : 'Anyone in the squad can view and chat in this channel.'}
             </p>
 
             <div className="mb-3">
-              <label className="text-xs font-semibold text-[#AEB6C8] block mb-1">Group Name</label>
+              <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">Channel Name</label>
               <input
                 type="text"
                 value={newGroupName}
                 onChange={(e) => setNewGroupName(e.target.value)}
-                placeholder="e.g. Night Owls 🦉"
-                className="w-full bg-[#11151E] border border-[#1F2430] rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-[#6366F1]"
+                placeholder="Channel name..."
+                className="w-full bg-[#0D1017] border border-[#202635] focus:border-[#6366F1] rounded-xl px-3.5 py-2 text-sm text-white placeholder-[#5A6376] outline-none"
                 required
               />
             </div>
 
             <div className="mb-3">
-              <label className="text-xs font-semibold text-[#AEB6C8] block mb-1">Description</label>
+              <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">Description (Optional)</label>
               <textarea
                 value={newGroupDesc}
                 onChange={(e) => setNewGroupDesc(e.target.value)}
-                placeholder="What is this squad about?"
+                placeholder="What is this channel about?"
                 rows={2}
-                className="w-full bg-[#11151E] border border-[#1F2430] rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-[#6366F1] resize-none"
+                className="w-full bg-[#0D1017] border border-[#202635] focus:border-[#6366F1] rounded-xl px-3.5 py-2 text-sm text-white placeholder-[#5A6376] outline-none resize-none"
               />
             </div>
 
             <div className="mb-5">
-              <label className="text-xs font-semibold text-[#AEB6C8] block mb-1">
-                {newGroupIsPrivate ? 'Initial Invited Members' : 'Invite Members (Optional)'}
+              <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">
+                {newGroupIsPrivate ? 'Invited Members' : 'Invite Members (Optional)'}
               </label>
               <input
                 type="text"
                 value={newGroupInviteMember}
                 onChange={(e) => setNewGroupInviteMember(e.target.value)}
-                placeholder="Comma separated names: Ana, Marcus"
-                className="w-full bg-[#11151E] border border-[#1F2430] rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:border-[#6366F1]"
+                placeholder="Type usernames separated by comma"
+                className="w-full bg-[#0D1017] border border-[#202635] focus:border-[#6366F1] rounded-xl px-3.5 py-2 text-xs text-white placeholder-[#5A6376] outline-none"
               />
             </div>
 
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-[#6366F1] to-[#4338CA] hover:brightness-110 text-white font-semibold py-2.5 rounded-xl text-sm transition-all shadow-lg"
+              className="w-full bg-[#6366F1] hover:bg-[#5457E5] active:scale-[0.98] text-white font-semibold py-2.5 rounded-xl text-sm transition-all shadow-md"
             >
-              {newGroupIsPrivate ? 'Create Private Squad' : 'Create Public Squad'}
+              {newGroupIsPrivate ? 'Create Private Channel' : 'Create Public Channel'}
             </button>
           </form>
         </div>
       )}
 
-      {/* LEFT RAIL (Sidebar) */}
+      {/* LEFT SIDEBAR (Channels & Profile) */}
       <aside
-        className={`fixed md:relative top-0 bottom-0 left-0 z-40 bg-gradient-to-b from-[#0E1219] to-[#0C1017] border-r border-[#1F2430] flex flex-col transition-all duration-300 ease-out ${
-          railCollapsed ? 'w-[82px] min-w-[82px]' : 'w-[310px] min-w-[310px]'
+        className={`fixed md:relative top-0 bottom-0 left-0 z-40 bg-[#0E121A] border-r border-[#1B212D] flex flex-col transition-all duration-300 ease-out ${
+          railCollapsed ? 'w-[76px] min-w-[76px]' : 'w-[290px] min-w-[290px]'
         } ${
-          mobileRailOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+          mobileRailOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
         }`}
       >
         {/* Brand Header */}
-        <div className="p-3.5 flex items-center justify-between border-b border-[#1F2430]/60">
+        <div className="p-3.5 flex items-center justify-between border-b border-[#1B212D]">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#6D70F5] to-[#4338CA] grid place-items-center shadow-lg text-white shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-[#6366F1] grid place-items-center text-white shrink-0 shadow-md">
               <Sparkles className="w-4 h-4" />
             </div>
             {!railCollapsed && (
               <div className="flex flex-col truncate">
                 <span className="font-extrabold text-sm tracking-tight text-white leading-tight">LMC Chats</span>
-                <span className="text-[10px] font-semibold tracking-wider uppercase text-[#818CF8]">Public & Private PWA</span>
+                <span className="text-[10px] font-medium text-[#7A8396]">Squad Messenger</span>
               </div>
             )}
           </div>
           <button
             onClick={() => setRailCollapsed(!railCollapsed)}
-            className="hidden md:grid place-items-center w-8 h-8 rounded-lg text-[#77808F] hover:text-white hover:bg-white/5 transition-colors"
-            title="Toggle Sidebar Rail"
+            className="hidden md:grid place-items-center w-8 h-8 rounded-lg text-[#7A8396] hover:text-white hover:bg-white/5 transition-colors"
+            title="Toggle Sidebar"
           >
             <PanelLeft className="w-4 h-4" />
           </button>
           <button
             onClick={() => setMobileRailOpen(false)}
-            className="md:hidden grid place-items-center w-8 h-8 rounded-lg text-[#77808F] hover:text-white"
+            className="md:hidden grid place-items-center w-8 h-8 rounded-lg text-[#7A8396] hover:text-white"
           >
             <X className="w-5 h-5" />
           </button>
@@ -893,28 +877,34 @@ export default function Home() {
         <div className="p-2.5 relative">
           <button
             onClick={() => setShowStatusMenu(!showStatusMenu)}
-            className="w-full flex items-center gap-2.5 p-2 rounded-xl bg-[#151922] border border-[#1F2430] hover:border-white/10 transition-all text-left"
+            className="w-full flex items-center gap-2.5 p-2 rounded-2xl bg-[#141822] border border-[#202635] hover:border-white/15 transition-all text-left"
           >
             <div className="relative shrink-0">
-              <img src={user.avatar} alt={user.name} className="w-9 h-9 rounded-xl object-cover border border-white/5" />
+              <div className="w-9 h-9 rounded-xl overflow-hidden bg-[#F5F6F8] p-0.5 border border-white/10">
+                <img
+                  src={user.avatar || AVATAR_OPTIONS[0]}
+                  alt={user.name || 'User'}
+                  className="w-full h-full object-contain"
+                />
+              </div>
               <span
-                className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-[#151922] ${
+                className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#141822] ${
                   user.status === 'online' ? 'bg-[#22C55E]' : user.status === 'idle' ? 'bg-[#F59E0B]' : 'bg-[#EF4444]'
                 }`}
               />
             </div>
             {!railCollapsed && (
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-white truncate">{user.name}</p>
-                <p className="text-[11px] text-[#77808F] capitalize truncate">{user.status}</p>
+                <p className="text-xs font-semibold text-white truncate">{user.name || 'Set your name'}</p>
+                <p className="text-[10px] text-[#7A8396] capitalize truncate">{user.status}</p>
               </div>
             )}
-            {!railCollapsed && <ChevronDown className="w-3.5 h-3.5 text-[#77808F] shrink-0" />}
+            {!railCollapsed && <ChevronDown className="w-3.5 h-3.5 text-[#7A8396] shrink-0" />}
           </button>
 
-          {/* Status Dropdown */}
+          {/* Status & Profile Dropdown */}
           {showStatusMenu && (
-            <div className="absolute top-16 left-3 right-3 z-50 bg-[#1A1F2A] border border-white/10 rounded-xl p-1.5 shadow-2xl animate-msg-in">
+            <div className="absolute top-16 left-3 right-3 z-50 bg-[#161B26] border border-white/10 rounded-2xl p-1.5 shadow-2xl animate-msg-in">
               <button
                 onClick={() => {
                   saveUser({ ...user, status: 'online' });
@@ -922,7 +912,7 @@ export default function Home() {
                 }}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left"
               >
-                <span className="w-2.5 h-2.5 rounded-full bg-[#22C55E]" />
+                <span className="w-2 h-2 rounded-full bg-[#22C55E]" />
                 <span className="flex-1 text-white">Online</span>
                 {user.status === 'online' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
               </button>
@@ -933,8 +923,8 @@ export default function Home() {
                 }}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left"
               >
-                <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]" />
-                <span className="flex-1 text-white">Idle</span>
+                <span className="w-2 h-2 rounded-full bg-[#F59E0B]" />
+                <span className="flex-1 text-white">Away</span>
                 {user.status === 'idle' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
               </button>
               <button
@@ -944,45 +934,47 @@ export default function Home() {
                 }}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left"
               >
-                <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" />
-                <span className="flex-1 text-white">Do Not Disturb</span>
+                <span className="w-2 h-2 rounded-full bg-[#EF4444]" />
+                <span className="flex-1 text-white">Busy</span>
                 {user.status === 'dnd' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
               </button>
               <div className="border-t border-white/10 my-1" />
               <button
                 onClick={() => {
                   setShowStatusMenu(false);
+                  setProfileNameInput(user.name);
+                  setProfileAvatarSelected(user.avatar || AVATAR_OPTIONS[0]);
                   setShowProfileModal(true);
                 }}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-[#818CF8]"
               >
-                <User className="w-3.5 h-3.5" /> Edit Profile...
+                <User className="w-3.5 h-3.5" /> Change Avatar & Name
               </button>
             </div>
           )}
         </div>
 
-        {/* New Group Button */}
+        {/* New Channel Button */}
         <div className="px-3 py-1">
           <button
             onClick={() => setShowNewGroupModal(true)}
-            className="w-full bg-[#6366F1] hover:bg-[#5457E5] text-white py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
+            className="w-full bg-[#6366F1] hover:bg-[#5457E5] text-white py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow active:scale-95"
           >
             <Plus className="w-4 h-4 shrink-0" />
-            {!railCollapsed && <span>New Group</span>}
+            {!railCollapsed && <span>New Channel</span>}
           </button>
         </div>
 
-        {/* Groups List */}
+        {/* Channel List */}
         <div className="flex-1 overflow-y-auto scroll px-2 py-2 space-y-3">
-          {/* Public Squads Section */}
+          {/* Public Channels */}
           <div>
             {!railCollapsed && (
-              <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-[#77808F]">
+              <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-[#7A8396]">
                 <span className="flex items-center gap-1.5">
-                  <Globe className="w-3 h-3 text-[#22C55E]" /> Public Squads
+                  <Globe className="w-3 h-3 text-[#22C55E]" /> Channels
                 </span>
-                <span className="bg-white/5 px-1.5 py-0.5 rounded">
+                <span className="bg-white/5 px-1.5 py-0.5 rounded text-[10px]">
                   {visibleGroups.filter((g) => !g.is_private).length}
                 </span>
               </div>
@@ -992,10 +984,6 @@ export default function Home() {
                 .filter((g) => !g.is_private)
                 .map((group) => {
                   const isActive = group.id === activeGroupId;
-                  const isMember =
-                    group.created_by?.toLowerCase() === user.name.toLowerCase() ||
-                    (group.members || []).some((m) => m.toLowerCase() === user.name.toLowerCase());
-
                   return (
                     <button
                       key={group.id}
@@ -1003,29 +991,24 @@ export default function Home() {
                         setActiveGroupId(group.id);
                         setMobileRailOpen(false);
                       }}
-                      className={`w-full flex items-center gap-3 p-2 rounded-xl transition-all text-left relative ${
+                      className={`w-full flex items-center gap-2.5 p-2 rounded-xl transition-all text-left relative ${
                         isActive
                           ? 'bg-[#6366F1]/15 text-white font-medium before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:bg-[#6366F1] before:rounded-r'
-                          : 'text-[#AEB6C8] hover:bg-white/[0.04]'
+                          : 'text-[#A8B2C7] hover:bg-white/[0.04]'
                       }`}
                     >
                       <div className="relative shrink-0">
-                        <img src={group.avatar} alt={group.name} className="w-10 h-10 rounded-xl object-cover border border-white/5" />
+                        <div className="w-9 h-9 rounded-xl overflow-hidden bg-[#F5F6F8] p-0.5 border border-white/5">
+                          <img src={group.avatar} alt={group.name} className="w-full h-full object-contain" />
+                        </div>
                         <span className="absolute -bottom-1 -right-1 bg-black/80 rounded-full p-0.5 text-[#22C55E]">
                           <Globe className="w-2.5 h-2.5" />
                         </span>
                       </div>
                       {!railCollapsed && (
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold truncate text-white">{group.name}</span>
-                            {!isMember && (
-                              <span className="text-[9px] bg-[#6366F1]/20 text-[#818CF8] px-1 py-0.5 rounded font-bold">
-                                Join
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-[#77808F] truncate">{group.description}</p>
+                          <span className="text-xs font-semibold truncate block text-white">{group.name}</span>
+                          <p className="text-[11px] text-[#7A8396] truncate">{group.description}</p>
                         </div>
                       )}
                     </button>
@@ -1034,14 +1017,14 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Private Squads Section (Filtered: only visible to members/admin) */}
+          {/* Private Channels */}
           <div>
             {!railCollapsed && (
-              <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-[#77808F]">
+              <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-[#7A8396]">
                 <span className="flex items-center gap-1.5">
-                  <Lock className="w-3 h-3 text-[#F59E0B]" /> Private Squads 🔒
+                  <Lock className="w-3 h-3 text-[#F59E0B]" /> Private Rooms
                 </span>
-                <span className="bg-white/5 px-1.5 py-0.5 rounded">
+                <span className="bg-white/5 px-1.5 py-0.5 rounded text-[10px]">
                   {visibleGroups.filter((g) => g.is_private).length}
                 </span>
               </div>
@@ -1058,14 +1041,16 @@ export default function Home() {
                         setActiveGroupId(group.id);
                         setMobileRailOpen(false);
                       }}
-                      className={`w-full flex items-center gap-3 p-2 rounded-xl transition-all text-left relative ${
+                      className={`w-full flex items-center gap-2.5 p-2 rounded-xl transition-all text-left relative ${
                         isActive
                           ? 'bg-[#6366F1]/15 text-white font-medium before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:bg-[#6366F1] before:rounded-r'
-                          : 'text-[#AEB6C8] hover:bg-white/[0.04]'
+                          : 'text-[#A8B2C7] hover:bg-white/[0.04]'
                       }`}
                     >
                       <div className="relative shrink-0">
-                        <img src={group.avatar} alt={group.name} className="w-10 h-10 rounded-xl object-cover border border-white/5" />
+                        <div className="w-9 h-9 rounded-xl overflow-hidden bg-[#F5F6F8] p-0.5 border border-white/5">
+                          <img src={group.avatar} alt={group.name} className="w-full h-full object-contain" />
+                        </div>
                         <span className="absolute -bottom-1 -right-1 bg-black/80 rounded-full p-0.5 text-[#F59E0B]">
                           <Lock className="w-2.5 h-2.5" />
                         </span>
@@ -1078,7 +1063,7 @@ export default function Home() {
                               Private
                             </span>
                           </div>
-                          <p className="text-[11px] text-[#77808F] truncate">{group.description}</p>
+                          <p className="text-[11px] text-[#7A8396] truncate">{group.description}</p>
                         </div>
                       )}
                     </button>
@@ -1088,43 +1073,38 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Footer info */}
-        <div className="p-3 border-t border-[#1F2430] text-[11px] flex items-center justify-between text-[#77808F]">
+        {/* Sidebar Footer */}
+        <div className="p-3 border-t border-[#1B212D] text-[11px] flex items-center justify-between text-[#7A8396]">
           <div className="flex items-center gap-1.5">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                isSupabaseConfigured ? 'bg-[#22C55E]' : 'bg-[#F59E0B]'
-              }`}
-            />
-            {!railCollapsed && <span>{isSupabaseConfigured ? 'Supabase Realtime' : 'LMC Local Realtime'}</span>}
+            <span className="w-2 h-2 rounded-full bg-[#22C55E]" />
+            {!railCollapsed && <span>Connected</span>}
           </div>
         </div>
       </aside>
 
-      {/* Scrim */}
-      {(mobileRailOpen || infoOpen) && (
+      {/* Mobile Sidebar Scrim */}
+      {mobileRailOpen && (
         <div
-          onClick={() => {
-            setMobileRailOpen(false);
-            setInfoOpen(false);
-          }}
-          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm md:hidden"
+          onClick={() => setMobileRailOpen(false)}
+          className="fixed inset-0 z-30 bg-black/70 backdrop-blur-sm md:hidden"
         />
       )}
 
       {/* MAIN CHAT COLUMN */}
       <main className="flex-1 flex flex-col min-w-0 h-full relative bg-[#0B0E14]">
-        {/* Header */}
-        <header className="h-16 px-3.5 sm:px-5 flex items-center justify-between border-b border-[#1F2430] bg-[#0B0E14]/80 backdrop-blur-md z-10 shrink-0">
+        {/* Chat Header */}
+        <header className="h-16 px-3.5 sm:px-5 flex items-center justify-between border-b border-[#1B212D] bg-[#0B0E14]/90 backdrop-blur-md z-10 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => setMobileRailOpen(true)}
-              className="md:hidden p-2 rounded-xl text-[#77808F] hover:text-white hover:bg-white/5"
+              className="md:hidden p-2 rounded-xl text-[#7A8396] hover:text-white hover:bg-white/5"
             >
               <Menu className="w-5 h-5" />
             </button>
             <div className="relative shrink-0">
-              <img src={activeGroup.avatar} alt={activeGroup.name} className="w-9 h-9 rounded-xl object-cover border border-white/10" />
+              <div className="w-9 h-9 rounded-xl overflow-hidden bg-[#F5F6F8] p-0.5 border border-white/10">
+                <img src={activeGroup.avatar} alt={activeGroup.name} className="w-full h-full object-contain" />
+              </div>
               {activeGroup.is_private && (
                 <span className="absolute -bottom-1 -right-1 bg-black/90 p-0.5 rounded-full text-[#F59E0B]">
                   <Lock className="w-2.5 h-2.5" />
@@ -1134,52 +1114,45 @@ export default function Home() {
             <div className="truncate">
               <h1 className="text-sm sm:text-base font-bold text-white flex items-center gap-1.5 truncate">
                 {activeGroup.name}
-                {activeGroup.is_private ? (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#F59E0B]/20 text-[#F59E0B] shrink-0">
-                    Private 🔒
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#22C55E]/20 text-[#22C55E] shrink-0">
-                    Public 🌐
-                  </span>
-                )}
               </h1>
-              <p className="text-[11px] text-[#77808F] flex items-center gap-1 truncate">
+              <p className="text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
                 <span>{(activeGroup.members || []).length} members</span>
-                <span>•</span>
-                <span>Created by {activeGroup.created_by}</span>
+                {activeGroup.is_private && <span>• Invite Only</span>}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             {/* Search Input */}
             <div className="relative hidden sm:block">
-              <Search className="w-3.5 h-3.5 text-[#77808F] absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search messages..."
-                className="bg-[#11151E] border border-[#1F2430] rounded-xl pl-8 pr-3 py-1.5 text-xs text-[#E9ECF4] placeholder-[#77808F] focus:outline-none focus:border-[#6366F1] w-40 lg:w-56 transition-all"
+                className="bg-[#131720] border border-[#202635] rounded-xl pl-8 pr-3 py-1.5 text-xs text-[#E9ECF4] placeholder-[#5A6376] focus:outline-none focus:border-[#6366F1] w-40 lg:w-52 transition-all"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#77808F] hover:text-white">
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[#7A8396] hover:text-white"
+                >
                   <X className="w-3 h-3" />
                 </button>
               )}
             </div>
 
             <button
-              onClick={() => triggerToast('Voice Call connecting to LMC channel...')}
-              className="p-2 rounded-xl text-[#AEB6C8] hover:text-white hover:bg-white/5 transition-all"
+              onClick={() => triggerToast('Connecting voice call...')}
+              className="p-2 rounded-xl text-[#A8B2C7] hover:text-white hover:bg-white/5 transition-all"
               title="Voice Call"
             >
               <Phone className="w-4 h-4" />
             </button>
             <button
-              onClick={() => triggerToast('Video Room link ready for squad members!')}
-              className="p-2 rounded-xl text-[#AEB6C8] hover:text-white hover:bg-white/5 transition-all"
+              onClick={() => triggerToast('Generating video room link...')}
+              className="p-2 rounded-xl text-[#A8B2C7] hover:text-white hover:bg-white/5 transition-all"
               title="Video Call"
             >
               <Video className="w-4 h-4" />
@@ -1187,49 +1160,25 @@ export default function Home() {
             <button
               onClick={() => setInfoOpen(!infoOpen)}
               className={`p-2 rounded-xl transition-all ${
-                infoOpen ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#AEB6C8] hover:text-white hover:bg-white/5'
+                infoOpen ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
               }`}
-              title="Channel Info & Members"
+              title="Channel Details"
             >
               <Info className="w-4 h-4" />
             </button>
           </div>
         </header>
 
-        {/* Non-Member Banner for Public Groups */}
-        {!isMemberOfActiveGroup && (
-          <div className="bg-[#6366F1]/15 border-b border-[#6366F1]/30 p-3 flex flex-col sm:flex-row items-center justify-between gap-2.5 z-10 animate-msg-in">
-            <div className="flex items-center gap-2 text-xs text-white text-center sm:text-left">
-              <Globe className="w-4 h-4 text-[#818CF8] shrink-0" />
-              <span>
-                You are currently previewing <strong>{activeGroup.name}</strong>. Join the squad to chat and send memes!
-              </span>
-            </div>
-            {hasPendingJoinRequest ? (
-              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 text-xs font-semibold text-[#AEB6C8]">
-                <Clock className="w-3.5 h-3.5 text-[#F59E0B]" /> Request Pending Approval
-              </span>
-            ) : (
-              <button
-                onClick={handleRequestToJoin}
-                className="bg-[#6366F1] hover:bg-[#5457E5] text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-md transition-all active:scale-95 flex items-center gap-1.5"
-              >
-                <UserPlus className="w-3.5 h-3.5" /> Request to Join Squad
-              </button>
-            )}
-          </div>
-        )}
-
         {/* Message Stream */}
         <div className="flex-1 overflow-y-auto scroll p-3 sm:p-6 space-y-4">
           <div className="flex items-center justify-center my-2">
-            <span className="text-[10px] font-bold tracking-wider uppercase text-[#77808F] bg-white/5 border border-white/5 px-3 py-1 rounded-full">
-              LMC Chats • Real-time
+            <span className="text-[10px] font-semibold text-[#7A8396] bg-white/5 px-3 py-1 rounded-full">
+              Today
             </span>
           </div>
 
           {displayedMessages.map((msg) => {
-            const isMe = msg.sender_name.toLowerCase() === user.name.toLowerCase();
+            const isMe = user.name && msg.sender_name.toLowerCase() === user.name.toLowerCase();
             return (
               <div
                 key={msg.id}
@@ -1238,18 +1187,20 @@ export default function Home() {
                 }`}
               >
                 {!isMe && (
-                  <img
-                    src={msg.sender_avatar}
-                    alt={msg.sender_name}
-                    className="w-8 h-8 rounded-xl object-cover shrink-0 mt-1 border border-white/5"
-                  />
+                  <div className="w-8 h-8 rounded-xl overflow-hidden bg-[#F5F6F8] p-0.5 shrink-0 mt-1 border border-white/5">
+                    <img
+                      src={msg.sender_avatar}
+                      alt={msg.sender_name}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
                 )}
 
                 <div className={`flex flex-col max-w-[85%] sm:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
                   {!isMe && (
                     <div className="flex items-center gap-2 mb-1 px-1">
                       <span className="text-xs font-bold text-[#DDE2EE]">{msg.sender_name}</span>
-                      <time className="text-[10px] text-[#77808F]">
+                      <time className="text-[10px] text-[#7A8396]">
                         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </time>
                     </div>
@@ -1258,10 +1209,10 @@ export default function Home() {
                   {/* Message Content */}
                   {msg.msg_type === 'text' && (
                     <div
-                      className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed break-words shadow-md ${
+                      className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed break-words shadow-md select-text ${
                         isMe
-                          ? 'bg-gradient-to-br from-[#6D70F5] to-[#5254E3] text-white rounded-tr-none'
-                          : 'bg-[#151922] border border-[#1F2430] text-[#DCE1EC] rounded-tl-none'
+                          ? 'bg-gradient-to-r from-[#6366F1] to-[#4F46E5] text-white rounded-tr-sm'
+                          : 'bg-[#151922] text-[#E9ECF4] border border-[#202635] rounded-tl-sm'
                       }`}
                     >
                       {msg.content}
@@ -1269,62 +1220,50 @@ export default function Home() {
                   )}
 
                   {msg.msg_type === 'sticker' && (
-                    <div className="p-1 rounded-2xl transition-transform hover:scale-105 active:scale-95 cursor-pointer">
+                    <div className="p-1">
                       <img
                         src={msg.media_url}
                         alt="Sticker"
-                        className="w-36 sm:w-44 h-auto object-contain filter drop-shadow-xl"
+                        className="w-32 h-32 sm:w-36 sm:h-36 object-contain hover:scale-105 transition-transform"
+                        loading="lazy"
                       />
                     </div>
                   )}
 
                   {msg.msg_type === 'gif' && (
-                    <div className="relative rounded-2xl overflow-hidden border border-[#1F2430] shadow-xl max-w-xs group/gif">
-                      <img src={msg.media_url} alt="GIF" className="w-full h-auto object-cover max-h-60" />
-                      <span className="absolute top-2 right-2 text-[9px] font-black uppercase bg-black/75 px-1.5 py-0.5 rounded text-white backdrop-blur">
-                        GIF
-                      </span>
-                      {msg.content && (
-                        <div className="p-2 bg-[#151922] text-xs text-[#DCE1EC] border-t border-[#1F2430]">
-                          {msg.content}
-                        </div>
-                      )}
+                    <div className="rounded-2xl overflow-hidden border border-white/10 shadow-lg max-w-xs">
+                      <img
+                        src={msg.media_url}
+                        alt="GIF"
+                        className="w-full h-auto object-cover max-h-60"
+                        loading="lazy"
+                      />
                     </div>
                   )}
 
                   {msg.msg_type === 'image' && (
-                    <div className="relative rounded-2xl overflow-hidden border border-[#1F2430] shadow-xl max-w-sm">
-                      <img src={msg.media_url} alt="Uploaded" className="w-full h-auto object-cover max-h-72" />
-                      {msg.content && (
-                        <div className="p-2 bg-[#151922] text-xs text-[#DCE1EC] border-t border-[#1F2430]">
-                          {msg.content}
-                        </div>
-                      )}
+                    <div className="rounded-2xl overflow-hidden border border-white/10 shadow-lg max-w-sm">
+                      <img
+                        src={msg.media_url}
+                        alt="Image"
+                        className="w-full h-auto object-cover max-h-72"
+                        loading="lazy"
+                      />
                     </div>
                   )}
 
-                  {/* Timestamp & checks */}
-                  {isMe && (
-                    <div className="flex items-center gap-1.5 mt-1 px-1 text-[10px] text-[#77808F]">
-                      <time>
-                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </time>
-                      <CheckCheck className="w-3.5 h-3.5 text-[#818CF8]" />
-                    </div>
-                  )}
-
-                  {/* Reactions */}
-                  <div className="flex flex-wrap gap-1.5 mt-1.5 items-center">
-                    {Object.entries(msg.reactions).map(([emoji, count]) => {
+                  {/* Reactions Bar */}
+                  <div className="flex flex-wrap items-center gap-1 mt-1.5 px-0.5">
+                    {Object.entries(msg.reactions || {}).map(([emoji, count]) => {
                       if (count <= 0) return null;
                       return (
                         <button
                           key={emoji}
                           onClick={() => handleToggleReaction(msg.id, emoji)}
-                          className="px-2 py-0.5 rounded-full bg-[#10141C] border border-[#232A38] text-xs hover:border-[#6366F1] flex items-center gap-1.5 transition-all animate-pop-in"
+                          className="flex items-center gap-1 bg-[#151922] hover:bg-[#1E2330] border border-[#202635] px-2 py-0.5 rounded-full text-xs transition-all active:scale-95"
                         >
                           <span>{emoji}</span>
-                          <span className="text-[10px] font-bold text-[#818CF8]">{count}</span>
+                          <span className="text-[10px] text-[#A8B2C7] font-semibold">{count}</span>
                         </button>
                       );
                     })}
@@ -1332,13 +1271,13 @@ export default function Home() {
                     <button
                       onClick={(e) => {
                         const rect = e.currentTarget.getBoundingClientRect();
-                        setReactionPopCoords({ x: rect.left, y: rect.top - 44 });
+                        setReactionPopCoords({ x: rect.left, y: rect.top - 45 });
                         setReactionPopForMsg(reactionPopForMsg === msg.id ? null : msg.id);
                       }}
-                      className="w-6 h-6 rounded-full border border-dashed border-[#2A3242] text-[#77808F] hover:text-white hover:border-[#6366F1] flex items-center justify-center text-xs transition-all"
+                      className="opacity-0 group-hover:opacity-100 hover:bg-white/10 p-1 rounded-full text-[#7A8396] hover:text-white transition-all text-xs"
                       title="Add Reaction"
                     >
-                      +
+                      <SmilePlus className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -1351,8 +1290,11 @@ export default function Home() {
         {/* Reaction Quick Bar Popover */}
         {reactionPopForMsg && (
           <div
-            style={{ top: `${Math.max(10, reactionPopCoords.y)}px`, left: `${Math.max(10, reactionPopCoords.x - 80)}px` }}
-            className="fixed z-50 flex items-center gap-1 bg-[#1A1F2A]/95 backdrop-blur-md border border-white/10 p-1.5 rounded-2xl shadow-2xl animate-pop-in"
+            style={{
+              top: `${Math.max(10, reactionPopCoords.y)}px`,
+              left: `${Math.max(10, reactionPopCoords.x - 80)}px`,
+            }}
+            className="fixed z-50 flex items-center gap-1 bg-[#161B26]/95 backdrop-blur-md border border-white/10 p-1.5 rounded-2xl shadow-2xl animate-pop-in"
           >
             {['🔥', '😂', '❤️', '👍', '🎉', '👀', '💯', '🚀'].map((em) => (
               <button
@@ -1367,30 +1309,33 @@ export default function Home() {
         )}
 
         {/* COMPOSER DOCK */}
-        <div className="p-2.5 sm:p-4 bg-[#0B0E14] border-t border-[#1F2430] relative">
+        <div className="p-2.5 sm:p-4 bg-[#0B0E14] border-t border-[#1B212D] relative">
           {/* Sticker & GIF Drawer */}
           {showTray && (
-            <div className="absolute bottom-full mb-3 right-2.5 sm:right-6 left-2.5 sm:left-auto sm:w-[420px] bg-[#151922]/95 backdrop-blur-xl border border-white/10 rounded-2xl p-3 shadow-2xl z-50 animate-msg-in">
-              <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+            <div className="absolute bottom-full mb-3 right-2.5 sm:right-6 left-2.5 sm:left-auto sm:w-[400px] bg-[#141822]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3.5 shadow-2xl z-50 animate-msg-in">
+              <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/10">
                 <div className="flex gap-1 bg-black/40 p-1 rounded-xl">
                   <button
                     onClick={() => setTrayTab('gifs')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                      trayTab === 'gifs' ? 'bg-[#6366F1] text-white shadow' : 'text-[#77808F] hover:text-white'
+                    className={`px-3.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      trayTab === 'gifs' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
                     }`}
                   >
                     GIFs
                   </button>
                   <button
                     onClick={() => setTrayTab('stickers')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                      trayTab === 'stickers' ? 'bg-[#6366F1] text-white shadow' : 'text-[#77808F] hover:text-white'
+                    className={`px-3.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      trayTab === 'stickers' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
                     }`}
                   >
-                    Stickers (16+)
+                    Stickers
                   </button>
                 </div>
-                <button onClick={() => setShowTray(false)} className="text-[#77808F] hover:text-white p-1">
+                <button
+                  onClick={() => setShowTray(false)}
+                  className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white"
+                >
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -1399,13 +1344,13 @@ export default function Home() {
               {trayTab === 'gifs' && (
                 <div className="space-y-2">
                   <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-[#77808F] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-2.5 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
                       value={gifSearch}
                       onChange={(e) => setGifSearch(e.target.value)}
                       placeholder="Search Tenor & Giphy..."
-                      className="w-full bg-black/30 border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#6366F1]"
+                      className="w-full bg-[#0D1017] border border-white/10 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-[#5A6376] outline-none focus:border-[#6366F1]"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto scroll pr-1">
@@ -1416,7 +1361,7 @@ export default function Home() {
                           handleSendMessage('', 'gif', gif.url);
                           setShowTray(false);
                         }}
-                        className="relative rounded-xl overflow-hidden aspect-video bg-[#0D1118] border border-white/5 hover:border-[#6366F1] hover:scale-[1.02] transition-all"
+                        className="relative rounded-xl overflow-hidden aspect-video bg-[#0D1017] border border-white/5 hover:border-[#6366F1] hover:scale-[1.02] transition-all"
                       >
                         <img src={gif.url} alt={gif.title} className="w-full h-full object-cover" />
                       </button>
@@ -1436,7 +1381,7 @@ export default function Home() {
                           handleSendMessage('', 'sticker', st.url);
                           setShowTray(false);
                         }}
-                        className="p-1.5 rounded-xl bg-black/20 hover:bg-[#6366F1]/20 border border-transparent hover:border-[#6366F1] flex items-center justify-center transition-all hover:scale-110"
+                        className="p-1.5 rounded-2xl bg-black/20 hover:bg-[#6366F1]/20 border border-transparent hover:border-[#6366F1] flex items-center justify-center transition-all hover:scale-110"
                         title={st.name}
                       >
                         <img src={st.url} alt={st.name} className="w-14 h-14 object-contain" />
@@ -1448,8 +1393,8 @@ export default function Home() {
                       type="url"
                       value={customStickerUrl}
                       onChange={(e) => setCustomStickerUrl(e.target.value)}
-                      placeholder="Paste Custom Sticker URL..."
-                      className="flex-1 bg-black/30 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-white focus:outline-none focus:border-[#6366F1]"
+                      placeholder="Paste image or GIF link..."
+                      className="flex-1 bg-[#0D1017] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-[#5A6376] outline-none focus:border-[#6366F1]"
                     />
                     <button
                       onClick={() => {
@@ -1458,7 +1403,7 @@ export default function Home() {
                         setCustomStickerUrl('');
                         setShowTray(false);
                       }}
-                      className="bg-[#6366F1] text-white px-2.5 py-1 rounded-xl text-xs font-semibold"
+                      className="bg-[#6366F1] text-white px-3 py-1.5 rounded-xl text-xs font-semibold"
                     >
                       Send
                     </button>
@@ -1470,13 +1415,13 @@ export default function Home() {
 
           {/* Emoji Picker Popover */}
           {showEmojiPicker && (
-            <div className="absolute bottom-full mb-3 right-2.5 sm:right-28 left-2.5 sm:left-auto sm:w-[320px] bg-[#151922]/95 backdrop-blur-xl border border-white/10 rounded-2xl p-3 shadow-2xl z-50 animate-msg-in">
+            <div className="absolute bottom-full mb-3 right-2.5 sm:right-28 left-2.5 sm:left-auto sm:w-[320px] bg-[#141822]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3 shadow-2xl z-50 animate-msg-in">
               <div className="flex gap-1 pb-2 border-b border-white/10 mb-2">
                 {EMOJI_CATEGORIES.map((cat, idx) => (
                   <button
                     key={idx}
                     onClick={() => setActiveEmojiCat(idx)}
-                    className={`flex-1 py-1 rounded-lg text-sm text-center transition-all ${
+                    className={`flex-1 py-1 rounded-xl text-sm text-center transition-all ${
                       activeEmojiCat === idx ? 'bg-[#6366F1]/30 text-white' : 'hover:bg-white/5'
                     }`}
                   >
@@ -1484,7 +1429,7 @@ export default function Home() {
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] uppercase font-bold text-[#77808F] mb-1">
+              <p className="text-[10px] uppercase font-bold text-[#7A8396] mb-1">
                 {EMOJI_CATEGORIES[activeEmojiCat].label}
               </p>
               <div className="grid grid-cols-6 sm:grid-cols-7 gap-1.5 max-h-48 overflow-y-auto scroll">
@@ -1507,10 +1452,10 @@ export default function Home() {
               e.preventDefault();
               handleSendMessage(inputText, 'text');
             }}
-            className="max-w-4xl mx-auto flex items-end gap-2 bg-[#151922] border border-[#1F2430] focus-within:border-[#6366F1] rounded-2xl p-2 transition-all shadow-xl"
+            className="max-w-4xl mx-auto flex items-end gap-2 bg-[#131720] border border-[#202635] focus-within:border-[#6366F1] rounded-2xl p-2 transition-all shadow-xl"
           >
             <label
-              className="p-2 rounded-xl text-[#AEB6C8] hover:text-white hover:bg-white/5 cursor-pointer shrink-0"
+              className="p-2 rounded-xl text-[#A8B2C7] hover:text-white hover:bg-white/5 cursor-pointer shrink-0"
               title="Upload Image"
             >
               <input
@@ -1547,13 +1492,8 @@ export default function Home() {
                   handleSendMessage(inputText, 'text');
                 }
               }}
-              placeholder={
-                isMemberOfActiveGroup
-                  ? `Message #${activeGroup.name}...`
-                  : `Join #${activeGroup.name} to message...`
-              }
-              disabled={!isMemberOfActiveGroup}
-              className="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 text-sm text-[#E9ECF4] placeholder-[#77808F] max-h-32 leading-relaxed disabled:opacity-50"
+              placeholder={`Message #${activeGroup.name}...`}
+              className="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 text-sm text-[#E9ECF4] placeholder-[#5A6376] max-h-32 leading-relaxed"
             />
 
             <div className="flex items-center gap-1 shrink-0">
@@ -1563,11 +1503,10 @@ export default function Home() {
                   setShowEmojiPicker(!showEmojiPicker);
                   setShowTray(false);
                 }}
-                disabled={!isMemberOfActiveGroup}
-                className={`p-2 rounded-xl transition-all disabled:opacity-50 ${
-                  showEmojiPicker ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#AEB6C8] hover:text-white hover:bg-white/5'
+                className={`p-2 rounded-xl transition-all ${
+                  showEmojiPicker ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
                 }`}
-                title="Emoji Picker"
+                title="Emoji"
               >
                 <Smile className="w-4 h-4" />
               </button>
@@ -1578,9 +1517,8 @@ export default function Home() {
                   setShowTray(!showTray);
                   setShowEmojiPicker(false);
                 }}
-                disabled={!isMemberOfActiveGroup}
-                className={`p-2 rounded-xl transition-all disabled:opacity-50 ${
-                  showTray ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#AEB6C8] hover:text-white hover:bg-white/5'
+                className={`p-2 rounded-xl transition-all ${
+                  showTray ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
                 }`}
                 title="Stickers & GIFs"
               >
@@ -1589,11 +1527,11 @@ export default function Home() {
 
               <button
                 type="submit"
-                disabled={!inputText.trim() || !isMemberOfActiveGroup}
-                className={`w-9 h-9 rounded-xl grid place-items-center text-white transition-all shadow-lg ml-1 ${
-                  inputText.trim() && isMemberOfActiveGroup
-                    ? 'bg-gradient-to-br from-[#6D70F5] to-[#4338CA] hover:brightness-110 active:scale-90'
-                    : 'bg-[#1A1F2A] text-[#77808F] opacity-50 cursor-not-allowed'
+                disabled={!inputText.trim()}
+                className={`w-9 h-9 rounded-xl grid place-items-center text-white transition-all shadow-md ml-1 ${
+                  inputText.trim()
+                    ? 'bg-[#6366F1] hover:bg-[#5457E5] active:scale-95'
+                    : 'bg-[#1C2230] text-[#5A6376] cursor-not-allowed'
                 }`}
               >
                 <Send className="w-4 h-4" />
@@ -1603,18 +1541,21 @@ export default function Home() {
         </div>
       </main>
 
-      {/* RIGHT SIDEBAR (Channel Info, Admin Controls & Members) */}
+      {/* RIGHT SIDEBAR (Channel Details & Members) */}
       <aside
-        className={`fixed md:relative top-0 bottom-0 right-0 z-40 bg-gradient-to-b from-[#0E1219] to-[#0C1017] border-l border-[#1F2430] w-[320px] min-w-[320px] flex flex-col transition-transform duration-300 ease-out ${
-          infoOpen ? 'translate-x-0' : 'translate-x-full md:hidden'
+        className={`fixed md:relative top-0 bottom-0 right-0 z-40 bg-[#0E121A] border-l border-[#1B212D] w-[300px] min-w-[300px] flex flex-col transition-transform duration-300 ease-out ${
+          infoOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full md:hidden'
         }`}
       >
-        <div className="p-4 border-b border-[#1F2430] flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider text-[#8D96A9] flex items-center gap-1.5">
+        <div className="p-4 border-b border-[#1B212D] flex items-center justify-between">
+          <span className="text-xs font-bold uppercase tracking-wider text-[#A8B2C7] flex items-center gap-1.5">
             {activeGroup.is_private ? <Lock className="w-3.5 h-3.5 text-[#F59E0B]" /> : <Globe className="w-3.5 h-3.5 text-[#22C55E]" />}
-            Squad Details
+            Channel Details
           </span>
-          <button onClick={() => setInfoOpen(false)} className="text-[#77808F] hover:text-white p-1">
+          <button
+            onClick={() => setInfoOpen(false)}
+            className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -1622,73 +1563,35 @@ export default function Home() {
         <div className="flex-1 overflow-y-auto scroll p-4 space-y-5">
           {/* Hero */}
           <div className="flex flex-col items-center text-center">
-            <img
-              src={activeGroup.avatar}
-              alt={activeGroup.name}
-              className="w-20 h-20 rounded-2xl object-cover border-2 border-[#6366F1]/30 shadow-xl mb-3"
-            />
+            <div className="w-20 h-20 rounded-2xl overflow-hidden bg-[#F5F6F8] p-1.5 border-2 border-white/10 shadow-lg mb-3">
+              <img
+                src={activeGroup.avatar}
+                alt={activeGroup.name}
+                className="w-full h-full object-contain"
+              />
+            </div>
             <h2 className="text-base font-bold text-white flex items-center gap-1.5">
               {activeGroup.name}
               {activeGroup.is_private && <Lock className="w-3.5 h-3.5 text-[#F59E0B]" />}
             </h2>
-            <p className="text-xs text-[#77808F] mt-1">{activeGroup.description}</p>
+            <p className="text-xs text-[#7A8396] mt-1">{activeGroup.description}</p>
             <div className="flex items-center gap-2 mt-2">
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[#AEB6C8]">
-                {activeGroup.is_private ? '🔒 Private Squad' : '🌐 Public Squad'}
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[#A8B2C7]">
+                {activeGroup.is_private ? '🔒 Private' : '🌐 Public'}
               </span>
               {isAdminOfActiveGroup && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#6366F1]/20 text-[#818CF8] flex items-center gap-1">
-                  <Crown className="w-2.5 h-2.5 text-[#F59E0B]" /> You are Admin
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#6366F1]/20 text-[#818CF8] flex items-center gap-1">
+                  <Crown className="w-2.5 h-2.5 text-[#F59E0B]" /> Admin
                 </span>
               )}
             </div>
           </div>
 
-          {/* ADMIN: Pending Join Requests Section (Only for Admin of this group) */}
-          {isAdminOfActiveGroup && (activeGroup.join_requests || []).length > 0 && (
-            <div className="bg-[#6366F1]/10 border border-[#6366F1]/30 rounded-2xl p-3 animate-msg-in">
-              <div className="flex items-center justify-between text-xs font-bold text-white mb-2">
-                <span className="flex items-center gap-1.5">
-                  <UserPlus className="w-3.5 h-3.5 text-[#818CF8]" /> Join Requests
-                </span>
-                <span className="bg-[#6366F1] px-1.5 py-0.2 rounded-full text-[10px]">
-                  {activeGroup.join_requests?.length}
-                </span>
-              </div>
-              <div className="space-y-2">
-                {activeGroup.join_requests?.map((reqUser) => (
-                  <div
-                    key={reqUser}
-                    className="flex items-center justify-between p-2 rounded-xl bg-[#151922] border border-[#1F2430] text-xs"
-                  >
-                    <span className="font-semibold text-white truncate">{reqUser}</span>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => handleAcceptRequest(reqUser)}
-                        className="p-1 rounded-lg bg-[#22C55E]/20 text-[#22C55E] hover:bg-[#22C55E]/30"
-                        title="Accept Request"
-                      >
-                        <UserCheck className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeclineRequest(reqUser)}
-                        className="p-1 rounded-lg bg-[#EF4444]/20 text-[#EF4444] hover:bg-[#EF4444]/30"
-                        title="Decline Request"
-                      >
-                        <UserX className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* ADMIN: Direct Add Member Input */}
           {isAdminOfActiveGroup && (
             <div>
-              <label className="text-[11px] font-bold uppercase tracking-wider text-[#77808F] block mb-1.5">
-                Admin: Add Member Directly
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-[#7A8396] block mb-1.5">
+                Add Member
               </label>
               <form onSubmit={handleAdminAddMember} className="flex gap-1.5">
                 <input
@@ -1696,7 +1599,7 @@ export default function Home() {
                   value={adminAddMemberInput}
                   onChange={(e) => setAdminAddMemberInput(e.target.value)}
                   placeholder="Username to add..."
-                  className="flex-1 bg-[#11151E] border border-[#1F2430] rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#6366F1]"
+                  className="flex-1 bg-[#131720] border border-[#202635] focus:border-[#6366F1] rounded-xl px-3 py-1.5 text-xs text-white placeholder-[#5A6376] outline-none"
                 />
                 <button
                   type="submit"
@@ -1710,36 +1613,38 @@ export default function Home() {
 
           {/* Members List */}
           <div>
-            <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-[#77808F] mb-2.5">
-              <span>Squad Members</span>
+            <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[#7A8396] mb-2.5">
+              <span>Members</span>
               <span>{(activeGroup.members || []).length}</span>
             </div>
             <div className="space-y-1.5">
-              {(activeGroup.members || []).map((mName) => {
+              {(activeGroup.members || []).map((mName, idx) => {
                 const isCreator = activeGroup.created_by?.toLowerCase() === mName.toLowerCase();
-                const isCurrent = user.name.toLowerCase() === mName.toLowerCase();
+                const isCurrent = user.name && user.name.toLowerCase() === mName.toLowerCase();
+                const memberAvatar = AVATAR_OPTIONS[idx % AVATAR_OPTIONS.length];
                 return (
-                  <div key={mName} className="flex items-center gap-2.5 p-2 rounded-xl bg-[#151922]/50 border border-white/5">
-                    <img
-                      src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(mName)}`}
-                      alt={mName}
-                      className="w-7 h-7 rounded-lg object-cover"
-                    />
+                  <div
+                    key={mName}
+                    className="flex items-center gap-2.5 p-2 rounded-xl bg-[#141822] border border-[#202635]"
+                  >
+                    <div className="w-7 h-7 rounded-lg overflow-hidden bg-[#F5F6F8] p-0.5 shrink-0 border border-white/5">
+                      <img
+                        src={memberAvatar}
+                        alt={mName}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-white truncate">
                         {mName} {isCurrent && '(You)'}
                       </p>
-                      <p className="text-[10px] text-[#77808F]">
-                        {isCreator ? 'Group Admin 👑' : 'Squad Member'}
+                      <p className="text-[10px] text-[#7A8396]">
+                        {isCreator ? 'Admin' : 'Member'}
                       </p>
                     </div>
-                    {isCreator ? (
+                    {isCreator && (
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#F59E0B]/20 text-[#F59E0B]">
                         Admin
-                      </span>
-                    ) : (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/5 text-[#77808F]">
-                        Member
                       </span>
                     )}
                   </div>
@@ -1750,16 +1655,16 @@ export default function Home() {
 
           {/* Shared Assets */}
           <div>
-            <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-[#77808F] mb-2">
-              <span>Shared Assets</span>
-              <span>{sharedMedia.length} Files</span>
+            <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[#7A8396] mb-2">
+              <span>Shared Files</span>
+              <span>{sharedMedia.length}</span>
             </div>
 
-            <div className="flex gap-1 bg-black/40 p-1 rounded-xl mb-3">
+            <div className="flex gap-1 bg-[#131720] p-1 rounded-xl mb-3 border border-[#202635]">
               <button
                 onClick={() => setInfoMediaTab('media')}
                 className={`flex-1 py-1 rounded-lg text-xs font-semibold transition-all ${
-                  infoMediaTab === 'media' ? 'bg-[#6366F1] text-white shadow' : 'text-[#77808F] hover:text-white'
+                  infoMediaTab === 'media' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
                 }`}
               >
                 Media & GIFs
@@ -1767,7 +1672,7 @@ export default function Home() {
               <button
                 onClick={() => setInfoMediaTab('links')}
                 className={`flex-1 py-1 rounded-lg text-xs font-semibold transition-all ${
-                  infoMediaTab === 'links' ? 'bg-[#6366F1] text-white shadow' : 'text-[#77808F] hover:text-white'
+                  infoMediaTab === 'links' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
                 }`}
               >
                 Links
@@ -1780,17 +1685,21 @@ export default function Home() {
                   sharedMedia.map((m) => (
                     <div
                       key={m.id}
-                      className="aspect-square rounded-xl overflow-hidden bg-black/30 border border-white/5 relative group cursor-pointer"
+                      className="aspect-square rounded-xl overflow-hidden bg-black/40 border border-white/5 relative group cursor-pointer"
                       onClick={() => triggerToast(`Opened media by ${m.sender_name}`)}
                     >
-                      <img src={m.media_url} alt="Shared" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                      <img
+                        src={m.media_url}
+                        alt="Shared"
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                      />
                       <span className="absolute bottom-1 right-1 text-[8px] font-bold bg-black/80 px-1 rounded uppercase text-white">
                         {m.msg_type}
                       </span>
                     </div>
                   ))
                 ) : (
-                  <p className="col-span-3 text-xs text-[#77808F] text-center py-4">No media in this squad yet.</p>
+                  <p className="col-span-3 text-xs text-[#7A8396] text-center py-4">No media shared yet</p>
                 )}
               </div>
             )}
@@ -1804,17 +1713,17 @@ export default function Home() {
                       href={l.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2 p-2 rounded-xl bg-[#151922] border border-[#1F2430] hover:border-[#6366F1] transition-all text-xs"
+                      className="flex items-center gap-2 p-2 rounded-xl bg-[#141822] border border-[#202635] hover:border-[#6366F1] transition-all text-xs"
                     >
                       <LinkIcon className="w-3.5 h-3.5 text-[#818CF8] shrink-0" />
                       <div className="flex-1 truncate">
                         <p className="text-white font-medium truncate">{l.url}</p>
-                        <p className="text-[10px] text-[#77808F]">Shared by {l.sender}</p>
+                        <p className="text-[10px] text-[#7A8396]">Shared by {l.sender}</p>
                       </div>
                     </a>
                   ))
                 ) : (
-                  <p className="text-xs text-[#77808F] text-center py-4">No links in this squad yet.</p>
+                  <p className="text-xs text-[#7A8396] text-center py-4">No links shared yet</p>
                 )}
               </div>
             )}

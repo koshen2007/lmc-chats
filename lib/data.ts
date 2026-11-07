@@ -24,14 +24,22 @@ export const STICKERS: Sticker[] = [
 ];
 
 export const AVATAR_OPTIONS = [
-  'https://api.dicebear.com/7.x/avataaars/svg?seed=Kai',
-  'https://api.dicebear.com/7.x/avataaars/svg?seed=Ana',
-  'https://api.dicebear.com/7.x/avataaars/svg?seed=Marcus',
-  'https://api.dicebear.com/7.x/avataaars/svg?seed=Juno',
-  'https://api.dicebear.com/7.x/avataaars/svg?seed=Priya',
-  'https://api.dicebear.com/7.x/bottts/svg?seed=Cyber',
-  'https://api.dicebear.com/7.x/bottts/svg?seed=Spark',
-  'https://api.dicebear.com/7.x/pixel-art/svg?seed=Pixel',
+  '/avatars/avatar-1.png',
+  '/avatars/avatar-2.png',
+  '/avatars/avatar-3.png',
+  '/avatars/avatar-4.png',
+  '/avatars/avatar-5.png',
+  '/avatars/avatar-6.png',
+  '/avatars/avatar-7.png',
+  '/avatars/avatar-8.png',
+  '/avatars/avatar-9.svg',
+  '/avatars/avatar-10.svg',
+  '/avatars/avatar-11.svg',
+  '/avatars/avatar-12.svg',
+  '/avatars/avatar-13.svg',
+  '/avatars/avatar-14.svg',
+  '/avatars/avatar-15.svg',
+  '/avatars/avatar-16.svg',
 ];
 
 export const FALLBACK_GIFS = [
