@@ -8,6 +8,9 @@ export interface Group {
   created_by?: string;
   created_at: string;
   unreadCount?: number;
+  is_private?: boolean;
+  members?: string[];
+  join_requests?: string[];
 }
 
 export interface Message {
@@ -41,4 +44,3 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
       },
     })
   : null;
-

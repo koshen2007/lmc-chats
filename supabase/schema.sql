@@ -1,13 +1,16 @@
 -- Enable UUID extension
 create extension if not exists "uuid-ossp";
 
--- 1. Create groups table
+-- 1. Create groups table with public/private support
 create table if not exists public.groups (
     id uuid primary key default gen_random_uuid(),
     name text not null,
     description text default '',
-    avatar text default 'https://api.dicebear.com/7.x/bottts/svg?seed=crew',
-    created_by text default 'system',
+    avatar text default 'https://api.dicebear.com/7.x/bottts/svg?seed=lmc',
+    created_by text default 'Kai Renner',
+    is_private boolean default false,
+    members text[] default array['Kai Renner'],
+    join_requests text[] default array[]::text[],
     created_at timestamptz default now()
 );
 
@@ -24,11 +27,10 @@ create table if not exists public.messages (
     created_at timestamptz default now()
 );
 
--- 3. Public Read/Write Policies (No Auth Barrier for frictionless friend chat)
+-- 3. Public Read/Write Policies
 alter table public.groups enable row level security;
 alter table public.messages enable row level security;
 
--- Groups Policies
 drop policy if exists "Allow public read access on groups" on public.groups;
 create policy "Allow public read access on groups" on public.groups for select using (true);
 
@@ -38,7 +40,6 @@ create policy "Allow public insert on groups" on public.groups for insert with c
 drop policy if exists "Allow public update on groups" on public.groups;
 create policy "Allow public update on groups" on public.groups for update using (true);
 
--- Messages Policies
 drop policy if exists "Allow public read access on messages" on public.messages;
 create policy "Allow public read access on messages" on public.messages for select using (true);
 
@@ -59,21 +60,13 @@ exception
   when others then null;
 end $$;
 
--- 5. Seed default groups
-insert into public.groups (id, name, description, avatar, created_by)
+-- 5. Seed default groups (Public and Private examples)
+insert into public.groups (id, name, description, avatar, created_by, is_private, members, join_requests)
 values 
-  ('11111111-1111-1111-1111-111111111111', 'Main Lounge', 'Chill general chat, memes, links & midnight music.', 'https://api.dicebear.com/7.x/bottts/svg?seed=Lounge', 'system'),
-  ('22222222-2222-2222-2222-222222222222', 'Squad HQ', 'Night owls, product builds, deployments & shipping at 2 AM.', 'https://api.dicebear.com/7.x/bottts/svg?seed=Squad', 'system')
+  ('11111111-1111-1111-1111-111111111111', 'LMC Main Lounge', 'Public squad hangout for general discussions, memes, music and announcements.', 'https://api.dicebear.com/7.x/bottts/svg?seed=LMC', 'Kai Renner', false, array['Kai Renner', 'Ana Vidal', 'Marcus Webb'], array[]::text[]),
+  ('22222222-2222-2222-2222-222222222222', 'LMC Core Devs 🔒', 'Confidential project planning, architecture reviews and private secrets.', 'https://api.dicebear.com/7.x/bottts/svg?seed=Devs', 'Kai Renner', true, array['Kai Renner', 'Ana Vidal'], array[]::text[])
 on conflict (id) do update set
   name = excluded.name,
   description = excluded.description,
-  avatar = excluded.avatar;
-
--- 6. Seed welcoming initial messages
-insert into public.messages (group_id, sender_name, sender_avatar, content, msg_type, reactions)
-values
-  ('11111111-1111-1111-1111-111111111111', 'Ana Vidal', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ana', 'Welcome to the Squad Chat! Realtime messaging, stickers, GIFs, and reactions are live 🚀', 'text', '{"🔥": 4, "💯": 3}'::jsonb),
-  ('11111111-1111-1111-1111-111111111111', 'Marcus Webb', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Marcus', 'The UI is slick on both iPhone, Android, and Desktop panels!', 'text', '{"❤️": 2, "🎉": 5}'::jsonb),
-  ('22222222-2222-2222-2222-222222222222', 'Juno Park', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Juno', 'Squad HQ is online. Ready to ship the build tonight!', 'text', '{"🚀": 6}'::jsonb)
-on conflict do nothing;
-
+  is_private = excluded.is_private,
+  members = excluded.members;

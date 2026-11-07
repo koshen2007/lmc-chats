@@ -2,13 +2,13 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Nexus — Squad Chat',
-  description: 'Real-time Group Chat, Memes, Stickers & GIFs PWA',
+  title: 'LMC Chats — Real-Time Group & Private Chat PWA',
+  description: 'LMC Chats — Private & Public groups with Memes, Stickers & Media',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Nexus Chat',
+    title: 'LMC Chats',
   },
 };
 
@@ -38,4 +38,3 @@ export default function RootLayout({
     </html>
   );
 }
-
