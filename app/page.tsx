@@ -52,14 +52,17 @@ import {
   Disc,
   AtSign,
   Copy,
+  Trash2,
 } from 'lucide-react';
-import { supabase, isSupabaseConfigured, Group, Message } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, Group, Message, BannedUser } from '@/lib/supabase';
 import { STICKERS, AVATAR_OPTIONS, FALLBACK_GIFS, EMOJI_CATEGORIES } from '@/lib/data';
 import AvatarCreatorModal from '@/components/AvatarCreatorModal';
 import TelegramMusicPlayer from '@/components/TelegramMusicPlayer';
 import MusicBotModal from '@/components/MusicBotModal';
 import GhostBurnTimer from '@/components/GhostBurnTimer';
 import AddMemberModal from '@/components/AddMemberModal';
+import AdminModerationModal from '@/components/AdminModerationModal';
+import GoogleAuthModal from '@/components/GoogleAuthModal';
 import {
   UserProfile,
   SEED_USERS,
@@ -83,6 +86,9 @@ interface CurrentUser {
   avatar: string;
   bio?: string;
   status: 'online' | 'idle' | 'dnd';
+  role?: 'admin' | 'user';
+  provider?: 'google' | 'custom';
+  email?: string;
 }
 
 const DEFAULT_GROUPS: Group[] = [
@@ -149,6 +155,11 @@ export default function Home() {
     bio?: string;
     status?: string;
   } | null>(null);
+
+  // Admin Moderation Panel & Google Auth
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [showGoogleAuthModal, setShowGoogleAuthModal] = useState(false);
+  const [bannedUsers, setBannedUsers] = useState<BannedUser[]>([]);
 
   // App Layout
   const [railCollapsed, setRailCollapsed] = useState(false);
@@ -376,6 +387,17 @@ export default function Home() {
         // ignore
       }
     }
+
+    // 5. Load Banned Users
+    const storedBanned = localStorage.getItem('lmc_banned_users');
+    if (storedBanned) {
+      try {
+        const parsedBanned = JSON.parse(storedBanned);
+        if (Array.isArray(parsedBanned)) {
+          setBannedUsers(parsedBanned);
+        }
+      } catch {}
+    }
   }, []);
 
   // Permanent Storage Sync Handlers
@@ -411,6 +433,35 @@ export default function Home() {
           if (prev.some((m) => m.id === payload.id)) return prev;
           const updated = [...prev, payload];
           localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+          return updated;
+        });
+      } else if (type === 'DELETE_MESSAGE') {
+        setMessages((prev) => {
+          const updated = prev.filter((m) => m.id !== payload.id);
+          localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+          return updated;
+        });
+      } else if (type === 'CLEAR_MESSAGES') {
+        setMessages((prev) => {
+          const updated = prev.filter((m) => m.group_id !== payload.group_id);
+          localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+          return updated;
+        });
+      } else if (type === 'BAN_USER') {
+        setBannedUsers((prev) => {
+          const updated = [
+            ...prev.filter((b) => b.username.toLowerCase() !== payload.username.toLowerCase()),
+            payload,
+          ];
+          localStorage.setItem('lmc_banned_users', JSON.stringify(updated));
+          return updated;
+        });
+      } else if (type === 'UNBAN_USER') {
+        setBannedUsers((prev) => {
+          const updated = prev.filter(
+            (b) => b.username.toLowerCase() !== payload.username.toLowerCase()
+          );
+          localStorage.setItem('lmc_banned_users', JSON.stringify(updated));
           return updated;
         });
       } else if (type === 'REACTION_UPDATE') {
@@ -619,8 +670,27 @@ export default function Home() {
 
   const isAdminOfActiveGroup = useMemo(() => {
     if (!activeGroup || !user.name) return false;
-    return activeGroup.created_by?.toLowerCase() === user.name.toLowerCase();
-  }, [activeGroup, user.name]);
+    const isOwner = activeGroup.created_by?.toLowerCase() === user.name.toLowerCase();
+    const isChannelAdmin = (activeGroup.admins || []).some(
+      (a) =>
+        a.toLowerCase() === user.name.toLowerCase() ||
+        (user.username && a.toLowerCase() === user.username.toLowerCase())
+    );
+    const isSuperAdmin = user.role === 'admin';
+    const isDefaultLmcAdmin =
+      activeGroup.id === 'lmc-squad' &&
+      (!activeGroup.created_by || activeGroup.created_by === 'LMC' || isOwner || isChannelAdmin);
+    return isOwner || isChannelAdmin || isSuperAdmin || isDefaultLmcAdmin;
+  }, [activeGroup, user.name, user.username, user.role]);
+
+  const isCurrentUserBanned = useMemo(() => {
+    return bannedUsers.some((b) => {
+      const matchUsername = user.username && b.username.toLowerCase() === user.username.toLowerCase();
+      const matchName = user.name && b.username.toLowerCase() === user.name.toLowerCase();
+      const matchChannel = !b.channel_id || b.channel_id === activeGroupId;
+      return (matchUsername || matchName) && matchChannel;
+    });
+  }, [bannedUsers, user.username, user.name, activeGroupId]);
 
   // Filtered Messages
   const displayedMessages = useMemo(() => {
@@ -1030,6 +1100,14 @@ export default function Home() {
         triggerToast('This channel is private. Invite required.');
         return;
       }
+      if (isCurrentUserBanned) {
+        triggerToast('🚫 You are banned from sending messages in this channel');
+        return;
+      }
+      if (activeGroup.is_read_only && !isAdminOfActiveGroup) {
+        triggerToast('🔒 Channel is in Admin Read-Only mode');
+        return;
+      }
       if (msg_type === 'text' && !content.trim()) return;
       if (isSending) return;
 
@@ -1299,6 +1377,236 @@ export default function Home() {
         console.error('Admin add member error:', err);
       }
     }
+  };
+
+  // DELETE SINGLE MESSAGE (Admin & Sender)
+  const handleDeleteMessage = useCallback(
+    async (messageId: string) => {
+      setMessages((prev) => {
+        const updated = prev.filter((m) => m.id !== messageId);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+        }
+        return updated;
+      });
+      triggerToast('Message deleted');
+
+      if (typeof window !== 'undefined') {
+        const channel = new BroadcastChannel('lmc_chat_sync');
+        channel.postMessage({ type: 'DELETE_MESSAGE', payload: { id: messageId } });
+        channel.close();
+      }
+
+      if (isSupabaseConfigured && supabase) {
+        try {
+          await supabase.from('messages').delete().eq('id', messageId);
+        } catch (err) {
+          console.error('Delete message error:', err);
+        }
+      }
+    },
+    []
+  );
+
+  // ADMIN: KICK MEMBER
+  const handleKickMember = useCallback(
+    (target: string) => {
+      const cleanTarget = target.replace(/^@/, '').toLowerCase();
+      const updatedMembers = (activeGroup.members || []).filter(
+        (m) => m.toLowerCase() !== cleanTarget && m.toLowerCase() !== `@${cleanTarget}`
+      );
+      const updatedGroup = { ...activeGroup, members: updatedMembers };
+      const updatedGroups = groups.map((g) => (g.id === activeGroup.id ? updatedGroup : g));
+      savePersistedGroups(updatedGroups);
+
+      handleSendMessage(`🛡️ Admin removed @${cleanTarget} from #${activeGroup.name}`, 'text');
+      triggerToast(`Removed @${cleanTarget} from channel`);
+
+      if (typeof window !== 'undefined') {
+        const channel = new BroadcastChannel('lmc_chat_sync');
+        channel.postMessage({ type: 'UPDATE_GROUP', payload: updatedGroup });
+        channel.close();
+      }
+    },
+    [activeGroup, groups, handleSendMessage]
+  );
+
+  // ADMIN: BAN USER
+  const handleBanUser = useCallback(
+    (target: string, reason: string = 'Rule violation') => {
+      const cleanTarget = target.replace(/^@/, '').toLowerCase();
+      const newBan: BannedUser = {
+        id: `ban_${Date.now()}`,
+        username: cleanTarget,
+        banned_at: new Date().toISOString(),
+        banned_by: user.username || user.name || 'Admin',
+        reason,
+        channel_id: activeGroup.id,
+      };
+
+      const updatedBans = [...bannedUsers.filter((b) => b.username.toLowerCase() !== cleanTarget), newBan];
+      setBannedUsers(updatedBans);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('lmc_banned_users', JSON.stringify(updatedBans));
+        const channel = new BroadcastChannel('lmc_chat_sync');
+        channel.postMessage({ type: 'BAN_USER', payload: newBan });
+        channel.close();
+      }
+
+      // Kick them from the channel as well
+      const updatedMembers = (activeGroup.members || []).filter(
+        (m) => m.toLowerCase() !== cleanTarget && m.toLowerCase() !== `@${cleanTarget}`
+      );
+      const updatedGroup = { ...activeGroup, members: updatedMembers };
+      savePersistedGroups(groups.map((g) => (g.id === activeGroup.id ? updatedGroup : g)));
+
+      handleSendMessage(`🚫 Admin banned @${cleanTarget} (${reason})`, 'text');
+      triggerToast(`Banned @${cleanTarget}`);
+    },
+    [activeGroup, bannedUsers, user, groups, handleSendMessage]
+  );
+
+  // ADMIN: UNBAN USER
+  const handleUnbanUser = useCallback(
+    (target: string) => {
+      const cleanTarget = target.replace(/^@/, '').toLowerCase();
+      const updatedBans = bannedUsers.filter((b) => b.username.toLowerCase() !== cleanTarget);
+      setBannedUsers(updatedBans);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('lmc_banned_users', JSON.stringify(updatedBans));
+        const channel = new BroadcastChannel('lmc_chat_sync');
+        channel.postMessage({ type: 'UNBAN_USER', payload: { username: cleanTarget } });
+        channel.close();
+      }
+      triggerToast(`Unbanned @${cleanTarget}`);
+    },
+    [bannedUsers]
+  );
+
+  // ADMIN: PROMOTE TO ADMIN
+  const handlePromoteAdmin = useCallback(
+    (target: string) => {
+      const cleanTarget = target.replace(/^@/, '');
+      const admins = [...(activeGroup.admins || [])];
+      if (!admins.some((a) => a.toLowerCase() === cleanTarget.toLowerCase())) {
+        admins.push(cleanTarget);
+      }
+      const updatedGroup = { ...activeGroup, admins };
+      savePersistedGroups(groups.map((g) => (g.id === activeGroup.id ? updatedGroup : g)));
+      triggerToast(`Promoted @${cleanTarget} to Admin`);
+    },
+    [activeGroup, groups]
+  );
+
+  // ADMIN: DEMOTE ADMIN
+  const handleDemoteAdmin = useCallback(
+    (target: string) => {
+      const cleanTarget = target.replace(/^@/, '').toLowerCase();
+      const admins = (activeGroup.admins || []).filter((a) => a.toLowerCase() !== cleanTarget);
+      const updatedGroup = { ...activeGroup, admins };
+      savePersistedGroups(groups.map((g) => (g.id === activeGroup.id ? updatedGroup : g)));
+      triggerToast(`Demoted @${cleanTarget}`);
+    },
+    [activeGroup, groups]
+  );
+
+  // ADMIN: CLEAR ALL CHANNEL MESSAGES
+  const handleClearChannelMessages = useCallback(() => {
+    setMessages((prev) => {
+      const remaining = prev.filter((m) => m.group_id !== activeGroupId);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('lmc_saved_messages', JSON.stringify(remaining));
+      }
+      return remaining;
+    });
+    triggerToast(`Cleared all messages in #${activeGroup.name}`);
+
+    if (typeof window !== 'undefined') {
+      const channel = new BroadcastChannel('lmc_chat_sync');
+      channel.postMessage({ type: 'CLEAR_MESSAGES', payload: { group_id: activeGroupId } });
+      channel.close();
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      supabase.from('messages').delete().eq('group_id', activeGroupId).then(() => {});
+    }
+  }, [activeGroupId, activeGroup]);
+
+  // ADMIN: TOGGLE READ ONLY
+  const handleToggleReadOnly = useCallback(
+    (enabled: boolean) => {
+      const updatedGroup = { ...activeGroup, is_read_only: enabled };
+      savePersistedGroups(groups.map((g) => (g.id === activeGroup.id ? updatedGroup : g)));
+      triggerToast(enabled ? 'Channel locked (Read-Only)' : 'Channel unlocked');
+    },
+    [activeGroup, groups]
+  );
+
+  // ADMIN: TOGGLE SLOW MODE
+  const handleToggleSlowMode = useCallback(
+    (enabled: boolean) => {
+      const updatedGroup = { ...activeGroup, slow_mode: enabled };
+      savePersistedGroups(groups.map((g) => (g.id === activeGroup.id ? updatedGroup : g)));
+      triggerToast(enabled ? 'Slow mode enabled (10s)' : 'Slow mode disabled');
+    },
+    [activeGroup, groups]
+  );
+
+  // ADMIN: DELETE CHANNEL
+  const handleDeleteChannel = useCallback(() => {
+    if (activeGroup.id === 'lmc-squad') {
+      triggerToast('Cannot delete default squad channel');
+      return;
+    }
+    const updatedGroups = groups.filter((g) => g.id !== activeGroup.id);
+    savePersistedGroups(updatedGroups);
+    setActiveGroupId('lmc-squad');
+    triggerToast(`Deleted #${activeGroup.name}`);
+  }, [activeGroup, groups]);
+
+  // GOOGLE AUTH SUCCESS HANDLER
+  const handleGoogleAuthSuccess = (googleUser: {
+    name: string;
+    email: string;
+    avatar: string;
+    username: string;
+  }) => {
+    const updatedUser: CurrentUser = {
+      id: `usr_${googleUser.username}`,
+      username: googleUser.username,
+      name: googleUser.name,
+      avatar: googleUser.avatar,
+      bio: 'Verified Google Squad Member ⚡',
+      status: 'online',
+      provider: 'google',
+      email: googleUser.email,
+      role: 'admin',
+    };
+
+    saveUserSession(updatedUser);
+
+    const updatedDir = registeredUsers.filter(
+      (u) => u.username.toLowerCase() !== googleUser.username && u.id !== updatedUser.id
+    );
+    updatedDir.push({
+      id: updatedUser.id,
+      username: updatedUser.username,
+      name: updatedUser.name,
+      avatar: updatedUser.avatar,
+      bio: updatedUser.bio,
+      status: 'online',
+      provider: 'google',
+      email: googleUser.email,
+      role: 'admin',
+    });
+    setRegisteredUsers(updatedDir);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('lmc_registered_users', JSON.stringify(updatedDir));
+    }
+
+    setShowProfileModal(false);
+    setShowGoogleAuthModal(false);
+    triggerToast(`Signed in as ${googleUser.name} with Google! 🎉`);
   };
 
   // AUDIO & VIDEO CALLING ENGINE (Web Audio API Ringing + Camera stream)
@@ -1661,6 +1969,41 @@ export default function Home() {
               )}
             </div>
 
+            {/* Google Sign In One-Tap Button */}
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={() => setShowGoogleAuthModal(true)}
+                className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2.5 shadow-md transition-all active:scale-[0.98]"
+              >
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                  />
+                </svg>
+                <span className="text-xs">Sign in with Google</span>
+              </button>
+
+              <div className="flex items-center gap-2 mt-3 mb-1">
+                <span className="flex-1 h-px bg-white/10" />
+                <span className="text-[10px] text-[#7A8396] uppercase font-semibold">Or Custom Identity</span>
+                <span className="flex-1 h-px bg-white/10" />
+              </div>
+            </div>
+
             {/* Profile Avatar Selection & Studio */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
@@ -1872,6 +2215,41 @@ export default function Home() {
           registeredUsers={registeredUsers}
           onAddMember={handleAddMemberToChannel}
           onClose={() => setShowAddMemberModal(false)}
+        />
+      )}
+
+      {/* ADMIN MODERATION & BAN PANEL MODAL */}
+      {showAdminModal && (
+        <AdminModerationModal
+          isOpen={showAdminModal}
+          onClose={() => setShowAdminModal(false)}
+          channel={activeGroup}
+          currentUser={{
+            id: user.id,
+            name: user.name,
+            username: user.username,
+            role: user.role,
+          }}
+          registeredUsers={registeredUsers}
+          bannedUsers={bannedUsers}
+          onKickMember={handleKickMember}
+          onBanUser={handleBanUser}
+          onUnbanUser={handleUnbanUser}
+          onPromoteAdmin={handlePromoteAdmin}
+          onDemoteAdmin={handleDemoteAdmin}
+          onClearMessages={handleClearChannelMessages}
+          onToggleReadOnly={handleToggleReadOnly}
+          onToggleSlowMode={handleToggleSlowMode}
+          onDeleteChannel={handleDeleteChannel}
+        />
+      )}
+
+      {/* GOOGLE SIGN IN MODAL */}
+      {showGoogleAuthModal && (
+        <GoogleAuthModal
+          isOpen={showGoogleAuthModal}
+          onClose={() => setShowGoogleAuthModal(false)}
+          onSuccess={handleGoogleAuthSuccess}
         />
       )}
 
@@ -2265,6 +2643,47 @@ export default function Home() {
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Edit Profile & Status</span>
               </button>
+
+              <button
+                onClick={() => {
+                  setShowStatusMenu(false);
+                  setShowGoogleAuthModal(true);
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-slate-200 font-medium transition-colors"
+              >
+                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                  />
+                </svg>
+                <span>{user.provider === 'google' ? 'Switch Google Account' : 'Sign in with Google'}</span>
+              </button>
+
+              {isAdminOfActiveGroup && (
+                <button
+                  onClick={() => {
+                    setShowStatusMenu(false);
+                    setShowAdminModal(true);
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-amber-500/10 text-amber-300 font-medium transition-colors"
+                >
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Admin & Ban Panel</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -2408,6 +2827,17 @@ export default function Home() {
                 </div>
               )}
             </div>
+
+            {/* Admin Moderation & Ban Panel Button */}
+            {isAdminOfActiveGroup && (
+              <button
+                onClick={() => setShowAdminModal(true)}
+                className="w-9 h-9 rounded-xl grid place-items-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 active:scale-90 transition-all shadow-sm"
+                title="Admin Moderation & Ban Panel"
+              >
+                <Crown className="w-4 h-4 text-amber-400" />
+              </button>
+            )}
 
             {/* Add Member Button */}
             <button
@@ -2666,6 +3096,16 @@ export default function Home() {
                     >
                       <SmilePlus className="w-3.5 h-3.5" />
                     </button>
+
+                    {(isAdminOfActiveGroup || isMe) && (
+                      <button
+                        onClick={() => handleDeleteMessage(msg.id)}
+                        className="opacity-0 group-hover:opacity-100 hover:bg-rose-500/20 p-1 rounded-full text-[#7A8396] hover:text-rose-400 transition-all text-xs"
+                        title={isAdminOfActiveGroup ? "Delete Message (Admin)" : "Delete Message"}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2880,6 +3320,22 @@ export default function Home() {
             </div>
           )}
 
+          {/* Banned User Warning Banner */}
+          {isCurrentUserBanned && (
+            <div className="max-w-4xl mx-auto mb-2 px-3.5 py-2.5 bg-rose-950/80 border border-rose-500/50 rounded-2xl flex items-center gap-2.5 text-xs text-rose-300 font-bold animate-msg-in">
+              <UserX className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>You have been banned from sending messages in this channel by the admin.</span>
+            </div>
+          )}
+
+          {/* Read Only Channel Banner */}
+          {activeGroup.is_read_only && !isAdminOfActiveGroup && (
+            <div className="max-w-4xl mx-auto mb-2 px-3.5 py-2.5 bg-indigo-950/80 border border-indigo-500/40 rounded-2xl flex items-center gap-2.5 text-xs text-indigo-300 font-semibold animate-msg-in">
+              <Lock className="w-4 h-4 text-indigo-400 shrink-0" />
+              <span>This channel is in Admin Read-Only mode. Only channel admins can post.</span>
+            </div>
+          )}
+
           {/* Ghost Mode Active Banner */}
           {ghostModeActive && (
             <div className="max-w-4xl mx-auto mb-2 px-3 py-1.5 bg-gradient-to-r from-amber-950/70 via-orange-950/50 to-amber-950/70 border border-amber-500/40 rounded-xl flex items-center justify-between text-xs text-amber-300 font-semibold animate-msg-in shadow-md">
@@ -2901,6 +3357,14 @@ export default function Home() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              if (isCurrentUserBanned) {
+                triggerToast('🚫 You are banned from sending messages in this channel');
+                return;
+              }
+              if (activeGroup.is_read_only && !isAdminOfActiveGroup) {
+                triggerToast('🔒 Channel is in Admin Read-Only mode');
+                return;
+              }
               if (!inputText.trim()) return;
               handleSendMessage(inputText, 'text');
             }}
@@ -3112,6 +3576,17 @@ export default function Home() {
                 </button>
               </form>
             </div>
+          )}
+
+          {/* Admin Moderation Panel Button */}
+          {isAdminOfActiveGroup && (
+            <button
+              onClick={() => setShowAdminModal(true)}
+              className="w-full bg-gradient-to-r from-amber-500/20 to-rose-500/20 hover:from-amber-500/30 hover:to-rose-500/30 text-amber-300 border border-amber-500/30 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98]"
+            >
+              <Crown className="w-4 h-4 text-amber-400" />
+              <span>Admin Ban & Delete Panel</span>
+            </button>
           )}
 
           {/* Members List with Click to View Profile */}

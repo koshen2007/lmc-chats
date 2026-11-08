@@ -10,7 +10,10 @@ export interface Group {
   unreadCount?: number;
   is_private?: boolean;
   members?: string[];
+  admins?: string[];
   join_requests?: string[];
+  is_read_only?: boolean;
+  slow_mode?: boolean;
 }
 
 export interface Message {
@@ -27,6 +30,16 @@ export interface Message {
   created_at: string;
   burn_after_read?: boolean;
   burn_seconds?: number;
+}
+
+export interface BannedUser {
+  id: string;
+  username: string;
+  name?: string;
+  banned_at: string;
+  banned_by: string;
+  reason?: string;
+  channel_id?: string;
 }
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -48,3 +61,27 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
       },
     })
   : null;
+
+/**
+ * Sign In with Google OAuth via Supabase
+ */
+export async function signInWithGoogle() {
+  if (isSupabaseConfigured && supabase) {
+    return await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+      },
+    });
+  }
+  return null;
+}
+
+/**
+ * Sign out user
+ */
+export async function signOutUser() {
+  if (isSupabaseConfigured && supabase) {
+    await supabase.auth.signOut();
+  }
+}

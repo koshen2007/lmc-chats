@@ -7,6 +7,9 @@ export interface UserProfile {
   avatar: string; // Avatar Data URL or URL
   bio?: string;
   status?: 'online' | 'idle' | 'dnd';
+  role?: 'admin' | 'user';
+  provider?: 'google' | 'custom';
+  email?: string;
   created_at?: string;
 }
 

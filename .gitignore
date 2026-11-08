@@ -7,5 +7,7 @@ node_modules
 next-env.d.ts
 
 .vercel
+supabase/.temp/
 
 .vercel
+supabase/.temp/
