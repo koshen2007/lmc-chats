@@ -42,6 +42,8 @@ import {
   MessageSquare,
   LogOut,
   Edit3,
+  Settings,
+  Hash,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured, Group, Message } from '@/lib/supabase';
 import { STICKERS, AVATAR_OPTIONS, FALLBACK_GIFS, EMOJI_CATEGORIES } from '@/lib/data';
@@ -1249,147 +1251,67 @@ export default function Home() {
         </div>
       )}
 
-      {/* LEFT SIDEBAR (Instagram & Telegram style) */}
+      {/* LEFT SIDEBAR (Discord & Linear style professional navigation) */}
       <aside
-        className={`fixed md:relative top-0 bottom-0 left-0 z-40 bg-[#0E121B] border-r border-[#1B212E] flex flex-col transition-all duration-300 ease-out ${
-          railCollapsed ? 'w-[76px] min-w-[76px]' : 'w-[290px] min-w-[290px]'
+        className={`fixed md:relative top-0 bottom-0 left-0 z-40 bg-[#0C0F17] border-r border-[#1B212E] flex flex-col transition-all duration-300 ease-out select-none ${
+          railCollapsed ? 'w-[72px] min-w-[72px]' : 'w-[268px] min-w-[268px]'
         } ${mobileRailOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'}`}
       >
-        {/* Brand Header with Official Circular Mascot */}
-        <div className="p-3.5 flex items-center justify-between border-b border-[#1B212E]">
+        {/* Workspace Brand Header */}
+        <div className="h-14 flex items-center justify-between px-3.5 border-b border-[#1A202E] shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-10 h-10 rounded-full overflow-hidden bg-transparent shrink-0 shadow-md">
-              <img src="/logo.png" alt="LMC Mascot" className="w-full h-full object-cover rounded-full" />
+            <div className="w-8 h-8 rounded-full overflow-hidden bg-transparent shrink-0 ring-1 ring-white/10 shadow-sm">
+              <img src="/logo.png" alt="LMC Logo" className="w-full h-full object-cover rounded-full" />
             </div>
             {!railCollapsed && (
-              <div className="flex flex-col truncate">
-                <span className="font-extrabold text-sm tracking-tight text-white leading-tight">LMC Chats</span>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="font-bold text-[14px] tracking-tight text-white truncate">LMC Chats</span>
+                <span className="text-[10px] bg-indigo-500/15 text-indigo-400 font-semibold px-1.5 py-0.5 rounded border border-indigo-500/30">
+                  Squad
+                </span>
               </div>
             )}
           </div>
-          <button
-            onClick={() => setRailCollapsed(!railCollapsed)}
-            className="hidden md:grid place-items-center w-8 h-8 rounded-lg text-[#7A8396] hover:text-white hover:bg-white/5 transition-colors"
-            title="Toggle Sidebar"
-          >
-            <PanelLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setMobileRailOpen(false)}
-            className="md:hidden grid place-items-center w-8 h-8 rounded-lg text-[#7A8396] hover:text-white"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setRailCollapsed(!railCollapsed)}
+              className="hidden md:grid place-items-center w-7 h-7 rounded-lg text-[#7A8396] hover:text-white hover:bg-white/5 transition-colors"
+              title={railCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+            >
+              <PanelLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setMobileRailOpen(false)}
+              className="md:hidden grid place-items-center w-7 h-7 rounded-lg text-[#7A8396] hover:text-white hover:bg-white/5"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
-        {/* User Profile Card */}
-        <div className="p-2.5 relative">
-          <button
-            onClick={() => setShowStatusMenu(!showStatusMenu)}
-            className="w-full flex items-center gap-2.5 p-2 rounded-2xl bg-[#141824] border border-[#232B3E] hover:border-white/15 transition-all text-left"
-          >
-            <div className="relative shrink-0">
-              <div className="w-9 h-9 rounded-full overflow-hidden bg-[#F5F6F8] p-0.5 border border-white/10">
-                <img
-                  src={user.avatar || AVATAR_OPTIONS[0]}
-                  alt={user.name || 'User'}
-                  className="w-full h-full object-contain"
-                />
-              </div>
-              <span
-                className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#141824] ${
-                  user.status === 'online' ? 'bg-[#22C55E]' : user.status === 'idle' ? 'bg-[#F59E0B]' : 'bg-[#EF4444]'
-                }`}
-              />
-            </div>
-            {!railCollapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-white truncate">{user.name || 'Set your name'}</p>
-                <p className="text-[10px] text-[#7A8396] truncate">{user.bio || 'Online'}</p>
-              </div>
-            )}
-            {!railCollapsed && <ChevronDown className="w-3.5 h-3.5 text-[#7A8396] shrink-0" />}
-          </button>
-
-          {/* Status & Profile Dropdown */}
-          {showStatusMenu && (
-            <div className="absolute top-16 left-3 right-3 z-50 bg-[#161B28] border border-white/10 rounded-2xl p-1.5 shadow-2xl animate-msg-in">
-              <button
-                onClick={() => {
-                  saveUserSession({ ...user, status: 'online' });
-                  setShowStatusMenu(false);
-                }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left"
-              >
-                <span className="w-2 h-2 rounded-full bg-[#22C55E]" />
-                <span className="flex-1 text-white">Online</span>
-                {user.status === 'online' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
-              </button>
-              <button
-                onClick={() => {
-                  saveUserSession({ ...user, status: 'idle' });
-                  setShowStatusMenu(false);
-                }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left"
-              >
-                <span className="w-2 h-2 rounded-full bg-[#F59E0B]" />
-                <span className="flex-1 text-white">Away</span>
-                {user.status === 'idle' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
-              </button>
-              <button
-                onClick={() => {
-                  saveUserSession({ ...user, status: 'dnd' });
-                  setShowStatusMenu(false);
-                }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left"
-              >
-                <span className="w-2 h-2 rounded-full bg-[#EF4444]" />
-                <span className="flex-1 text-white">Do Not Disturb</span>
-                {user.status === 'dnd' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
-              </button>
-              <div className="border-t border-white/10 my-1" />
-              <button
-                onClick={() => {
-                  setShowStatusMenu(false);
-                  setProfileNameInput(user.name);
-                  setProfileBioInput(user.bio || '');
-                  setProfileAvatarSelected(user.avatar || AVATAR_OPTIONS[0]);
-                  setShowProfileModal(true);
-                }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-[#818CF8]"
-              >
-                <Edit3 className="w-3.5 h-3.5" /> Edit Profile & Photo
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* New Channel Button */}
-        <div className="px-3 py-1">
-          <button
-            onClick={() => setShowNewGroupModal(true)}
-            className="w-full bg-[#6366F1] hover:bg-[#5457E5] text-white py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow active:scale-95"
-          >
-            <Plus className="w-4 h-4 shrink-0" />
-            {!railCollapsed && <span>New Channel</span>}
-          </button>
-        </div>
-
-        {/* Channel List */}
-        <div className="flex-1 overflow-y-auto scroll px-2 py-2 space-y-3">
-          {/* Public Channels */}
+        {/* Navigation & Channel List */}
+        <div className="flex-1 overflow-y-auto scroll px-2 py-2.5 space-y-4">
+          {/* Public Channels Section */}
           <div>
-            {!railCollapsed && (
-              <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-[#7A8396]">
-                <span className="flex items-center gap-1.5">
-                  <Globe className="w-3 h-3 text-[#22C55E]" /> Channels
-                </span>
-                <span className="bg-white/5 px-1.5 py-0.5 rounded text-[10px]">
-                  {visibleGroups.filter((g) => !g.is_private).length}
-                </span>
+            {!railCollapsed ? (
+              <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase text-[#7A8396]">
+                <span className="flex items-center gap-1.5">Channels</span>
+                <button
+                  onClick={() => {
+                    setNewGroupIsPrivate(false);
+                    setShowNewGroupModal(true);
+                  }}
+                  className="w-5 h-5 rounded hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white transition-colors"
+                  title="Create Public Channel"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
               </div>
+            ) : (
+              <div className="w-full h-px bg-white/10 my-1" />
             )}
-            <div className="space-y-1 mt-1">
+
+            <div className="space-y-0.5 mt-1">
               {visibleGroups
                 .filter((g) => !g.is_private)
                 .map((group) => {
@@ -1401,24 +1323,34 @@ export default function Home() {
                         setActiveGroupId(group.id);
                         setMobileRailOpen(false);
                       }}
-                      className={`w-full flex items-center gap-2.5 p-2 rounded-2xl transition-all text-left relative ${
+                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-left relative group ${
                         isActive
-                          ? 'bg-[#6366F1]/15 text-white font-medium before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:bg-[#6366F1] before:rounded-r'
-                          : 'text-[#A8B2C7] hover:bg-white/[0.04]'
+                          ? 'bg-[#6366F1]/15 text-white font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:bg-[#6366F1] before:rounded-r'
+                          : 'text-[#9DA6B8] hover:bg-white/[0.05] hover:text-white font-medium'
                       }`}
+                      title={group.name}
                     >
                       <div className="relative shrink-0">
-                        <div className="w-9 h-9 rounded-full overflow-hidden bg-transparent border border-white/10 shrink-0">
-                          <img src={group.avatar || '/logo.png'} alt={group.name} className="w-full h-full object-cover rounded-full" />
-                        </div>
-                        <span className="absolute -bottom-0.5 -right-0.5 bg-black/80 rounded-full p-0.5 text-[#22C55E]">
-                          <Globe className="w-2.5 h-2.5" />
-                        </span>
+                        {group.avatar && group.avatar !== '/logo.png' ? (
+                          <div className="w-5 h-5 rounded-full overflow-hidden bg-transparent shrink-0">
+                            <img src={group.avatar} alt={group.name} className="w-full h-full object-cover rounded-full" />
+                          </div>
+                        ) : (
+                          <Hash
+                            className={`w-4 h-4 shrink-0 ${
+                              isActive ? 'text-[#818CF8]' : 'text-[#7A8396] group-hover:text-white'
+                            }`}
+                          />
+                        )}
                       </div>
                       {!railCollapsed && (
-                        <div className="flex-1 min-w-0">
-                          <span className="text-xs font-semibold truncate block text-white">{group.name}</span>
-                          <p className="text-[11px] text-[#7A8396] truncate">{group.description}</p>
+                        <div className="flex-1 min-w-0 flex items-center justify-between gap-1">
+                          <span className="text-[13px] truncate">{group.name}</span>
+                          {group.unreadCount && group.unreadCount > 0 ? (
+                            <span className="bg-[#6366F1] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                              {group.unreadCount}
+                            </span>
+                          ) : null}
                         </div>
                       )}
                     </button>
@@ -1427,19 +1359,27 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Private Channels */}
+          {/* Private Rooms Section */}
           <div>
-            {!railCollapsed && (
-              <div className="flex items-center justify-between px-2 py-1 text-[10px] font-bold tracking-wider uppercase text-[#7A8396]">
-                <span className="flex items-center gap-1.5">
-                  <Lock className="w-3 h-3 text-[#F59E0B]" /> Private Rooms
-                </span>
-                <span className="bg-white/5 px-1.5 py-0.5 rounded text-[10px]">
-                  {visibleGroups.filter((g) => g.is_private).length}
-                </span>
+            {!railCollapsed ? (
+              <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase text-[#7A8396]">
+                <span className="flex items-center gap-1.5">Private Rooms</span>
+                <button
+                  onClick={() => {
+                    setNewGroupIsPrivate(true);
+                    setShowNewGroupModal(true);
+                  }}
+                  className="w-5 h-5 rounded hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white transition-colors"
+                  title="Create Private Room"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
               </div>
+            ) : (
+              <div className="w-full h-px bg-white/10 my-1" />
             )}
-            <div className="space-y-1 mt-1">
+
+            <div className="space-y-0.5 mt-1">
               {visibleGroups
                 .filter((g) => g.is_private)
                 .map((group) => {
@@ -1451,29 +1391,24 @@ export default function Home() {
                         setActiveGroupId(group.id);
                         setMobileRailOpen(false);
                       }}
-                      className={`w-full flex items-center gap-2.5 p-2 rounded-2xl transition-all text-left relative ${
+                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-left relative group ${
                         isActive
-                          ? 'bg-[#6366F1]/15 text-white font-medium before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:bg-[#6366F1] before:rounded-r'
-                          : 'text-[#A8B2C7] hover:bg-white/[0.04]'
+                          ? 'bg-[#6366F1]/15 text-white font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:bg-[#6366F1] before:rounded-r'
+                          : 'text-[#9DA6B8] hover:bg-white/[0.05] hover:text-white font-medium'
                       }`}
+                      title={group.name}
                     >
-                      <div className="relative shrink-0">
-                        <div className="w-9 h-9 rounded-full overflow-hidden bg-transparent border border-white/10 shrink-0">
-                          <img src={group.avatar || '/logo.png'} alt={group.name} className="w-full h-full object-cover rounded-full" />
-                        </div>
-                        <span className="absolute -bottom-0.5 -right-0.5 bg-black/80 rounded-full p-0.5 text-[#F59E0B]">
-                          <Lock className="w-2.5 h-2.5" />
-                        </span>
-                      </div>
+                      <Lock
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          isActive ? 'text-[#F59E0B]' : 'text-[#7A8396] group-hover:text-white'
+                        }`}
+                      />
                       {!railCollapsed && (
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold truncate text-white">{group.name}</span>
-                            <span className="text-[9px] bg-[#F59E0B]/20 text-[#F59E0B] px-1 py-0.5 rounded font-bold">
-                              Private
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-[#7A8396] truncate">{group.description}</p>
+                        <div className="flex-1 min-w-0 flex items-center justify-between gap-1">
+                          <span className="text-[13px] truncate">{group.name}</span>
+                          <span className="text-[9px] text-[#F59E0B] font-semibold bg-[#F59E0B]/10 px-1.5 py-0.5 rounded">
+                            Lock
+                          </span>
                         </div>
                       )}
                     </button>
@@ -1483,12 +1418,126 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Sidebar Footer */}
-        <div className="p-3 border-t border-[#1B212E] text-[11px] flex items-center justify-between text-[#7A8396]">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#22C55E]" />
-            {!railCollapsed && <span>LMC Realtime Online</span>}
+        {/* User Profile Footer (Discord / Slack style) */}
+        <div className="p-2 border-t border-[#1A202E] bg-[#0A0D14]/90 backdrop-blur shrink-0 relative">
+          <div className="flex items-center justify-between gap-2 p-1 rounded-xl hover:bg-white/[0.04] transition-colors">
+            <button
+              onClick={() => setShowStatusMenu(!showStatusMenu)}
+              className="flex items-center gap-2.5 min-w-0 flex-1 text-left group"
+              title="Click to change status"
+            >
+              <div className="relative shrink-0">
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-[#161C28] border border-white/15">
+                  <img
+                    src={user.avatar || AVATAR_OPTIONS[0]}
+                    alt={user.name || 'User'}
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                </div>
+                <span
+                  className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#0A0D14] ${
+                    user.status === 'online' ? 'bg-[#22C55E]' : user.status === 'idle' ? 'bg-[#F59E0B]' : 'bg-[#EF4444]'
+                  }`}
+                />
+              </div>
+              {!railCollapsed && (
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-white truncate group-hover:text-[#818CF8] transition-colors">
+                    {user.name || 'Set your name'}
+                  </p>
+                  <p className="text-[10px] text-[#7A8396] truncate">
+                    {user.status === 'online' ? 'Online' : user.status === 'idle' ? 'Away' : 'Do Not Disturb'}
+                  </p>
+                </div>
+              )}
+            </button>
+
+            {!railCollapsed && (
+              <button
+                onClick={() => {
+                  setProfileNameInput(user.name);
+                  setProfileBioInput(user.bio || '');
+                  setProfileAvatarSelected(user.avatar || AVATAR_OPTIONS[0]);
+                  setShowProfileModal(true);
+                }}
+                className="w-7 h-7 rounded-lg grid place-items-center text-[#7A8396] hover:text-white hover:bg-white/10 transition-colors shrink-0"
+                title="Edit Profile & Photo"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            )}
           </div>
+
+          {/* Upwards Discord-style Status Flyout */}
+          {showStatusMenu && (
+            <div className="absolute bottom-14 left-2 right-2 z-50 bg-[#141824] border border-white/10 rounded-2xl p-2 shadow-2xl animate-msg-in">
+              <div className="px-2 py-1.5 border-b border-white/10 mb-1.5 flex items-center gap-2">
+                <div className="w-7 h-7 rounded-full overflow-hidden bg-[#161C28] shrink-0 border border-white/10">
+                  <img
+                    src={user.avatar || AVATAR_OPTIONS[0]}
+                    alt="avatar"
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-white truncate">{user.name || 'User'}</p>
+                  <p className="text-[10px] text-[#7A8396] truncate">{user.bio || 'LMC squad member'}</p>
+                </div>
+              </div>
+
+              <div className="space-y-0.5">
+                <button
+                  onClick={() => {
+                    saveUserSession({ ...user, status: 'online' });
+                    setShowStatusMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left text-white transition-colors"
+                >
+                  <span className="w-2 h-2 rounded-full bg-[#22C55E]" />
+                  <span className="flex-1">Online</span>
+                  {user.status === 'online' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
+                </button>
+                <button
+                  onClick={() => {
+                    saveUserSession({ ...user, status: 'idle' });
+                    setShowStatusMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left text-white transition-colors"
+                >
+                  <span className="w-2 h-2 rounded-full bg-[#F59E0B]" />
+                  <span className="flex-1">Away</span>
+                  {user.status === 'idle' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
+                </button>
+                <button
+                  onClick={() => {
+                    saveUserSession({ ...user, status: 'dnd' });
+                    setShowStatusMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left text-white transition-colors"
+                >
+                  <span className="w-2 h-2 rounded-full bg-[#EF4444]" />
+                  <span className="flex-1">Do Not Disturb</span>
+                  {user.status === 'dnd' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
+                </button>
+              </div>
+
+              <div className="border-t border-white/10 my-1.5" />
+
+              <button
+                onClick={() => {
+                  setShowStatusMenu(false);
+                  setProfileNameInput(user.name);
+                  setProfileBioInput(user.bio || '');
+                  setProfileAvatarSelected(user.avatar || AVATAR_OPTIONS[0]);
+                  setShowProfileModal(true);
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-[#818CF8] font-medium transition-colors"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Edit Profile & Avatar</span>
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
