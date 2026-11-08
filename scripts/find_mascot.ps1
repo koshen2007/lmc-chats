@@ -32,3 +32,4 @@ for ($y = 0; $y -lt $limitY; $y++) {
 
 Write-Output "Mascot bounds: X=[$minX, $maxX], Y=[$minY, $maxY], Width=$($maxX - $minX), Height=$($maxY - $minY)"
 $src.Dispose()
+

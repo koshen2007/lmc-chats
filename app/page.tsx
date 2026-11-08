@@ -1084,8 +1084,8 @@ export default function Home() {
 
               {/* Active Avatar Preview */}
               <div className="flex items-center gap-3 p-2 bg-[#0D1017] rounded-2xl border border-white/5 mb-3">
-                <div className="w-12 h-12 rounded-full overflow-hidden bg-[#F5F6F8] p-0.5 border border-[#6366F1] shrink-0">
-                  <img src={profileAvatarSelected} alt="Current" className="w-full h-full object-contain" />
+                <div className="w-12 h-12 rounded-full overflow-hidden bg-[#161C28] p-0.5 border border-[#6366F1] shrink-0">
+                  <img src={profileAvatarSelected} alt="Current" className="w-full h-full object-cover rounded-full" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-white">Selected Avatar</p>
@@ -1102,15 +1102,15 @@ export default function Home() {
                       key={idx}
                       type="button"
                       onClick={() => setProfileAvatarSelected(av)}
-                      className={`relative aspect-square rounded-xl p-1 transition-all overflow-hidden bg-[#F5F6F8] border-2 ${
+                      className={`relative aspect-square rounded-full p-0.5 transition-all overflow-hidden bg-[#161C28] border-2 ${
                         isSelected
                           ? 'border-[#6366F1] ring-2 ring-[#6366F1]/50 scale-105 shadow-md'
-                          : 'border-transparent hover:border-white/30 opacity-80 hover:opacity-100'
+                          : 'border-transparent hover:border-white/30 opacity-85 hover:opacity-100'
                       }`}
                     >
-                      <img src={av} alt={`Avatar ${idx + 1}`} className="w-full h-full object-contain" />
+                      <img src={av} alt={`Avatar ${idx + 1}`} className="w-full h-full object-cover rounded-full" />
                       {isSelected && (
-                        <span className="absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full bg-[#6366F1] text-white grid place-items-center text-[8px] shadow">
+                        <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-[#6366F1] text-white grid place-items-center text-[8px] shadow">
                           ✓
                         </span>
                       )}
@@ -1408,8 +1408,8 @@ export default function Home() {
                       }`}
                     >
                       <div className="relative shrink-0">
-                        <div className="w-9 h-9 rounded-full overflow-hidden bg-[#162044] p-0.5 border border-white/5">
-                          <img src={group.avatar || '/logo.png'} alt={group.name} className="w-full h-full object-contain" />
+                        <div className="w-9 h-9 rounded-full overflow-hidden bg-transparent border border-white/10 shrink-0">
+                          <img src={group.avatar || '/logo.png'} alt={group.name} className="w-full h-full object-cover rounded-full" />
                         </div>
                         <span className="absolute -bottom-0.5 -right-0.5 bg-black/80 rounded-full p-0.5 text-[#22C55E]">
                           <Globe className="w-2.5 h-2.5" />
@@ -1458,8 +1458,8 @@ export default function Home() {
                       }`}
                     >
                       <div className="relative shrink-0">
-                        <div className="w-9 h-9 rounded-full overflow-hidden bg-[#162044] p-0.5 border border-white/5">
-                          <img src={group.avatar || '/logo.png'} alt={group.name} className="w-full h-full object-contain" />
+                        <div className="w-9 h-9 rounded-full overflow-hidden bg-transparent border border-white/10 shrink-0">
+                          <img src={group.avatar || '/logo.png'} alt={group.name} className="w-full h-full object-cover rounded-full" />
                         </div>
                         <span className="absolute -bottom-0.5 -right-0.5 bg-black/80 rounded-full p-0.5 text-[#F59E0B]">
                           <Lock className="w-2.5 h-2.5" />
@@ -1521,8 +1521,8 @@ export default function Home() {
               title="View Channel Details & Members"
             >
               <div className="relative shrink-0">
-                <div className="w-10 h-10 rounded-full overflow-hidden bg-[#162044] p-0.5 border border-white/10 shadow-sm">
-                  <img src={activeGroup.avatar || '/logo.png'} alt={activeGroup.name} className="w-full h-full object-contain" />
+                <div className="w-10 h-10 rounded-full overflow-hidden bg-transparent border border-white/10 shadow-sm">
+                  <img src={activeGroup.avatar || '/logo.png'} alt={activeGroup.name} className="w-full h-full object-cover rounded-full" />
                 </div>
                 {activeGroup.is_private && (
                   <span className="absolute -bottom-0.5 -right-0.5 bg-black/90 p-0.5 rounded-full text-[#F59E0B]">
@@ -1622,13 +1622,13 @@ export default function Home() {
                         status: 'online',
                       })
                     }
-                    className="w-8 h-8 rounded-full overflow-hidden bg-[#F5F6F8] p-0.5 shrink-0 mt-1 border border-white/5 hover:scale-105 transition-transform"
+                    className="w-8 h-8 rounded-full overflow-hidden bg-[#161C28] p-0.5 shrink-0 mt-1 border border-white/10 hover:scale-105 transition-transform"
                     title={`View @${msg.sender_name}'s profile`}
                   >
                     <img
                       src={msg.sender_avatar}
                       alt={msg.sender_name}
-                      className="w-full h-full object-contain"
+                      className="w-full h-full object-cover rounded-full"
                     />
                   </button>
                 )}
@@ -2065,11 +2065,11 @@ export default function Home() {
         <div className="flex-1 overflow-y-auto scroll p-4 space-y-5">
           {/* Group Mascot & Info */}
           <div className="flex flex-col items-center text-center">
-            <div className="w-20 h-20 rounded-full overflow-hidden bg-[#162044] p-1.5 border-2 border-[#6366F1]/40 shadow-lg mb-3">
+            <div className="w-20 h-20 rounded-full overflow-hidden bg-transparent border-2 border-[#6366F1]/40 shadow-lg mb-3">
               <img
                 src={activeGroup.avatar || '/logo.png'}
                 alt={activeGroup.name}
-                className="w-full h-full object-contain"
+                className="w-full h-full object-cover rounded-full"
               />
             </div>
             <h2 className="text-base font-bold text-white flex items-center gap-1.5">
