@@ -47,6 +47,15 @@ import {
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured, Group, Message } from '@/lib/supabase';
 import { STICKERS, AVATAR_OPTIONS, FALLBACK_GIFS, EMOJI_CATEGORIES } from '@/lib/data';
+import AvatarCreatorModal from '@/components/AvatarCreatorModal';
+import {
+  AvatarConfig,
+  DEFAULT_AVATAR,
+  DEFAULT_AVATAR_DATA_URL,
+  PRESET_AVATARS,
+  renderAvatarSvgString,
+  svgToDataUrl,
+} from '@/lib/avatarStudio';
 
 interface CurrentUser {
   name: string;
@@ -99,14 +108,16 @@ export default function Home() {
   // Current user state
   const [user, setUser] = useState<CurrentUser>({
     name: '',
-    avatar: AVATAR_OPTIONS[0],
+    avatar: DEFAULT_AVATAR_DATA_URL,
     bio: 'Living life • LMC Squad member ⚡',
     status: 'online',
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showAvatarStudio, setShowAvatarStudio] = useState(false);
+  const [avatarStudioConfig, setAvatarStudioConfig] = useState<AvatarConfig>(DEFAULT_AVATAR);
   const [profileNameInput, setProfileNameInput] = useState('');
   const [profileBioInput, setProfileBioInput] = useState('');
-  const [profileAvatarSelected, setProfileAvatarSelected] = useState(AVATAR_OPTIONS[0]);
+  const [profileAvatarSelected, setProfileAvatarSelected] = useState(DEFAULT_AVATAR_DATA_URL);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
 
   // User Profile Viewer Modal (Visiting other users)
@@ -192,7 +203,7 @@ export default function Home() {
         if (parsed && parsed.name) {
           setUser(parsed);
           setProfileNameInput(parsed.name);
-          setProfileAvatarSelected(parsed.avatar || AVATAR_OPTIONS[0]);
+          setProfileAvatarSelected(parsed.avatar || DEFAULT_AVATAR_DATA_URL);
           setProfileBioInput(parsed.bio || 'Living life • LMC Squad member ⚡');
         } else {
           setShowProfileModal(true);
@@ -202,6 +213,17 @@ export default function Home() {
       }
     } else {
       setShowProfileModal(true);
+    }
+
+    // Load persisted Avatar Studio config
+    const storedAvatarConfig = localStorage.getItem('lmc_avatar_config');
+    if (storedAvatarConfig) {
+      try {
+        const parsedConf = JSON.parse(storedAvatarConfig);
+        if (parsedConf && parsedConf.skinColor) {
+          setAvatarStudioConfig(parsedConf);
+        }
+      } catch {}
     }
 
     // 2. Load Persisted Groups & auto-migrate old "LMC Main Lounge"
@@ -535,6 +557,25 @@ export default function Home() {
     reader.readAsDataURL(file);
   };
 
+  // Snapchat / Bitmoji Avatar Studio Save Handler
+  const handleAvatarStudioSave = (dataUrl: string, config: AvatarConfig) => {
+    setProfileAvatarSelected(dataUrl);
+    setAvatarStudioConfig(config);
+    try {
+      localStorage.setItem('lmc_avatar_config', JSON.stringify(config));
+    } catch {}
+
+    if (user.name) {
+      const updatedUser: CurrentUser = {
+        ...user,
+        avatar: dataUrl,
+      };
+      saveUserSession(updatedUser);
+    }
+    setShowAvatarStudio(false);
+    triggerToast('Bitmoji Avatar saved & applied!');
+  };
+
   // Custom Sticker Upload Handler (WhatsApp style)
   const handleCreateCustomSticker = (file: File) => {
     const reader = new FileReader();
@@ -587,7 +628,7 @@ export default function Home() {
         id: uniqueId,
         group_id: activeGroupId,
         sender_name: user.name,
-        sender_avatar: user.avatar || AVATAR_OPTIONS[0],
+        sender_avatar: user.avatar || DEFAULT_AVATAR_DATA_URL,
         sender_bio: user.bio,
         content: content.trim(),
         msg_type,
@@ -1066,7 +1107,7 @@ export default function Home() {
               )}
             </div>
 
-            {/* Custom Photo Upload or Doodle Grid */}
+            {/* Profile Avatar Selection & Studio */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs font-semibold text-[#A8B2C7]">Profile Picture</label>
@@ -1084,41 +1125,78 @@ export default function Home() {
                 </label>
               </div>
 
-              {/* Active Avatar Preview */}
-              <div className="flex items-center gap-3 p-2 bg-[#0D1017] rounded-2xl border border-white/5 mb-3">
-                <div className="w-12 h-12 rounded-full overflow-hidden bg-[#161C28] p-0.5 border border-[#6366F1] shrink-0">
+              {/* Active Avatar Card */}
+              <div className="flex items-center gap-3 p-2.5 bg-[#0D1017] rounded-2xl border border-white/5 mb-2.5">
+                <div className="relative w-12 h-12 rounded-full overflow-hidden bg-[#161C28] p-0.5 border-2 border-[#6366F1] shrink-0 shadow-md">
                   <img src={profileAvatarSelected} alt="Current" className="w-full h-full object-cover rounded-full" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-white">Selected Avatar</p>
-                  <p className="text-[10px] text-[#7A8396]">Pick below or upload custom photo</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-bold text-white truncate">Active Avatar</p>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-[#6366F1]/20 text-[#818CF8] font-semibold">
+                      Snap Vector
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-[#7A8396] truncate">Pick a preset or build custom below</p>
                 </div>
               </div>
 
-              {/* 16 Doodle Avatars Grid */}
-              <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto scroll p-1 bg-[#0D1017] rounded-2xl border border-white/5">
-                {AVATAR_OPTIONS.map((av, idx) => {
-                  const isSelected = profileAvatarSelected === av;
-                  return (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setProfileAvatarSelected(av)}
-                      className={`relative aspect-square rounded-full p-0.5 transition-all overflow-hidden bg-[#161C28] border-2 ${
-                        isSelected
-                          ? 'border-[#6366F1] ring-2 ring-[#6366F1]/50 scale-105 shadow-md'
-                          : 'border-transparent hover:border-white/30 opacity-85 hover:opacity-100'
-                      }`}
-                    >
-                      <img src={av} alt={`Avatar ${idx + 1}`} className="w-full h-full object-cover rounded-full" />
-                      {isSelected && (
-                        <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-[#6366F1] text-white grid place-items-center text-[8px] shadow">
-                          ✓
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+              {/* Primary Launch Button for Avatar Studio */}
+              <button
+                type="button"
+                onClick={() => setShowAvatarStudio(true)}
+                className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 text-white font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 transition-all active:scale-[0.98] mb-2.5 group"
+              >
+                <Sparkles className="w-4 h-4 text-yellow-300 group-hover:rotate-12 transition-transform" />
+                <span className="text-xs">Create Custom Avatar (Studio)</span>
+              </button>
+
+              {/* Quick Presets Picker */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5 px-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#7A8396]">Quick Presets</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rand = PRESET_AVATARS[Math.floor(Math.random() * PRESET_AVATARS.length)];
+                      const dataUrl = svgToDataUrl(renderAvatarSvgString(rand.config));
+                      setProfileAvatarSelected(dataUrl);
+                      setAvatarStudioConfig(rand.config);
+                    }}
+                    className="text-[10px] font-semibold text-indigo-400 hover:text-indigo-300"
+                  >
+                    🎲 Shuffle
+                  </button>
+                </div>
+                <div className="grid grid-cols-6 gap-1.5 p-1.5 bg-[#0D1017] rounded-xl border border-white/5">
+                  {PRESET_AVATARS.map((p, idx) => {
+                    const pDataUrl = svgToDataUrl(renderAvatarSvgString(p.config));
+                    const isSelected = profileAvatarSelected === pDataUrl;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setProfileAvatarSelected(pDataUrl);
+                          setAvatarStudioConfig(p.config);
+                        }}
+                        className={`relative aspect-square rounded-full p-0.5 transition-all overflow-hidden bg-[#161C28] border-2 ${
+                          isSelected
+                            ? 'border-indigo-500 ring-2 ring-indigo-500/50 scale-105 shadow-md'
+                            : 'border-transparent hover:border-white/30 opacity-85 hover:opacity-100'
+                        }`}
+                        title={p.name + ' - ' + p.tag}
+                      >
+                        <img src={pDataUrl} alt={p.name} className="w-full h-full object-cover rounded-full" />
+                        {isSelected && (
+                          <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-indigo-600 text-white grid place-items-center text-[7px] shadow">
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -1155,6 +1233,15 @@ export default function Home() {
             </button>
           </form>
         </div>
+      )}
+
+      {/* SNAPCHAT / BITMOJI AVATAR CREATOR STUDIO MODAL */}
+      {showAvatarStudio && (
+        <AvatarCreatorModal
+          initialConfig={avatarStudioConfig}
+          onSave={handleAvatarStudioSave}
+          onClose={() => setShowAvatarStudio(false)}
+        />
       )}
 
       {/* CREATE NEW CHANNEL MODAL */}
@@ -1429,7 +1516,7 @@ export default function Home() {
               <div className="relative shrink-0">
                 <div className="w-8 h-8 rounded-full overflow-hidden bg-[#161C28] border border-white/15">
                   <img
-                    src={user.avatar || AVATAR_OPTIONS[0]}
+                    src={user.avatar || DEFAULT_AVATAR_DATA_URL}
                     alt={user.name || 'User'}
                     className="w-full h-full object-cover rounded-full"
                   />
@@ -1457,7 +1544,7 @@ export default function Home() {
                 onClick={() => {
                   setProfileNameInput(user.name);
                   setProfileBioInput(user.bio || '');
-                  setProfileAvatarSelected(user.avatar || AVATAR_OPTIONS[0]);
+                  setProfileAvatarSelected(user.avatar || DEFAULT_AVATAR_DATA_URL);
                   setShowProfileModal(true);
                 }}
                 className="w-7 h-7 rounded-lg grid place-items-center text-[#7A8396] hover:text-white hover:bg-white/10 transition-colors shrink-0"
@@ -1474,7 +1561,7 @@ export default function Home() {
               <div className="px-2 py-1.5 border-b border-white/10 mb-1.5 flex items-center gap-2">
                 <div className="w-7 h-7 rounded-full overflow-hidden bg-[#161C28] shrink-0 border border-white/10">
                   <img
-                    src={user.avatar || AVATAR_OPTIONS[0]}
+                    src={user.avatar || DEFAULT_AVATAR_DATA_URL}
                     alt="avatar"
                     className="w-full h-full object-cover rounded-full"
                   />
@@ -1526,15 +1613,26 @@ export default function Home() {
               <button
                 onClick={() => {
                   setShowStatusMenu(false);
+                  setShowAvatarStudio(true);
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-[#A78BFA] font-medium transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-pink-400" />
+                <span>Snapchat Avatar Studio</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowStatusMenu(false);
                   setProfileNameInput(user.name);
                   setProfileBioInput(user.bio || '');
-                  setProfileAvatarSelected(user.avatar || AVATAR_OPTIONS[0]);
+                  setProfileAvatarSelected(user.avatar || DEFAULT_AVATAR_DATA_URL);
                   setShowProfileModal(true);
                 }}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-[#818CF8] font-medium transition-colors"
               >
                 <Edit3 className="w-3.5 h-3.5" />
-                <span>Edit Profile & Avatar</span>
+                <span>Edit Profile & Status</span>
               </button>
             </div>
           )}
@@ -2187,7 +2285,7 @@ export default function Home() {
               {(activeGroup.members || []).map((mName, idx) => {
                 const isCreator = activeGroup.created_by?.toLowerCase() === mName.toLowerCase();
                 const isCurrent = user.name && user.name.toLowerCase() === mName.toLowerCase();
-                const memberAvatar = AVATAR_OPTIONS[idx % AVATAR_OPTIONS.length];
+                const memberAvatar = isCurrent && user.avatar ? user.avatar : svgToDataUrl(renderAvatarSvgString(PRESET_AVATARS[idx % PRESET_AVATARS.length].config));
                 return (
                   <button
                     key={mName}
