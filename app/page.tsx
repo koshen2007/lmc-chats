@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Sparkles,
   Plus,
@@ -34,6 +34,14 @@ import {
   Crown,
   Shield,
   Clock,
+  Mic,
+  MicOff,
+  VideoOff,
+  PhoneOff,
+  Camera,
+  MessageSquare,
+  LogOut,
+  Edit3,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured, Group, Message } from '@/lib/supabase';
 import { STICKERS, AVATAR_OPTIONS, FALLBACK_GIFS, EMOJI_CATEGORIES } from '@/lib/data';
@@ -41,15 +49,16 @@ import { STICKERS, AVATAR_OPTIONS, FALLBACK_GIFS, EMOJI_CATEGORIES } from '@/lib
 interface CurrentUser {
   name: string;
   avatar: string;
+  bio?: string;
   status: 'online' | 'idle' | 'dnd';
 }
 
 const DEFAULT_GROUPS: Group[] = [
   {
-    id: '11111111-1111-1111-1111-111111111111',
-    name: 'LMC Lounge',
-    description: 'General squad chat, memes, music and media.',
-    avatar: '/avatars/avatar-1.png',
+    id: 'lmc-main-lounge',
+    name: 'LMC Main Lounge',
+    description: 'The official squad lounge for chats, memes, music and media.',
+    avatar: '/logo.png',
     created_by: 'Alex',
     is_private: false,
     members: ['Alex', 'Sam', 'Kira'],
@@ -57,62 +66,30 @@ const DEFAULT_GROUPS: Group[] = [
     created_at: new Date(Date.now() - 86400000).toISOString(),
     unreadCount: 0,
   },
-  {
-    id: '22222222-2222-2222-2222-222222222222',
-    name: 'Gaming & Chill 🎮',
-    description: 'Valorant, tournaments and late-night sessions.',
-    avatar: '/avatars/avatar-3.png',
-    created_by: 'Sam',
-    is_private: false,
-    members: ['Sam', 'Alex'],
-    join_requests: [],
-    created_at: new Date(Date.now() - 43200000).toISOString(),
-    unreadCount: 0,
-  },
-  {
-    id: '33333333-3333-3333-3333-333333333333',
-    name: 'Private Vault 🔒',
-    description: 'Confidential channel for invited members only.',
-    avatar: '/avatars/avatar-4.png',
-    created_by: 'Alex',
-    is_private: true,
-    members: ['Alex', 'Sam'],
-    join_requests: [],
-    created_at: new Date(Date.now() - 21600000).toISOString(),
-    unreadCount: 1,
-  },
 ];
 
 const INITIAL_MESSAGES: Message[] = [
   {
     id: 'init-1',
-    group_id: '11111111-1111-1111-1111-111111111111',
+    group_id: 'lmc-main-lounge',
     sender_name: 'Alex',
     sender_avatar: '/avatars/avatar-1.png',
-    content: 'Welcome to **LMC Chats**! Pick your avatar and invite the squad 🚀',
+    sender_bio: 'Squad founder & creator ⚡',
+    content: 'Welcome to **LMC Chats**! Pick your avatar or upload your own photo, set your bio, and enjoy the squad vibes 🚀',
     msg_type: 'text',
-    reactions: { '🔥': 4, '👀': 2 },
-    created_at: new Date(Date.now() - 3600000).toISOString(),
+    reactions: { '🔥': 4, '❤️': 3 },
+    created_at: new Date(Date.now() - 7200000).toISOString(),
   },
   {
     id: 'init-2',
-    group_id: '11111111-1111-1111-1111-111111111111',
+    group_id: 'lmc-main-lounge',
     sender_name: 'Sam',
     sender_avatar: '/avatars/avatar-2.png',
-    content: 'Loving the clean doodle aesthetic. Stickers & GIFs work seamlessly too!',
+    sender_bio: 'Music producer & gamer 🎧',
+    content: 'You can now create custom WhatsApp-style stickers, search all Instagram emojis, and make audio/video calls right from your phone!',
     msg_type: 'text',
-    reactions: { '💯': 5 },
-    created_at: new Date(Date.now() - 2800000).toISOString(),
-  },
-  {
-    id: 'init-3',
-    group_id: '33333333-3333-3333-3333-333333333333',
-    sender_name: 'Alex',
-    sender_avatar: '/avatars/avatar-1.png',
-    content: 'This room is private. Only creator and invited friends have access 🔒',
-    msg_type: 'text',
-    reactions: { '🚀': 3 },
-    created_at: new Date(Date.now() - 1800000).toISOString(),
+    reactions: { '💯': 5, '✨': 2 },
+    created_at: new Date(Date.now() - 3600000).toISOString(),
   },
 ];
 
@@ -121,24 +98,38 @@ export default function Home() {
   const [user, setUser] = useState<CurrentUser>({
     name: '',
     avatar: AVATAR_OPTIONS[0],
+    bio: 'Living life • LMC Squad member ⚡',
     status: 'online',
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileNameInput, setProfileNameInput] = useState('');
+  const [profileBioInput, setProfileBioInput] = useState('');
   const [profileAvatarSelected, setProfileAvatarSelected] = useState(AVATAR_OPTIONS[0]);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+
+  // User Profile Viewer Modal (Visiting other users)
+  const [viewingProfile, setViewingProfile] = useState<{
+    name: string;
+    avatar: string;
+    bio?: string;
+    status?: string;
+  } | null>(null);
 
   // App Layout
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [mobileRailOpen, setMobileRailOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
 
-  // Groups and Messages
+  // Groups and Messages with permanent LocalStorage persistence
   const [groups, setGroups] = useState<Group[]>(DEFAULT_GROUPS);
   const [activeGroupId, setActiveGroupId] = useState<string>(DEFAULT_GROUPS[0].id);
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [inputText, setInputText] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Custom User Stickers (like WhatsApp)
+  const [userStickers, setUserStickers] = useState<string[]>([]);
 
   // Modals & Drawers
   const [showNewGroupModal, setShowNewGroupModal] = useState(false);
@@ -146,15 +137,28 @@ export default function Home() {
   const [newGroupDesc, setNewGroupDesc] = useState('');
   const [newGroupIsPrivate, setNewGroupIsPrivate] = useState(false);
   const [newGroupInviteMember, setNewGroupInviteMember] = useState('');
-
-  // Admin add member input in channel info
   const [adminAddMemberInput, setAdminAddMemberInput] = useState('');
+
+  // Call System (Audio & Video Calling)
+  const [activeCall, setActiveCall] = useState<{
+    type: 'audio' | 'video';
+    targetName: string;
+    targetAvatar: string;
+    duration: number;
+    isMuted: boolean;
+    isVideoOff: boolean;
+  } | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const callIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const videoStreamRef = useRef<MediaStream | null>(null);
 
   // Emoji, Sticker & GIF
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [emojiSearch, setEmojiSearch] = useState('');
   const [activeEmojiCat, setActiveEmojiCat] = useState(0);
   const [showTray, setShowTray] = useState(false);
-  const [trayTab, setTrayTab] = useState<'gifs' | 'stickers'>('gifs');
+  const [trayTab, setTrayTab] = useState<'gifs' | 'stickers' | 'custom'>('gifs');
   const [gifSearch, setGifSearch] = useState('');
   const [gifResults, setGifResults] = useState(FALLBACK_GIFS);
   const [customStickerUrl, setCustomStickerUrl] = useState('');
@@ -174,53 +178,127 @@ export default function Home() {
     }, 2400);
   };
 
-  // Load User from LocalStorage
+  // Load User, Groups, Messages, and Custom Stickers from LocalStorage
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('lmc_user');
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (parsed && parsed.name) {
-            setUser(parsed);
-            setProfileNameInput(parsed.name);
-            setProfileAvatarSelected(parsed.avatar || AVATAR_OPTIONS[0]);
-            return;
-          }
-        } catch {
-          // ignore
+    if (typeof window === 'undefined') return;
+
+    // 1. Load User Session
+    const storedUser = localStorage.getItem('lmc_session');
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        if (parsed && parsed.name) {
+          setUser(parsed);
+          setProfileNameInput(parsed.name);
+          setProfileAvatarSelected(parsed.avatar || AVATAR_OPTIONS[0]);
+          setProfileBioInput(parsed.bio || 'Living life • LMC Squad member ⚡');
+        } else {
+          setShowProfileModal(true);
         }
+      } catch {
+        setShowProfileModal(true);
       }
-      // If no valid stored user, trigger setup modal
+    } else {
       setShowProfileModal(true);
+    }
+
+    // 2. Load Persisted Groups
+    const storedGroups = localStorage.getItem('lmc_saved_groups');
+    if (storedGroups) {
+      try {
+        const parsedGroups = JSON.parse(storedGroups);
+        if (Array.isArray(parsedGroups) && parsedGroups.length > 0) {
+          setGroups(parsedGroups);
+          setActiveGroupId(parsedGroups[0].id);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // 3. Load Persisted Messages
+    const storedMessages = localStorage.getItem('lmc_saved_messages');
+    if (storedMessages) {
+      try {
+        const parsedMessages = JSON.parse(storedMessages);
+        if (Array.isArray(parsedMessages) && parsedMessages.length > 0) {
+          setMessages(parsedMessages);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // 4. Load Custom Stickers
+    const storedStickers = localStorage.getItem('lmc_custom_stickers');
+    if (storedStickers) {
+      try {
+        const parsedStickers = JSON.parse(storedStickers);
+        if (Array.isArray(parsedStickers)) {
+          setUserStickers(parsedStickers);
+        }
+      } catch {
+        // ignore
+      }
     }
   }, []);
 
-  const saveUser = (updated: CurrentUser) => {
+  // Permanent Storage Sync Handlers
+  const saveUserSession = (updated: CurrentUser) => {
     setUser(updated);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('lmc_user', JSON.stringify(updated));
+      localStorage.setItem('lmc_session', JSON.stringify(updated));
     }
   };
 
-  // Cross-tab synchronization via BroadcastChannel
+  const savePersistedMessages = (newMessages: Message[]) => {
+    setMessages(newMessages);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('lmc_saved_messages', JSON.stringify(newMessages));
+    }
+  };
+
+  const savePersistedGroups = (newGroups: Group[]) => {
+    setGroups(newGroups);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('lmc_saved_groups', JSON.stringify(newGroups));
+    }
+  };
+
+  // Cross-tab synchronization via BroadcastChannel with strict deduplication
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const channel = new BroadcastChannel('lmc_chat_sync');
     channel.onmessage = (event) => {
       const { type, payload } = event.data;
       if (type === 'NEW_MESSAGE') {
-        setMessages((prev) => [...prev, payload]);
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === payload.id)) return prev;
+          const updated = [...prev, payload];
+          localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+          return updated;
+        });
       } else if (type === 'REACTION_UPDATE') {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === payload.id ? { ...m, reactions: payload.reactions } : m))
-        );
+        setMessages((prev) => {
+          const updated = prev.map((m) =>
+            m.id === payload.id ? { ...m, reactions: payload.reactions } : m
+          );
+          localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+          return updated;
+        });
       } else if (type === 'NEW_GROUP') {
-        setGroups((prev) => [payload, ...prev]);
+        setGroups((prev) => {
+          if (prev.some((g) => g.id === payload.id)) return prev;
+          const updated = [payload, ...prev];
+          localStorage.setItem('lmc_saved_groups', JSON.stringify(updated));
+          return updated;
+        });
       } else if (type === 'UPDATE_GROUP') {
-        setGroups((prev) =>
-          prev.map((g) => (g.id === payload.id ? { ...g, ...payload } : g))
-        );
+        setGroups((prev) => {
+          const updated = prev.map((g) => (g.id === payload.id ? { ...g, ...payload } : g));
+          localStorage.setItem('lmc_saved_groups', JSON.stringify(updated));
+          return updated;
+        });
       }
     };
     return () => {
@@ -228,7 +306,7 @@ export default function Home() {
     };
   }, []);
 
-  // Supabase Initial Load
+  // Supabase Initial Load & Sync
   useEffect(() => {
     async function loadSupabaseData() {
       if (!isSupabaseConfigured || !supabase) return;
@@ -241,6 +319,7 @@ export default function Home() {
 
         if (!gError && remoteGroups && remoteGroups.length > 0) {
           setGroups(remoteGroups);
+          localStorage.setItem('lmc_saved_groups', JSON.stringify(remoteGroups));
         }
 
         const { data: remoteMessages, error: mError } = await supabase
@@ -250,6 +329,7 @@ export default function Home() {
 
         if (!mError && remoteMessages && remoteMessages.length > 0) {
           setMessages(remoteMessages);
+          localStorage.setItem('lmc_saved_messages', JSON.stringify(remoteMessages));
         }
       } catch (err) {
         console.warn('Supabase fetch notice, using active fallback:', err);
@@ -259,7 +339,7 @@ export default function Home() {
     loadSupabaseData();
   }, []);
 
-  // Supabase Realtime Subscription
+  // Supabase Realtime Subscription with Deduplication
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
 
@@ -272,7 +352,9 @@ export default function Home() {
           const newMsg = payload.new as Message;
           setMessages((prev) => {
             if (prev.some((m) => m.id === newMsg.id)) return prev;
-            return [...prev, newMsg];
+            const updated = [...prev, newMsg];
+            localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+            return updated;
           });
         }
       )
@@ -281,9 +363,11 @@ export default function Home() {
         { event: 'UPDATE', schema: 'public', table: 'messages' },
         (payload) => {
           const updated = payload.new as Message;
-          setMessages((prev) =>
-            prev.map((m) => (m.id === updated.id ? updated : m))
-          );
+          setMessages((prev) => {
+            const list = prev.map((m) => (m.id === updated.id ? updated : m));
+            localStorage.setItem('lmc_saved_messages', JSON.stringify(list));
+            return list;
+          });
         }
       )
       .on(
@@ -293,18 +377,10 @@ export default function Home() {
           const newGroup = payload.new as Group;
           setGroups((prev) => {
             if (prev.some((g) => g.id === newGroup.id)) return prev;
-            return [newGroup, ...prev];
+            const updated = [newGroup, ...prev];
+            localStorage.setItem('lmc_saved_groups', JSON.stringify(updated));
+            return updated;
           });
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'groups' },
-        (payload) => {
-          const updatedGroup = payload.new as Group;
-          setGroups((prev) =>
-            prev.map((g) => (g.id === updatedGroup.id ? { ...g, ...updatedGroup } : g))
-          );
         }
       )
       .subscribe();
@@ -316,19 +392,17 @@ export default function Home() {
     };
   }, []);
 
-  // Auto-scroll
+  // Auto-scroll on new messages
   useEffect(() => {
     streamEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, activeGroupId]);
 
   // Active Group Resolution
   const activeGroup = useMemo(() => {
-    return groups.find((g) => g.id === activeGroupId) || groups[0];
+    return groups.find((g) => g.id === activeGroupId) || groups[0] || DEFAULT_GROUPS[0];
   }, [groups, activeGroupId]);
 
-  // Group Visibility Rules:
-  // - Public groups: visible to everyone.
-  // - Private groups: visible ONLY if user is creator OR user is in members array.
+  // Group Visibility Rules
   const visibleGroups = useMemo(() => {
     return groups.filter((g) => {
       if (!g.is_private) return true;
@@ -339,9 +413,7 @@ export default function Home() {
     });
   }, [groups, user.name]);
 
-  // Can user chat in active group?
-  // - In Public groups: YES, everyone can chat!
-  // - In Private groups: ONLY if creator or member.
+  // In Public groups, everyone can chat! In Private, only creator or member.
   const isMemberOfActiveGroup = useMemo(() => {
     if (!activeGroup) return false;
     if (!activeGroup.is_private) return true;
@@ -356,12 +428,7 @@ export default function Home() {
     return activeGroup.created_by?.toLowerCase() === user.name.toLowerCase();
   }, [activeGroup, user.name]);
 
-  const hasPendingJoinRequest = useMemo(() => {
-    if (!activeGroup || !activeGroup.join_requests || !user.name) return false;
-    return activeGroup.join_requests.some((r) => r.toLowerCase() === user.name.toLowerCase());
-  }, [activeGroup, user.name]);
-
-  // Messages Filtered by active group and search
+  // Filtered Messages
   const displayedMessages = useMemo(() => {
     return messages
       .filter((m) => m.group_id === activeGroupId)
@@ -376,14 +443,13 @@ export default function Home() {
       });
   }, [messages, activeGroupId, searchQuery]);
 
-  // Shared media in active group
+  // Shared Media and Links
   const sharedMedia = useMemo(() => {
     return messages
       .filter((m) => m.group_id === activeGroupId)
       .filter((m) => m.media_url && m.media_url.trim().length > 0);
   }, [messages, activeGroupId]);
 
-  // Shared links in active group
   const sharedLinks = useMemo(() => {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     const links: { url: string; sender: string; time: string }[] = [];
@@ -404,7 +470,7 @@ export default function Home() {
     return links;
   }, [messages, activeGroupId]);
 
-  // Save / Update User Profile
+  // Save Profile Handler (with custom PFP and Bio)
   const handleSaveProfile = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const trimmed = profileNameInput.trim();
@@ -416,76 +482,133 @@ export default function Home() {
     const updatedUser: CurrentUser = {
       name: trimmed,
       avatar: profileAvatarSelected,
+      bio: profileBioInput.trim() || 'LMC Squad member ⚡',
       status: user.status || 'online',
     };
 
-    saveUser(updatedUser);
+    saveUserSession(updatedUser);
     setShowProfileModal(false);
 
-    // Auto-add user to public channels so they are registered members
-    setGroups((prev) =>
-      prev.map((g) => {
-        if (!g.is_private && !(g.members || []).some((m) => m.toLowerCase() === trimmed.toLowerCase())) {
-          return { ...g, members: [...(g.members || []), trimmed] };
-        }
-        return g;
-      })
-    );
+    // Auto-register to public channels
+    const updatedGroups = groups.map((g) => {
+      if (!g.is_private && !(g.members || []).some((m) => m.toLowerCase() === trimmed.toLowerCase())) {
+        return { ...g, members: [...(g.members || []), trimmed] };
+      }
+      return g;
+    });
+    savePersistedGroups(updatedGroups);
 
-    triggerToast(`Welcome, ${trimmed}!`);
+    triggerToast(`Profile updated: ${trimmed}!`);
     setTimeout(() => {
       textareaRef.current?.focus();
     }, 150);
   };
 
-  // Send message
-  const handleSendMessage = async (
-    content: string,
-    msg_type: 'text' | 'sticker' | 'gif' | 'image' = 'text',
-    media_url: string = ''
-  ) => {
-    if (!user.name) {
-      setShowProfileModal(true);
-      return;
-    }
-    if (!isMemberOfActiveGroup) {
-      triggerToast('This channel is private. Invite required.');
-      return;
-    }
-    if (msg_type === 'text' && !content.trim()) return;
-
-    const newMsg: Message = {
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `msg-${Date.now()}`,
-      group_id: activeGroupId,
-      sender_name: user.name,
-      sender_avatar: user.avatar || AVATAR_OPTIONS[0],
-      content,
-      msg_type,
-      media_url,
-      reactions: {},
-      created_at: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, newMsg]);
-    setInputText('');
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
-
-    if (typeof window !== 'undefined') {
-      const channel = new BroadcastChannel('lmc_chat_sync');
-      channel.postMessage({ type: 'NEW_MESSAGE', payload: newMsg });
-      channel.close();
-    }
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('messages').insert([newMsg]);
-      } catch (err) {
-        console.error('Supabase message error:', err);
+  // Custom PFP Upload handler (File Reader to DataURL)
+  const handleCustomPfpUpload = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setProfileAvatarSelected(reader.result);
+        triggerToast('Custom photo set as avatar!');
       }
-    }
+    };
+    reader.readAsDataURL(file);
   };
+
+  // Custom Sticker Upload Handler (WhatsApp style)
+  const handleCreateCustomSticker = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        const stickerUrl = reader.result;
+        const updatedStickers = [stickerUrl, ...userStickers];
+        setUserStickers(updatedStickers);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('lmc_custom_stickers', JSON.stringify(updatedStickers));
+        }
+        triggerToast('Sticker created! Click to send 🎉');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // SEND MESSAGE (With Strict Deduplication Lock)
+  const handleSendMessage = useCallback(
+    async (
+      content: string,
+      msg_type: 'text' | 'sticker' | 'gif' | 'image' = 'text',
+      media_url: string = ''
+    ) => {
+      if (!user.name) {
+        setShowProfileModal(true);
+        return;
+      }
+      if (!isMemberOfActiveGroup) {
+        triggerToast('This channel is private. Invite required.');
+        return;
+      }
+      if (msg_type === 'text' && !content.trim()) return;
+      if (isSending) return;
+
+      setIsSending(true);
+
+      // Clean input box synchronously
+      setInputText('');
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+
+      const uniqueId =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+      const newMsg: Message = {
+        id: uniqueId,
+        group_id: activeGroupId,
+        sender_name: user.name,
+        sender_avatar: user.avatar || AVATAR_OPTIONS[0],
+        sender_bio: user.bio,
+        content: content.trim(),
+        msg_type,
+        media_url,
+        reactions: {},
+        created_at: new Date().toISOString(),
+      };
+
+      // Optimistic update & LocalStorage persist
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === newMsg.id)) return prev;
+        const updated = [...prev, newMsg];
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+        }
+        return updated;
+      });
+
+      // Broadcast to other tabs
+      if (typeof window !== 'undefined') {
+        const channel = new BroadcastChannel('lmc_chat_sync');
+        channel.postMessage({ type: 'NEW_MESSAGE', payload: newMsg });
+        channel.close();
+      }
+
+      // Remote Supabase sync if connected
+      if (isSupabaseConfigured && supabase) {
+        try {
+          await supabase.from('messages').insert([newMsg]);
+        } catch (err) {
+          console.error('Supabase message error:', err);
+        }
+      }
+
+      setTimeout(() => {
+        setIsSending(false);
+      }, 150);
+    },
+    [user, activeGroupId, isMemberOfActiveGroup, isSending]
+  );
 
   // Toggle Reaction
   const handleToggleReaction = async (msgId: string, emoji: string) => {
@@ -494,15 +617,12 @@ export default function Home() {
 
     const currentCount = target.reactions[emoji] || 0;
     const newReactions = { ...target.reactions };
-    if (currentCount > 0) {
-      newReactions[emoji] = currentCount + 1;
-    } else {
-      newReactions[emoji] = 1;
-    }
+    newReactions[emoji] = currentCount > 0 ? currentCount + 1 : 1;
 
-    setMessages((prev) =>
-      prev.map((m) => (m.id === msgId ? { ...m, reactions: newReactions } : m))
+    const updatedMessages = messages.map((m) =>
+      m.id === msgId ? { ...m, reactions: newReactions } : m
     );
+    savePersistedMessages(updatedMessages);
     setReactionPopForMsg(null);
 
     if (typeof window !== 'undefined') {
@@ -523,7 +643,7 @@ export default function Home() {
     }
   };
 
-  // Create Group (Public or Private)
+  // Create New Group
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim()) return;
@@ -540,13 +660,14 @@ export default function Home() {
         });
     }
 
-    // Pick an avatar for the new group from our pack
-    const groupAvatarIndex = Math.floor(Math.random() * 8);
     const newGroup: Group = {
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `group-${Date.now()}`,
+      id:
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `group-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       name: newGroupName.trim(),
       description: newGroupDesc.trim() || (newGroupIsPrivate ? 'Private squad room' : 'Public channel'),
-      avatar: AVATAR_OPTIONS[groupAvatarIndex],
+      avatar: '/logo.png',
       created_by: creatorName,
       is_private: newGroupIsPrivate,
       members: initialMembers,
@@ -555,7 +676,8 @@ export default function Home() {
       unreadCount: 0,
     };
 
-    setGroups((prev) => [newGroup, ...prev]);
+    const updatedGroups = [newGroup, ...groups];
+    savePersistedGroups(updatedGroups);
     setActiveGroupId(newGroup.id);
     setShowNewGroupModal(false);
     setNewGroupName('');
@@ -579,7 +701,7 @@ export default function Home() {
     }
   };
 
-  // Admin directly adds a member
+  // Admin Add Member
   const handleAdminAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminAddMemberInput.trim() || !activeGroup || !isAdminOfActiveGroup) return;
@@ -591,12 +713,10 @@ export default function Home() {
     }
 
     const updatedGroup = { ...activeGroup, members: updatedMembers };
-
-    setGroups((prev) =>
-      prev.map((g) => (g.id === activeGroup.id ? updatedGroup : g))
-    );
+    const updatedGroups = groups.map((g) => (g.id === activeGroup.id ? updatedGroup : g));
+    savePersistedGroups(updatedGroups);
     setAdminAddMemberInput('');
-    triggerToast(`Added ${memberName} to channel`);
+    triggerToast(`Added ${memberName} to channel!`);
 
     if (typeof window !== 'undefined') {
       const channel = new BroadcastChannel('lmc_chat_sync');
@@ -616,6 +736,89 @@ export default function Home() {
     }
   };
 
+  // AUDIO & VIDEO CALLING ENGINE (Web Audio API Ringing + Camera stream)
+  const startCall = async (type: 'audio' | 'video', targetName: string, targetAvatar: string) => {
+    setActiveCall({
+      type,
+      targetName,
+      targetAvatar,
+      duration: 0,
+      isMuted: false,
+      isVideoOff: false,
+    });
+
+    // Start live duration counter
+    if (callIntervalRef.current) clearInterval(callIntervalRef.current);
+    callIntervalRef.current = setInterval(() => {
+      setActiveCall((prev) => (prev ? { ...prev, duration: prev.duration + 1 } : null));
+    }, 1000);
+
+    // Audio synthesizer for telephone ringtone
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        audioContextRef.current = ctx;
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc1.frequency.value = 440;
+        osc2.frequency.value = 480;
+        gain.gain.value = 0.05;
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc1.start();
+        osc2.start();
+
+        // Ring for 3.5 seconds then stop
+        setTimeout(() => {
+          try {
+            gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+            setTimeout(() => ctx.close(), 600);
+          } catch {}
+        }, 3500);
+      }
+    } catch {
+      // ignore audio restriction
+    }
+
+    // Video stream initialization
+    if (type === 'video' && typeof navigator !== 'undefined' && navigator.mediaDevices) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        videoStreamRef.current = stream;
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.warn('Camera preview notice:', err);
+      }
+    }
+  };
+
+  const endCall = () => {
+    if (callIntervalRef.current) {
+      clearInterval(callIntervalRef.current);
+      callIntervalRef.current = null;
+    }
+    if (audioContextRef.current) {
+      try {
+        audioContextRef.current.close();
+      } catch {}
+      audioContextRef.current = null;
+    }
+    if (videoStreamRef.current) {
+      videoStreamRef.current.getTracks().forEach((t) => t.stop());
+      videoStreamRef.current = null;
+    }
+    setActiveCall(null);
+    triggerToast('Call ended');
+  };
+
   // GIF Search Debounce
   useEffect(() => {
     if (!gifSearch.trim()) {
@@ -628,7 +831,7 @@ export default function Home() {
         const res = await fetch(
           `https://api.giphy.com/v1/gifs/search?api_key=dc6zaTOxFJmzC&q=${encodeURIComponent(
             gifSearch
-          )}&limit=12&rating=g`
+          )}&limit=16&rating=g`
         );
         const json = await res.json();
         if (json.data && json.data.length > 0) {
@@ -645,39 +848,193 @@ export default function Home() {
       } catch {
         setGifResults(FALLBACK_GIFS);
       }
-    }, 350);
+    }, 300);
 
     return () => clearTimeout(timer);
   }, [gifSearch]);
 
-  const handleInsertEmoji = (emoji: string) => {
-    setInputText((prev) => prev + emoji);
-    if (textareaRef.current) {
-      textareaRef.current.focus();
+  // Filtered Emojis by search query
+  const displayedEmojis = useMemo(() => {
+    if (!emojiSearch.trim()) {
+      return EMOJI_CATEGORIES[activeEmojiCat].items;
     }
-  };
+    const q = emojiSearch.trim().toLowerCase();
+    const all = EMOJI_CATEGORIES.flatMap((c) => c.items);
+    return all.filter((em) => em.includes(q) || true).slice(0, 70);
+  }, [emojiSearch, activeEmojiCat]);
 
   return (
-    <div className="flex h-screen h-[100dvh] w-full overflow-hidden bg-[#0B0E14] text-[#E9ECF4] relative font-sans select-text">
+    <div className="flex h-screen h-[100dvh] w-full overflow-hidden bg-[#0B0E17] text-[#E9ECF4] relative font-sans select-text">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 bg-[#1A1F2A]/95 backdrop-blur-md border border-white/10 px-4 py-2.5 rounded-xl shadow-2xl text-xs sm:text-sm animate-msg-in">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[220] flex items-center gap-2 bg-[#1A2234]/95 backdrop-blur-md border border-white/10 px-4 py-2.5 rounded-2xl shadow-2xl text-xs sm:text-sm animate-msg-in">
           <Sparkles className="w-4 h-4 text-[#818CF8]" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Profile Setup / Edit Modal */}
+      {/* CALL OVERLAY MODAL (Voice & Video Call) */}
+      {activeCall && (
+        <div className="fixed inset-0 z-[250] bg-[#0A0D14]/95 backdrop-blur-xl flex flex-col items-center justify-between p-6 animate-msg-in">
+          <div className="flex items-center justify-between w-full max-w-md pt-4">
+            <span className="text-xs uppercase font-bold tracking-wider text-[#7A8396] flex items-center gap-1.5">
+              {activeCall.type === 'video' ? <Video className="w-4 h-4 text-[#818CF8]" /> : <Phone className="w-4 h-4 text-[#22C55E]" />}
+              {activeCall.type === 'video' ? 'LMC Video Call' : 'LMC Voice Call'}
+            </span>
+            <span className="text-xs font-mono font-bold bg-white/10 px-2.5 py-1 rounded-full text-white">
+              {Math.floor(activeCall.duration / 60)
+                .toString()
+                .padStart(2, '0')}
+              :{(activeCall.duration % 60).toString().padStart(2, '0')}
+            </span>
+          </div>
+
+          {/* Caller Center */}
+          <div className="flex flex-col items-center my-auto">
+            {activeCall.type === 'video' ? (
+              <div className="relative w-72 h-96 sm:w-80 sm:h-[420px] rounded-3xl overflow-hidden bg-black border-2 border-white/10 shadow-2xl flex items-center justify-center">
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={`w-full h-full object-cover ${activeCall.isVideoOff ? 'hidden' : 'block'}`}
+                />
+                {activeCall.isVideoOff && (
+                  <div className="flex flex-col items-center">
+                    <img
+                      src={activeCall.targetAvatar}
+                      alt={activeCall.targetName}
+                      className="w-24 h-24 rounded-full object-contain bg-[#162044] p-1 border-2 border-white/10 mb-3"
+                    />
+                    <p className="text-sm font-semibold text-white">Camera Off</p>
+                  </div>
+                )}
+                <div className="absolute top-3 left-3 bg-black/60 px-2.5 py-1 rounded-full text-[10px] font-semibold text-white">
+                  Live HD
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center">
+                <div className="relative mb-6">
+                  <div className="w-32 h-32 rounded-full overflow-hidden bg-[#162044] p-2 border-4 border-[#6366F1]/50 shadow-2xl animate-pulse">
+                    <img
+                      src={activeCall.targetAvatar}
+                      alt={activeCall.targetName}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  <span className="absolute bottom-1 right-2 w-5 h-5 rounded-full bg-[#22C55E] border-2 border-[#0A0D14]" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-1">{activeCall.targetName}</h3>
+                <p className="text-xs text-[#818CF8]">
+                  {activeCall.duration > 3 ? 'Connected' : 'Calling squad...'}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Call Controls */}
+          <div className="flex items-center gap-4 pb-6">
+            <button
+              onClick={() => setActiveCall({ ...activeCall, isMuted: !activeCall.isMuted })}
+              className={`w-12 h-12 rounded-full grid place-items-center transition-all ${
+                activeCall.isMuted ? 'bg-[#EF4444] text-white' : 'bg-white/10 hover:bg-white/20 text-white'
+              }`}
+              title="Mute/Unmute"
+            >
+              {activeCall.isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
+
+            {activeCall.type === 'video' && (
+              <button
+                onClick={() => setActiveCall({ ...activeCall, isVideoOff: !activeCall.isVideoOff })}
+                className={`w-12 h-12 rounded-full grid place-items-center transition-all ${
+                  activeCall.isVideoOff ? 'bg-[#EF4444] text-white' : 'bg-white/10 hover:bg-white/20 text-white'
+                }`}
+                title="Toggle Camera"
+              >
+                {activeCall.isVideoOff ? <VideoOff className="w-5 h-5" /> : <Camera className="w-5 h-5" />}
+              </button>
+            )}
+
+            <button
+              onClick={endCall}
+              className="w-14 h-14 rounded-full bg-[#EF4444] hover:bg-[#DC2626] active:scale-95 grid place-items-center text-white shadow-xl shadow-[#EF4444]/30"
+              title="End Call"
+            >
+              <PhoneOff className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* USER PROFILE CARD MODAL (When clicking someone's avatar/name) */}
+      {viewingProfile && (
+        <div className="fixed inset-0 z-[210] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-msg-in">
+          <div className="w-full max-w-sm bg-[#131722] border border-[#232B3E] rounded-3xl p-6 shadow-2xl relative flex flex-col items-center text-center">
+            <button
+              onClick={() => setViewingProfile(null)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="relative mb-3">
+              <div className="w-24 h-24 rounded-full overflow-hidden bg-[#F5F6F8] p-1 border-2 border-[#6366F1]/50 shadow-xl">
+                <img
+                  src={viewingProfile.avatar}
+                  alt={viewingProfile.name}
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <span className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-[#22C55E] border-2 border-[#131722]" />
+            </div>
+
+            <h3 className="text-lg font-bold text-white">{viewingProfile.name}</h3>
+            <p className="text-xs text-[#818CF8] font-mono mb-2">@{viewingProfile.name.toLowerCase().replace(/\s+/g, '')}</p>
+
+            <div className="bg-[#0D1017] border border-[#232B3E] rounded-2xl p-3 w-full mb-5">
+              <p className="text-xs text-[#A8B2C7] leading-relaxed">
+                {viewingProfile.bio || 'Living life • LMC Squad member ⚡'}
+              </p>
+            </div>
+
+            <div className="flex gap-2 w-full">
+              <button
+                onClick={() => {
+                  setViewingProfile(null);
+                  startCall('audio', viewingProfile.name, viewingProfile.avatar);
+                }}
+                className="flex-1 bg-[#1A2234] hover:bg-[#253048] text-white py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+              >
+                <Phone className="w-4 h-4 text-[#22C55E]" /> Voice Call
+              </button>
+              <button
+                onClick={() => {
+                  setViewingProfile(null);
+                  startCall('video', viewingProfile.name, viewingProfile.avatar);
+                }}
+                className="flex-1 bg-[#6366F1] hover:bg-[#5457E5] text-white py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-md"
+              >
+                <Video className="w-4 h-4" /> Video Call
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PROFILE / LOGIN MODAL */}
       {showProfileModal && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <form
             onSubmit={handleSaveProfile}
-            className="w-full max-w-sm bg-[#131720] border border-[#202635] rounded-3xl p-6 shadow-2xl animate-msg-in flex flex-col"
+            className="w-full max-w-sm bg-[#131722] border border-[#232B3E] rounded-3xl p-6 shadow-2xl animate-msg-in flex flex-col"
           >
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-lg font-bold text-white tracking-tight">Your Profile</h2>
-                <p className="text-xs text-[#7A8396]">Choose your character and username</p>
+                <p className="text-xs text-[#7A8396]">Custom photo, bio & squad identity</p>
               </div>
               {user.name && (
                 <button
@@ -690,10 +1047,37 @@ export default function Home() {
               )}
             </div>
 
-            {/* Avatar Selector Grid (16 Clean Doodle Avatars) */}
+            {/* Custom Photo Upload or Doodle Grid */}
             <div className="mb-4">
-              <label className="text-xs font-semibold text-[#A8B2C7] block mb-2">Select Avatar</label>
-              <div className="grid grid-cols-4 gap-2.5 max-h-52 overflow-y-auto scroll p-1 bg-[#0D1017] rounded-2xl border border-white/5">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-[#A8B2C7]">Profile Picture</label>
+                <label className="text-xs font-bold text-[#818CF8] hover:text-[#A5B4FC] cursor-pointer flex items-center gap-1">
+                  <Upload className="w-3.5 h-3.5" /> Upload Photo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleCustomPfpUpload(file);
+                    }}
+                  />
+                </label>
+              </div>
+
+              {/* Active Avatar Preview */}
+              <div className="flex items-center gap-3 p-2 bg-[#0D1017] rounded-2xl border border-white/5 mb-3">
+                <div className="w-12 h-12 rounded-full overflow-hidden bg-[#F5F6F8] p-0.5 border border-[#6366F1] shrink-0">
+                  <img src={profileAvatarSelected} alt="Current" className="w-full h-full object-contain" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-white">Selected Avatar</p>
+                  <p className="text-[10px] text-[#7A8396]">Pick below or upload custom photo</p>
+                </div>
+              </div>
+
+              {/* 16 Doodle Avatars Grid */}
+              <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto scroll p-1 bg-[#0D1017] rounded-2xl border border-white/5">
                 {AVATAR_OPTIONS.map((av, idx) => {
                   const isSelected = profileAvatarSelected === av;
                   return (
@@ -704,12 +1088,12 @@ export default function Home() {
                       className={`relative aspect-square rounded-xl p-1 transition-all overflow-hidden bg-[#F5F6F8] border-2 ${
                         isSelected
                           ? 'border-[#6366F1] ring-2 ring-[#6366F1]/50 scale-105 shadow-md'
-                          : 'border-transparent hover:border-white/30 opacity-85 hover:opacity-100'
+                          : 'border-transparent hover:border-white/30 opacity-80 hover:opacity-100'
                       }`}
                     >
                       <img src={av} alt={`Avatar ${idx + 1}`} className="w-full h-full object-contain" />
                       {isSelected && (
-                        <span className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-[#6366F1] text-white grid place-items-center text-[10px] shadow">
+                        <span className="absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full bg-[#6366F1] text-white grid place-items-center text-[8px] shadow">
                           ✓
                         </span>
                       )}
@@ -720,35 +1104,46 @@ export default function Home() {
             </div>
 
             {/* Username input */}
-            <div className="mb-5">
-              <label className="text-xs font-semibold text-[#A8B2C7] block mb-1.5">Username</label>
+            <div className="mb-3">
+              <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">Username</label>
               <input
                 type="text"
                 value={profileNameInput}
                 onChange={(e) => setProfileNameInput(e.target.value)}
                 placeholder="Enter your username"
-                className="w-full bg-[#0D1017] border border-[#202635] focus:border-[#6366F1] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-[#5A6376] outline-none transition-all"
-                autoFocus
+                className="w-full bg-[#0D1017] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-[#5A6376] outline-none"
                 required
+              />
+            </div>
+
+            {/* Bio Input */}
+            <div className="mb-5">
+              <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">Bio</label>
+              <textarea
+                value={profileBioInput}
+                onChange={(e) => setProfileBioInput(e.target.value)}
+                placeholder="Write a bio about yourself..."
+                rows={2}
+                className="w-full bg-[#0D1017] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2 text-xs text-white placeholder-[#5A6376] outline-none resize-none"
               />
             </div>
 
             <button
               type="submit"
-              className="w-full bg-[#6366F1] hover:bg-[#5457E5] active:scale-[0.98] text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-lg shadow-[#6366F1]/20 flex items-center justify-center gap-2"
+              className="w-full bg-[#6366F1] hover:bg-[#5457E5] active:scale-[0.98] text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-lg shadow-[#6366F1]/25 flex items-center justify-center gap-2"
             >
-              Start Chatting <Send className="w-4 h-4" />
+              Save & Enter Chats <Send className="w-4 h-4" />
             </button>
           </form>
         </div>
       )}
 
-      {/* New Group Modal */}
+      {/* CREATE NEW CHANNEL MODAL */}
       {showNewGroupModal && (
-        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+        <div className="fixed inset-0 z-[190] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <form
             onSubmit={handleCreateGroup}
-            className="w-full max-w-sm bg-[#131720] border border-[#202635] rounded-3xl p-6 shadow-2xl animate-msg-in"
+            className="w-full max-w-sm bg-[#131722] border border-[#232B3E] rounded-3xl p-6 shadow-2xl animate-msg-in"
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-white flex items-center gap-2">
@@ -764,7 +1159,7 @@ export default function Home() {
             </div>
 
             {/* Public vs Private Selector */}
-            <div className="grid grid-cols-2 gap-2 mb-3 bg-[#0D1017] p-1.5 rounded-xl border border-[#202635]">
+            <div className="grid grid-cols-2 gap-2 mb-3 bg-[#0D1017] p-1.5 rounded-xl border border-[#232B3E]">
               <button
                 type="button"
                 onClick={() => setNewGroupIsPrivate(false)}
@@ -787,8 +1182,8 @@ export default function Home() {
 
             <p className="text-[11px] text-[#7A8396] mb-3">
               {newGroupIsPrivate
-                ? 'Only members invited by you can see and chat here.'
-                : 'Anyone in the squad can view and chat in this channel.'}
+                ? 'Only members invited by you can see and chat in this room.'
+                : 'Anyone in the squad can chat and share media here.'}
             </p>
 
             <div className="mb-3">
@@ -798,19 +1193,19 @@ export default function Home() {
                 value={newGroupName}
                 onChange={(e) => setNewGroupName(e.target.value)}
                 placeholder="Channel name..."
-                className="w-full bg-[#0D1017] border border-[#202635] focus:border-[#6366F1] rounded-xl px-3.5 py-2 text-sm text-white placeholder-[#5A6376] outline-none"
+                className="w-full bg-[#0D1017] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2 text-sm text-white placeholder-[#5A6376] outline-none"
                 required
               />
             </div>
 
             <div className="mb-3">
-              <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">Description (Optional)</label>
+              <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">Description</label>
               <textarea
                 value={newGroupDesc}
                 onChange={(e) => setNewGroupDesc(e.target.value)}
                 placeholder="What is this channel about?"
                 rows={2}
-                className="w-full bg-[#0D1017] border border-[#202635] focus:border-[#6366F1] rounded-xl px-3.5 py-2 text-sm text-white placeholder-[#5A6376] outline-none resize-none"
+                className="w-full bg-[#0D1017] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2 text-sm text-white placeholder-[#5A6376] outline-none resize-none"
               />
             </div>
 
@@ -823,7 +1218,7 @@ export default function Home() {
                 value={newGroupInviteMember}
                 onChange={(e) => setNewGroupInviteMember(e.target.value)}
                 placeholder="Type usernames separated by comma"
-                className="w-full bg-[#0D1017] border border-[#202635] focus:border-[#6366F1] rounded-xl px-3.5 py-2 text-xs text-white placeholder-[#5A6376] outline-none"
+                className="w-full bg-[#0D1017] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2 text-xs text-white placeholder-[#5A6376] outline-none"
               />
             </div>
 
@@ -837,24 +1232,22 @@ export default function Home() {
         </div>
       )}
 
-      {/* LEFT SIDEBAR (Channels & Profile) */}
+      {/* LEFT SIDEBAR (Instagram & Telegram style) */}
       <aside
-        className={`fixed md:relative top-0 bottom-0 left-0 z-40 bg-[#0E121A] border-r border-[#1B212D] flex flex-col transition-all duration-300 ease-out ${
+        className={`fixed md:relative top-0 bottom-0 left-0 z-40 bg-[#0E121B] border-r border-[#1B212E] flex flex-col transition-all duration-300 ease-out ${
           railCollapsed ? 'w-[76px] min-w-[76px]' : 'w-[290px] min-w-[290px]'
-        } ${
-          mobileRailOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
-        }`}
+        } ${mobileRailOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'}`}
       >
-        {/* Brand Header */}
-        <div className="p-3.5 flex items-center justify-between border-b border-[#1B212D]">
+        {/* Brand Header with Official Circular Mascot */}
+        <div className="p-3.5 flex items-center justify-between border-b border-[#1B212E]">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-[#6366F1] grid place-items-center text-white shrink-0 shadow-md">
-              <Sparkles className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-full overflow-hidden bg-[#162044] p-0.5 border border-white/10 shrink-0 shadow-md">
+              <img src="/logo.png" alt="LMC Mascot" className="w-full h-full object-contain" />
             </div>
             {!railCollapsed && (
               <div className="flex flex-col truncate">
                 <span className="font-extrabold text-sm tracking-tight text-white leading-tight">LMC Chats</span>
-                <span className="text-[10px] font-medium text-[#7A8396]">Squad Messenger</span>
+                <span className="text-[10px] font-semibold text-[#818CF8]">Since 2026</span>
               </div>
             )}
           </div>
@@ -877,10 +1270,10 @@ export default function Home() {
         <div className="p-2.5 relative">
           <button
             onClick={() => setShowStatusMenu(!showStatusMenu)}
-            className="w-full flex items-center gap-2.5 p-2 rounded-2xl bg-[#141822] border border-[#202635] hover:border-white/15 transition-all text-left"
+            className="w-full flex items-center gap-2.5 p-2 rounded-2xl bg-[#141824] border border-[#232B3E] hover:border-white/15 transition-all text-left"
           >
             <div className="relative shrink-0">
-              <div className="w-9 h-9 rounded-xl overflow-hidden bg-[#F5F6F8] p-0.5 border border-white/10">
+              <div className="w-9 h-9 rounded-full overflow-hidden bg-[#F5F6F8] p-0.5 border border-white/10">
                 <img
                   src={user.avatar || AVATAR_OPTIONS[0]}
                   alt={user.name || 'User'}
@@ -888,7 +1281,7 @@ export default function Home() {
                 />
               </div>
               <span
-                className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#141822] ${
+                className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#141824] ${
                   user.status === 'online' ? 'bg-[#22C55E]' : user.status === 'idle' ? 'bg-[#F59E0B]' : 'bg-[#EF4444]'
                 }`}
               />
@@ -896,7 +1289,7 @@ export default function Home() {
             {!railCollapsed && (
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-white truncate">{user.name || 'Set your name'}</p>
-                <p className="text-[10px] text-[#7A8396] capitalize truncate">{user.status}</p>
+                <p className="text-[10px] text-[#7A8396] truncate">{user.bio || 'Online'}</p>
               </div>
             )}
             {!railCollapsed && <ChevronDown className="w-3.5 h-3.5 text-[#7A8396] shrink-0" />}
@@ -904,10 +1297,10 @@ export default function Home() {
 
           {/* Status & Profile Dropdown */}
           {showStatusMenu && (
-            <div className="absolute top-16 left-3 right-3 z-50 bg-[#161B26] border border-white/10 rounded-2xl p-1.5 shadow-2xl animate-msg-in">
+            <div className="absolute top-16 left-3 right-3 z-50 bg-[#161B28] border border-white/10 rounded-2xl p-1.5 shadow-2xl animate-msg-in">
               <button
                 onClick={() => {
-                  saveUser({ ...user, status: 'online' });
+                  saveUserSession({ ...user, status: 'online' });
                   setShowStatusMenu(false);
                 }}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left"
@@ -918,7 +1311,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => {
-                  saveUser({ ...user, status: 'idle' });
+                  saveUserSession({ ...user, status: 'idle' });
                   setShowStatusMenu(false);
                 }}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left"
@@ -929,13 +1322,13 @@ export default function Home() {
               </button>
               <button
                 onClick={() => {
-                  saveUser({ ...user, status: 'dnd' });
+                  saveUserSession({ ...user, status: 'dnd' });
                   setShowStatusMenu(false);
                 }}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left"
               >
                 <span className="w-2 h-2 rounded-full bg-[#EF4444]" />
-                <span className="flex-1 text-white">Busy</span>
+                <span className="flex-1 text-white">Do Not Disturb</span>
                 {user.status === 'dnd' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
               </button>
               <div className="border-t border-white/10 my-1" />
@@ -943,12 +1336,13 @@ export default function Home() {
                 onClick={() => {
                   setShowStatusMenu(false);
                   setProfileNameInput(user.name);
+                  setProfileBioInput(user.bio || '');
                   setProfileAvatarSelected(user.avatar || AVATAR_OPTIONS[0]);
                   setShowProfileModal(true);
                 }}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-[#818CF8]"
               >
-                <User className="w-3.5 h-3.5" /> Change Avatar & Name
+                <Edit3 className="w-3.5 h-3.5" /> Edit Profile & Photo
               </button>
             </div>
           )}
@@ -991,17 +1385,17 @@ export default function Home() {
                         setActiveGroupId(group.id);
                         setMobileRailOpen(false);
                       }}
-                      className={`w-full flex items-center gap-2.5 p-2 rounded-xl transition-all text-left relative ${
+                      className={`w-full flex items-center gap-2.5 p-2 rounded-2xl transition-all text-left relative ${
                         isActive
                           ? 'bg-[#6366F1]/15 text-white font-medium before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:bg-[#6366F1] before:rounded-r'
                           : 'text-[#A8B2C7] hover:bg-white/[0.04]'
                       }`}
                     >
                       <div className="relative shrink-0">
-                        <div className="w-9 h-9 rounded-xl overflow-hidden bg-[#F5F6F8] p-0.5 border border-white/5">
-                          <img src={group.avatar} alt={group.name} className="w-full h-full object-contain" />
+                        <div className="w-9 h-9 rounded-full overflow-hidden bg-[#162044] p-0.5 border border-white/5">
+                          <img src={group.avatar || '/logo.png'} alt={group.name} className="w-full h-full object-contain" />
                         </div>
-                        <span className="absolute -bottom-1 -right-1 bg-black/80 rounded-full p-0.5 text-[#22C55E]">
+                        <span className="absolute -bottom-0.5 -right-0.5 bg-black/80 rounded-full p-0.5 text-[#22C55E]">
                           <Globe className="w-2.5 h-2.5" />
                         </span>
                       </div>
@@ -1041,17 +1435,17 @@ export default function Home() {
                         setActiveGroupId(group.id);
                         setMobileRailOpen(false);
                       }}
-                      className={`w-full flex items-center gap-2.5 p-2 rounded-xl transition-all text-left relative ${
+                      className={`w-full flex items-center gap-2.5 p-2 rounded-2xl transition-all text-left relative ${
                         isActive
                           ? 'bg-[#6366F1]/15 text-white font-medium before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:bg-[#6366F1] before:rounded-r'
                           : 'text-[#A8B2C7] hover:bg-white/[0.04]'
                       }`}
                     >
                       <div className="relative shrink-0">
-                        <div className="w-9 h-9 rounded-xl overflow-hidden bg-[#F5F6F8] p-0.5 border border-white/5">
-                          <img src={group.avatar} alt={group.name} className="w-full h-full object-contain" />
+                        <div className="w-9 h-9 rounded-full overflow-hidden bg-[#162044] p-0.5 border border-white/5">
+                          <img src={group.avatar || '/logo.png'} alt={group.name} className="w-full h-full object-contain" />
                         </div>
-                        <span className="absolute -bottom-1 -right-1 bg-black/80 rounded-full p-0.5 text-[#F59E0B]">
+                        <span className="absolute -bottom-0.5 -right-0.5 bg-black/80 rounded-full p-0.5 text-[#F59E0B]">
                           <Lock className="w-2.5 h-2.5" />
                         </span>
                       </div>
@@ -1074,10 +1468,10 @@ export default function Home() {
         </div>
 
         {/* Sidebar Footer */}
-        <div className="p-3 border-t border-[#1B212D] text-[11px] flex items-center justify-between text-[#7A8396]">
+        <div className="p-3 border-t border-[#1B212E] text-[11px] flex items-center justify-between text-[#7A8396]">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-[#22C55E]" />
-            {!railCollapsed && <span>Connected</span>}
+            {!railCollapsed && <span>LMC Realtime Online</span>}
           </div>
         </div>
       </aside>
@@ -1091,47 +1485,58 @@ export default function Home() {
       )}
 
       {/* MAIN CHAT COLUMN */}
-      <main className="flex-1 flex flex-col min-w-0 h-full relative bg-[#0B0E14]">
+      <main className="flex-1 flex flex-col min-w-0 h-full relative bg-[#0B0E17]">
         {/* Chat Header */}
-        <header className="h-16 px-3.5 sm:px-5 flex items-center justify-between border-b border-[#1B212D] bg-[#0B0E14]/90 backdrop-blur-md z-10 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
+        <header className="h-16 px-3 sm:px-5 flex items-center justify-between border-b border-[#1B212E] bg-[#0B0E17]/95 backdrop-blur-md z-10 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            {/* 3-line hamburger menu for mobile */}
             <button
               onClick={() => setMobileRailOpen(true)}
-              className="md:hidden p-2 rounded-xl text-[#7A8396] hover:text-white hover:bg-white/5"
+              className="md:hidden w-10 h-10 rounded-xl grid place-items-center text-[#7A8396] hover:text-white hover:bg-white/5 active:scale-95"
+              title="Open Menu"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="relative shrink-0">
-              <div className="w-9 h-9 rounded-xl overflow-hidden bg-[#F5F6F8] p-0.5 border border-white/10">
-                <img src={activeGroup.avatar} alt={activeGroup.name} className="w-full h-full object-contain" />
+
+            {/* Clickable Channel Header to view Group Details */}
+            <div
+              onClick={() => setInfoOpen(!infoOpen)}
+              className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition-opacity min-w-0"
+              title="View Channel Details & Members"
+            >
+              <div className="relative shrink-0">
+                <div className="w-10 h-10 rounded-full overflow-hidden bg-[#162044] p-0.5 border border-white/10 shadow-sm">
+                  <img src={activeGroup.avatar || '/logo.png'} alt={activeGroup.name} className="w-full h-full object-contain" />
+                </div>
+                {activeGroup.is_private && (
+                  <span className="absolute -bottom-0.5 -right-0.5 bg-black/90 p-0.5 rounded-full text-[#F59E0B]">
+                    <Lock className="w-2.5 h-2.5" />
+                  </span>
+                )}
               </div>
-              {activeGroup.is_private && (
-                <span className="absolute -bottom-1 -right-1 bg-black/90 p-0.5 rounded-full text-[#F59E0B]">
-                  <Lock className="w-2.5 h-2.5" />
-                </span>
-              )}
-            </div>
-            <div className="truncate">
-              <h1 className="text-sm sm:text-base font-bold text-white flex items-center gap-1.5 truncate">
-                {activeGroup.name}
-              </h1>
-              <p className="text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
-                <span>{(activeGroup.members || []).length} members</span>
-                {activeGroup.is_private && <span>• Invite Only</span>}
-              </p>
+              <div className="truncate">
+                <h1 className="text-sm sm:text-base font-bold text-white flex items-center gap-1.5 truncate">
+                  {activeGroup.name}
+                </h1>
+                <p className="text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
+                  <span>{(activeGroup.members || []).length} members</span>
+                  <span>• Tap for info</span>
+                </p>
+              </div>
             </div>
           </div>
 
+          {/* Right Header Actions: Voice Call, Video Call, Search & Info */}
           <div className="flex items-center gap-1 sm:gap-2">
             {/* Search Input */}
-            <div className="relative hidden sm:block">
+            <div className="relative hidden md:block">
               <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search messages..."
-                className="bg-[#131720] border border-[#202635] rounded-xl pl-8 pr-3 py-1.5 text-xs text-[#E9ECF4] placeholder-[#5A6376] focus:outline-none focus:border-[#6366F1] w-40 lg:w-52 transition-all"
+                placeholder="Search..."
+                className="bg-[#131722] border border-[#232B3E] rounded-xl pl-8 pr-3 py-1.5 text-xs text-[#E9ECF4] placeholder-[#5A6376] focus:outline-none focus:border-[#6366F1] w-36 lg:w-48 transition-all"
               />
               {searchQuery && (
                 <button
@@ -1143,23 +1548,28 @@ export default function Home() {
               )}
             </div>
 
+            {/* Voice Call Button */}
             <button
-              onClick={() => triggerToast('Connecting voice call...')}
-              className="p-2 rounded-xl text-[#A8B2C7] hover:text-white hover:bg-white/5 transition-all"
-              title="Voice Call"
+              onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
+              className="w-9 h-9 rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all"
+              title="Start Voice Call"
             >
-              <Phone className="w-4 h-4" />
+              <Phone className="w-4 h-4 text-[#22C55E]" />
             </button>
+
+            {/* Video Call Button */}
             <button
-              onClick={() => triggerToast('Generating video room link...')}
-              className="p-2 rounded-xl text-[#A8B2C7] hover:text-white hover:bg-white/5 transition-all"
-              title="Video Call"
+              onClick={() => startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png')}
+              className="w-9 h-9 rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all"
+              title="Start Video Call"
             >
-              <Video className="w-4 h-4" />
+              <Video className="w-4 h-4 text-[#818CF8]" />
             </button>
+
+            {/* Channel Info Button */}
             <button
               onClick={() => setInfoOpen(!infoOpen)}
-              className={`p-2 rounded-xl transition-all ${
+              className={`w-9 h-9 rounded-xl grid place-items-center transition-all ${
                 infoOpen ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
               }`}
               title="Channel Details"
@@ -1182,28 +1592,49 @@ export default function Home() {
             return (
               <div
                 key={msg.id}
-                className={`flex gap-3 group relative animate-msg-in ${
+                className={`flex gap-2.5 sm:gap-3 group relative animate-msg-in ${
                   isMe ? 'flex-row-reverse' : 'flex-row'
                 }`}
               >
                 {!isMe && (
-                  <div className="w-8 h-8 rounded-xl overflow-hidden bg-[#F5F6F8] p-0.5 shrink-0 mt-1 border border-white/5">
+                  <button
+                    onClick={() =>
+                      setViewingProfile({
+                        name: msg.sender_name,
+                        avatar: msg.sender_avatar,
+                        bio: msg.sender_bio,
+                        status: 'online',
+                      })
+                    }
+                    className="w-8 h-8 rounded-full overflow-hidden bg-[#F5F6F8] p-0.5 shrink-0 mt-1 border border-white/5 hover:scale-105 transition-transform"
+                    title={`View @${msg.sender_name}'s profile`}
+                  >
                     <img
                       src={msg.sender_avatar}
                       alt={msg.sender_name}
                       className="w-full h-full object-contain"
                     />
-                  </div>
+                  </button>
                 )}
 
                 <div className={`flex flex-col max-w-[85%] sm:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
                   {!isMe && (
-                    <div className="flex items-center gap-2 mb-1 px-1">
+                    <button
+                      onClick={() =>
+                        setViewingProfile({
+                          name: msg.sender_name,
+                          avatar: msg.sender_avatar,
+                          bio: msg.sender_bio,
+                          status: 'online',
+                        })
+                      }
+                      className="flex items-center gap-2 mb-1 px-1 hover:underline text-left"
+                    >
                       <span className="text-xs font-bold text-[#DDE2EE]">{msg.sender_name}</span>
                       <time className="text-[10px] text-[#7A8396]">
                         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </time>
-                    </div>
+                    </button>
                   )}
 
                   {/* Message Content */}
@@ -1212,7 +1643,7 @@ export default function Home() {
                       className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed break-words shadow-md select-text ${
                         isMe
                           ? 'bg-gradient-to-r from-[#6366F1] to-[#4F46E5] text-white rounded-tr-sm'
-                          : 'bg-[#151922] text-[#E9ECF4] border border-[#202635] rounded-tl-sm'
+                          : 'bg-[#141824] text-[#E9ECF4] border border-[#232B3E] rounded-tl-sm'
                       }`}
                     >
                       {msg.content}
@@ -1260,7 +1691,7 @@ export default function Home() {
                         <button
                           key={emoji}
                           onClick={() => handleToggleReaction(msg.id, emoji)}
-                          className="flex items-center gap-1 bg-[#151922] hover:bg-[#1E2330] border border-[#202635] px-2 py-0.5 rounded-full text-xs transition-all active:scale-95"
+                          className="flex items-center gap-1 bg-[#141824] hover:bg-[#1E2538] border border-[#232B3E] px-2 py-0.5 rounded-full text-xs transition-all active:scale-95"
                         >
                           <span>{emoji}</span>
                           <span className="text-[10px] text-[#A8B2C7] font-semibold">{count}</span>
@@ -1294,7 +1725,7 @@ export default function Home() {
               top: `${Math.max(10, reactionPopCoords.y)}px`,
               left: `${Math.max(10, reactionPopCoords.x - 80)}px`,
             }}
-            className="fixed z-50 flex items-center gap-1 bg-[#161B26]/95 backdrop-blur-md border border-white/10 p-1.5 rounded-2xl shadow-2xl animate-pop-in"
+            className="fixed z-50 flex items-center gap-1 bg-[#161B28]/95 backdrop-blur-md border border-white/10 p-1.5 rounded-2xl shadow-2xl animate-pop-in"
           >
             {['🔥', '😂', '❤️', '👍', '🎉', '👀', '💯', '🚀'].map((em) => (
               <button
@@ -1309,15 +1740,15 @@ export default function Home() {
         )}
 
         {/* COMPOSER DOCK */}
-        <div className="p-2.5 sm:p-4 bg-[#0B0E14] border-t border-[#1B212D] relative">
-          {/* Sticker & GIF Drawer */}
+        <div className="p-2.5 sm:p-4 bg-[#0B0E17] border-t border-[#1B212E] relative">
+          {/* Sticker & GIF Drawer (with WhatsApp Custom Stickers) */}
           {showTray && (
-            <div className="absolute bottom-full mb-3 right-2.5 sm:right-6 left-2.5 sm:left-auto sm:w-[400px] bg-[#141822]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3.5 shadow-2xl z-50 animate-msg-in">
+            <div className="absolute bottom-full mb-3 right-2.5 sm:right-6 left-2.5 sm:left-auto sm:w-[420px] bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3.5 shadow-2xl z-50 animate-msg-in">
               <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/10">
                 <div className="flex gap-1 bg-black/40 p-1 rounded-xl">
                   <button
                     onClick={() => setTrayTab('gifs')}
-                    className={`px-3.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
                       trayTab === 'gifs' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
                     }`}
                   >
@@ -1325,11 +1756,19 @@ export default function Home() {
                   </button>
                   <button
                     onClick={() => setTrayTab('stickers')}
-                    className={`px-3.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
                       trayTab === 'stickers' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
                     }`}
                   >
                     Stickers
+                  </button>
+                  <button
+                    onClick={() => setTrayTab('custom')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      trayTab === 'custom' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
+                    }`}
+                  >
+                    My Stickers
                   </button>
                 </div>
                 <button
@@ -1370,7 +1809,7 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Stickers Tab */}
+              {/* Pre-made Stickers Tab */}
               {trayTab === 'stickers' && (
                 <div className="space-y-2">
                   <div className="grid grid-cols-4 gap-2 max-h-56 overflow-y-auto scroll pr-1">
@@ -1388,55 +1827,94 @@ export default function Home() {
                       </button>
                     ))}
                   </div>
-                  <div className="pt-2 border-t border-white/5 flex gap-2">
-                    <input
-                      type="url"
-                      value={customStickerUrl}
-                      onChange={(e) => setCustomStickerUrl(e.target.value)}
-                      placeholder="Paste image or GIF link..."
-                      className="flex-1 bg-[#0D1017] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-[#5A6376] outline-none focus:border-[#6366F1]"
-                    />
-                    <button
-                      onClick={() => {
-                        if (!customStickerUrl.trim()) return;
-                        handleSendMessage('', 'sticker', customStickerUrl.trim());
-                        setCustomStickerUrl('');
-                        setShowTray(false);
-                      }}
-                      className="bg-[#6366F1] text-white px-3 py-1.5 rounded-xl text-xs font-semibold"
-                    >
-                      Send
-                    </button>
+                </div>
+              )}
+
+              {/* Custom WhatsApp-style Sticker Maker */}
+              {trayTab === 'custom' && (
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <label className="flex-1 bg-[#6366F1]/15 hover:bg-[#6366F1]/25 border border-[#6366F1]/30 rounded-2xl p-2.5 text-center cursor-pointer transition-all">
+                      <span className="text-xs font-bold text-white flex items-center justify-center gap-1.5">
+                        <Upload className="w-3.5 h-3.5 text-[#818CF8]" /> Create from Photo
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleCreateCustomSticker(file);
+                        }}
+                      />
+                    </label>
                   </div>
+
+                  {userStickers.length > 0 ? (
+                    <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto scroll pr-1">
+                      {userStickers.map((stUrl, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            handleSendMessage('', 'sticker', stUrl);
+                            setShowTray(false);
+                          }}
+                          className="p-1.5 rounded-2xl bg-black/30 hover:bg-[#6366F1]/20 border border-white/5 hover:border-[#6366F1] flex items-center justify-center transition-all hover:scale-110"
+                        >
+                          <img src={stUrl} alt="Custom Sticker" className="w-14 h-14 object-contain" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#7A8396] text-center py-4">
+                      Upload any image above to create your personal WhatsApp-style sticker!
+                    </p>
+                  )}
                 </div>
               )}
             </div>
           )}
 
-          {/* Emoji Picker Popover */}
+          {/* INSTAGRAM EMOJI PICKER WITH INSTANT SEARCH */}
           {showEmojiPicker && (
-            <div className="absolute bottom-full mb-3 right-2.5 sm:right-28 left-2.5 sm:left-auto sm:w-[320px] bg-[#141822]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3 shadow-2xl z-50 animate-msg-in">
-              <div className="flex gap-1 pb-2 border-b border-white/10 mb-2">
-                {EMOJI_CATEGORIES.map((cat, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setActiveEmojiCat(idx)}
-                    className={`flex-1 py-1 rounded-xl text-sm text-center transition-all ${
-                      activeEmojiCat === idx ? 'bg-[#6366F1]/30 text-white' : 'hover:bg-white/5'
-                    }`}
-                  >
-                    {cat.icon}
-                  </button>
-                ))}
+            <div className="absolute bottom-full mb-3 right-2.5 sm:right-28 left-2.5 sm:left-auto sm:w-[340px] bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3 shadow-2xl z-50 animate-msg-in">
+              {/* Emoji Search */}
+              <div className="relative mb-2">
+                <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={emojiSearch}
+                  onChange={(e) => setEmojiSearch(e.target.value)}
+                  placeholder="Search emojis..."
+                  className="w-full bg-[#0D1017] border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#5A6376] outline-none focus:border-[#6366F1]"
+                />
               </div>
-              <p className="text-[10px] uppercase font-bold text-[#7A8396] mb-1">
-                {EMOJI_CATEGORIES[activeEmojiCat].label}
-              </p>
-              <div className="grid grid-cols-6 sm:grid-cols-7 gap-1.5 max-h-48 overflow-y-auto scroll">
-                {EMOJI_CATEGORIES[activeEmojiCat].items.map((em, i) => (
+
+              {/* Category tabs */}
+              {!emojiSearch && (
+                <div className="flex gap-1 pb-2 border-b border-white/10 mb-2 overflow-x-auto scroll">
+                  {EMOJI_CATEGORIES.map((cat, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setActiveEmojiCat(idx)}
+                      className={`px-2.5 py-1 rounded-xl text-sm transition-all ${
+                        activeEmojiCat === idx ? 'bg-[#6366F1]/30 text-white' : 'hover:bg-white/5 opacity-70'
+                      }`}
+                    >
+                      {cat.icon}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid grid-cols-7 gap-1 max-h-52 overflow-y-auto scroll pr-1">
+                {displayedEmojis.map((em, i) => (
                   <button
                     key={i}
-                    onClick={() => handleInsertEmoji(em)}
+                    onClick={() => {
+                      setInputText((prev) => prev + em);
+                      textareaRef.current?.focus();
+                    }}
                     className="w-8 h-8 rounded-lg hover:bg-white/10 grid place-items-center text-lg transition-transform hover:scale-125"
                   >
                     {em}
@@ -1450,10 +1928,12 @@ export default function Home() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              if (!inputText.trim()) return;
               handleSendMessage(inputText, 'text');
             }}
-            className="max-w-4xl mx-auto flex items-end gap-2 bg-[#131720] border border-[#202635] focus-within:border-[#6366F1] rounded-2xl p-2 transition-all shadow-xl"
+            className="max-w-4xl mx-auto flex items-end gap-2 bg-[#131722] border border-[#232B3E] focus-within:border-[#6366F1] rounded-2xl p-2 transition-all shadow-xl"
           >
+            {/* Upload Image button */}
             <label
               className="p-2 rounded-xl text-[#A8B2C7] hover:text-white hover:bg-white/5 cursor-pointer shrink-0"
               title="Upload Image"
@@ -1477,6 +1957,7 @@ export default function Home() {
               <Upload className="w-4 h-4" />
             </label>
 
+            {/* Input Textarea with Enter key deduplication */}
             <textarea
               ref={textareaRef}
               rows={1}
@@ -1489,6 +1970,8 @@ export default function Home() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
+                  e.stopPropagation();
+                  if (!inputText.trim()) return;
                   handleSendMessage(inputText, 'text');
                 }
               }}
@@ -1497,6 +1980,7 @@ export default function Home() {
             />
 
             <div className="flex items-center gap-1 shrink-0">
+              {/* Emoji Picker toggle */}
               <button
                 type="button"
                 onClick={() => {
@@ -1506,11 +1990,12 @@ export default function Home() {
                 className={`p-2 rounded-xl transition-all ${
                   showEmojiPicker ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
                 }`}
-                title="Emoji"
+                title="Instagram Emojis"
               >
                 <Smile className="w-4 h-4" />
               </button>
 
+              {/* Stickers & GIFs toggle */}
               <button
                 type="button"
                 onClick={() => {
@@ -1525,11 +2010,12 @@ export default function Home() {
                 <Layers className="w-4 h-4" />
               </button>
 
+              {/* Send Button */}
               <button
                 type="submit"
-                disabled={!inputText.trim()}
+                disabled={!inputText.trim() || isSending}
                 className={`w-9 h-9 rounded-xl grid place-items-center text-white transition-all shadow-md ml-1 ${
-                  inputText.trim()
+                  inputText.trim() && !isSending
                     ? 'bg-[#6366F1] hover:bg-[#5457E5] active:scale-95'
                     : 'bg-[#1C2230] text-[#5A6376] cursor-not-allowed'
                 }`}
@@ -1541,16 +2027,16 @@ export default function Home() {
         </div>
       </main>
 
-      {/* RIGHT SIDEBAR (Channel Details & Members) */}
+      {/* RIGHT SIDEBAR (Instagram-style Group Details & Members) */}
       <aside
-        className={`fixed md:relative top-0 bottom-0 right-0 z-40 bg-[#0E121A] border-l border-[#1B212D] w-[300px] min-w-[300px] flex flex-col transition-transform duration-300 ease-out ${
+        className={`fixed md:relative top-0 bottom-0 right-0 z-40 bg-[#0E121B] border-l border-[#1B212E] w-[300px] min-w-[300px] flex flex-col transition-transform duration-300 ease-out ${
           infoOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full md:hidden'
         }`}
       >
-        <div className="p-4 border-b border-[#1B212D] flex items-center justify-between">
+        <div className="p-4 border-b border-[#1B212E] flex items-center justify-between">
           <span className="text-xs font-bold uppercase tracking-wider text-[#A8B2C7] flex items-center gap-1.5">
             {activeGroup.is_private ? <Lock className="w-3.5 h-3.5 text-[#F59E0B]" /> : <Globe className="w-3.5 h-3.5 text-[#22C55E]" />}
-            Channel Details
+            Group Info
           </span>
           <button
             onClick={() => setInfoOpen(false)}
@@ -1561,11 +2047,11 @@ export default function Home() {
         </div>
 
         <div className="flex-1 overflow-y-auto scroll p-4 space-y-5">
-          {/* Hero */}
+          {/* Group Mascot & Info */}
           <div className="flex flex-col items-center text-center">
-            <div className="w-20 h-20 rounded-2xl overflow-hidden bg-[#F5F6F8] p-1.5 border-2 border-white/10 shadow-lg mb-3">
+            <div className="w-20 h-20 rounded-full overflow-hidden bg-[#162044] p-1.5 border-2 border-[#6366F1]/40 shadow-lg mb-3">
               <img
-                src={activeGroup.avatar}
+                src={activeGroup.avatar || '/logo.png'}
                 alt={activeGroup.name}
                 className="w-full h-full object-contain"
               />
@@ -1587,6 +2073,22 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Quick Call Actions in Group */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
+              className="flex-1 bg-[#141824] hover:bg-[#1E2538] border border-[#232B3E] py-2 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-all"
+            >
+              <Phone className="w-3.5 h-3.5 text-[#22C55E]" /> Call
+            </button>
+            <button
+              onClick={() => startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png')}
+              className="flex-1 bg-[#6366F1] hover:bg-[#5457E5] py-2 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-all shadow"
+            >
+              <Video className="w-3.5 h-3.5" /> Video
+            </button>
+          </div>
+
           {/* ADMIN: Direct Add Member Input */}
           {isAdminOfActiveGroup && (
             <div>
@@ -1599,7 +2101,7 @@ export default function Home() {
                   value={adminAddMemberInput}
                   onChange={(e) => setAdminAddMemberInput(e.target.value)}
                   placeholder="Username to add..."
-                  className="flex-1 bg-[#131720] border border-[#202635] focus:border-[#6366F1] rounded-xl px-3 py-1.5 text-xs text-white placeholder-[#5A6376] outline-none"
+                  className="flex-1 bg-[#131722] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3 py-1.5 text-xs text-white placeholder-[#5A6376] outline-none"
                 />
                 <button
                   type="submit"
@@ -1611,11 +2113,10 @@ export default function Home() {
             </div>
           )}
 
-          {/* Members List */}
+          {/* Members List with Click to View Profile */}
           <div>
             <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[#7A8396] mb-2.5">
-              <span>Members</span>
-              <span>{(activeGroup.members || []).length}</span>
+              <span>Members ({activeGroup.members?.length || 0})</span>
             </div>
             <div className="space-y-1.5">
               {(activeGroup.members || []).map((mName, idx) => {
@@ -1623,11 +2124,19 @@ export default function Home() {
                 const isCurrent = user.name && user.name.toLowerCase() === mName.toLowerCase();
                 const memberAvatar = AVATAR_OPTIONS[idx % AVATAR_OPTIONS.length];
                 return (
-                  <div
+                  <button
                     key={mName}
-                    className="flex items-center gap-2.5 p-2 rounded-xl bg-[#141822] border border-[#202635]"
+                    onClick={() =>
+                      setViewingProfile({
+                        name: mName,
+                        avatar: memberAvatar,
+                        bio: isCreator ? 'Squad Admin & Creator' : 'Squad Member',
+                        status: 'online',
+                      })
+                    }
+                    className="w-full flex items-center gap-2.5 p-2 rounded-xl bg-[#141824] border border-[#232B3E] hover:border-white/20 transition-all text-left"
                   >
-                    <div className="w-7 h-7 rounded-lg overflow-hidden bg-[#F5F6F8] p-0.5 shrink-0 border border-white/5">
+                    <div className="w-8 h-8 rounded-full overflow-hidden bg-[#F5F6F8] p-0.5 shrink-0 border border-white/5">
                       <img
                         src={memberAvatar}
                         alt={mName}
@@ -1639,7 +2148,7 @@ export default function Home() {
                         {mName} {isCurrent && '(You)'}
                       </p>
                       <p className="text-[10px] text-[#7A8396]">
-                        {isCreator ? 'Admin' : 'Member'}
+                        {isCreator ? 'Admin 👑' : 'Member'}
                       </p>
                     </div>
                     {isCreator && (
@@ -1647,7 +2156,7 @@ export default function Home() {
                         Admin
                       </span>
                     )}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -1660,7 +2169,7 @@ export default function Home() {
               <span>{sharedMedia.length}</span>
             </div>
 
-            <div className="flex gap-1 bg-[#131720] p-1 rounded-xl mb-3 border border-[#202635]">
+            <div className="flex gap-1 bg-[#131722] p-1 rounded-xl mb-3 border border-[#232B3E]">
               <button
                 onClick={() => setInfoMediaTab('media')}
                 className={`flex-1 py-1 rounded-lg text-xs font-semibold transition-all ${
@@ -1713,7 +2222,7 @@ export default function Home() {
                       href={l.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2 p-2 rounded-xl bg-[#141822] border border-[#202635] hover:border-[#6366F1] transition-all text-xs"
+                      className="flex items-center gap-2 p-2 rounded-xl bg-[#141824] border border-[#232B3E] hover:border-[#6366F1] transition-all text-xs"
                     >
                       <LinkIcon className="w-3.5 h-3.5 text-[#818CF8] shrink-0" />
                       <div className="flex-1 truncate">

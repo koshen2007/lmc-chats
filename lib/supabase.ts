@@ -18,6 +18,7 @@ export interface Message {
   group_id: string;
   sender_name: string;
   sender_avatar: string;
+  sender_bio?: string;
   content: string;
   msg_type: 'text' | 'sticker' | 'gif' | 'image';
   media_url?: string;

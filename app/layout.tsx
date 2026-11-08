@@ -29,8 +29,8 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark h-full bg-[#0B0E14] text-[#E9ECF4]">
       <head>
-        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/icon.svg" />
+        <link rel="icon" href="/logo.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/logo.png" />
       </head>
       <body className="h-full antialiased overflow-hidden select-none touch-manipulation">
         {children}
