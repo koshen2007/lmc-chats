@@ -44,10 +44,20 @@ import {
   Edit3,
   Settings,
   Hash,
+  Ghost,
+  Flame,
+  Music,
+  Bot,
+  Radio,
+  Disc,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured, Group, Message } from '@/lib/supabase';
 import { STICKERS, AVATAR_OPTIONS, FALLBACK_GIFS, EMOJI_CATEGORIES } from '@/lib/data';
 import AvatarCreatorModal from '@/components/AvatarCreatorModal';
+import TelegramMusicPlayer from '@/components/TelegramMusicPlayer';
+import MusicBotModal from '@/components/MusicBotModal';
+import GhostBurnTimer from '@/components/GhostBurnTimer';
+import { MusicTrack, RoomPlaybackState, CURATED_TRACKS } from '@/lib/musicPlayer';
 import {
   AvatarConfig,
   DEFAULT_AVATAR,
@@ -119,6 +129,13 @@ export default function Home() {
   const [profileBioInput, setProfileBioInput] = useState('');
   const [profileAvatarSelected, setProfileAvatarSelected] = useState(DEFAULT_AVATAR_DATA_URL);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+
+  // Ghost Mode (Burn-on-Read: 10s auto self-destruct)
+  const [ghostModeActive, setGhostModeActive] = useState(false);
+
+  // Telegram Music Player & Room Bot
+  const [showMusicBotModal, setShowMusicBotModal] = useState(false);
+  const [roomPlayback, setRoomPlayback] = useState<RoomPlaybackState | null>(null);
 
   // User Profile Viewer Modal (Visiting other users)
   const [viewingProfile, setViewingProfile] = useState<{
@@ -413,6 +430,20 @@ export default function Home() {
       )
       .on(
         'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'messages' },
+        (payload) => {
+          const deletedId = (payload.old as { id?: string })?.id;
+          if (deletedId) {
+            setMessages((prev) => {
+              const updated = prev.filter((m) => m.id !== deletedId);
+              localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+              return updated;
+            });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'groups' },
         (payload) => {
           const newGroup = payload.new as Group;
@@ -424,6 +455,20 @@ export default function Home() {
           });
         }
       )
+      .on('broadcast', { event: 'room_music_sync' }, ({ payload }) => {
+        if (payload && payload.track) {
+          setRoomPlayback(payload);
+        }
+      })
+      .on('broadcast', { event: 'room_burn_sync' }, ({ payload }) => {
+        if (payload && payload.msgId) {
+          setMessages((prev) => {
+            const updated = prev.filter((m) => m.id !== payload.msgId);
+            localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+            return updated;
+          });
+        }
+      })
       .subscribe();
 
     return () => {
@@ -432,6 +477,37 @@ export default function Home() {
       }
     };
   }, []);
+
+  // Multi-tab / Local BroadcastChannel Sync for Music & Ghost Mode
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const bc = new BroadcastChannel('lmc_local_sync');
+      bc.onmessage = (event) => {
+        if (event.data?.type === 'music_sync') {
+          setRoomPlayback(event.data.payload);
+        } else if (event.data?.type === 'burn_sync') {
+          const burnId = event.data.msgId;
+          setMessages((prev) => prev.filter((m) => m.id !== burnId));
+        }
+      };
+      return () => bc.close();
+    } catch {}
+  }, []);
+
+  // Load Saved Room Music per channel
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const savedMusic = localStorage.getItem(`lmc_active_music_${activeGroupId}`);
+    if (savedMusic) {
+      try {
+        const parsed = JSON.parse(savedMusic);
+        if (parsed && parsed.track) {
+          setRoomPlayback(parsed);
+        }
+      } catch {}
+    }
+  }, [activeGroupId]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -593,7 +669,164 @@ export default function Home() {
     reader.readAsDataURL(file);
   };
 
-  // SEND MESSAGE (With Strict Deduplication Lock)
+  // Burn-on-Read Message Deletion Handler (Ghost Mode)
+  const handleBurnMessage = useCallback(
+    async (msgId: string) => {
+      // 1. Remove from React messages state
+      setMessages((prev) => {
+        const updated = prev.filter((m) => m.id !== msgId);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+        }
+        return updated;
+      });
+
+      // 2. Broadcast to other tabs & windows
+      if (typeof window !== 'undefined') {
+        try {
+          const bc = new BroadcastChannel('lmc_local_sync');
+          bc.postMessage({ type: 'burn_sync', msgId });
+          bc.close();
+        } catch {}
+      }
+
+      // 3. Permanently Delete from Supabase Database
+      if (isSupabaseConfigured && supabase) {
+        try {
+          await supabase.from('messages').delete().eq('id', msgId);
+        } catch (err) {
+          console.error('Error burning message from Supabase:', err);
+        }
+      }
+    },
+    []
+  );
+
+  // Telegram Music Sync & Broadcast Handlers
+  const broadcastMusicState = useCallback(
+    (state: RoomPlaybackState | null) => {
+      setRoomPlayback(state);
+
+      if (typeof window !== 'undefined') {
+        if (state) {
+          localStorage.setItem(`lmc_active_music_${activeGroupId}`, JSON.stringify(state));
+        } else {
+          localStorage.removeItem(`lmc_active_music_${activeGroupId}`);
+        }
+
+        try {
+          const bc = new BroadcastChannel('lmc_local_sync');
+          bc.postMessage({ type: 'music_sync', payload: state });
+          bc.close();
+        } catch {}
+      }
+
+      // Broadcast via Supabase Realtime channel
+      if (isSupabaseConfigured && supabase) {
+        try {
+          supabase.channel('public:lmc_changes').send({
+            type: 'broadcast',
+            event: 'room_music_sync',
+            payload: state,
+          });
+        } catch (err) {
+          console.warn('Music broadcast notice:', err);
+        }
+      }
+    },
+    [activeGroupId]
+  );
+
+  const handlePlayTrack = useCallback(
+    (track: MusicTrack) => {
+      const newState: RoomPlaybackState = {
+        groupId: activeGroupId,
+        track,
+        isPlaying: true,
+        currentTime: 0,
+        updatedAt: Date.now(),
+        requestedBy: user.name || 'Anonymous',
+      };
+      broadcastMusicState(newState);
+
+      // Post Bot announcement into chat
+      const botMsgId = `bot-${Date.now()}`;
+      const botMsg: Message = {
+        id: botMsgId,
+        group_id: activeGroupId,
+        sender_name: 'LMC Music Bot 🎵',
+        sender_avatar: '/logo.png',
+        sender_bio: 'Official Room DJ & Music Bot 🎧',
+        content: `Now playing "${track.title}" by ${track.artist} (${track.genre}) for everyone in this room! 🎧`,
+        msg_type: 'music_bot',
+        media_url: track.coverUrl,
+        reactions: { '🎵': 1, '🔥': 1 },
+        created_at: new Date().toISOString(),
+      };
+
+      setMessages((prev) => {
+        const updated = [...prev, botMsg];
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+        }
+        return updated;
+      });
+
+      if (isSupabaseConfigured && supabase) {
+        Promise.resolve(supabase.from('messages').insert([botMsg])).catch(() => {});
+      }
+
+      triggerToast(`🎵 Now playing: ${track.title}`);
+    },
+    [activeGroupId, user.name, broadcastMusicState]
+  );
+
+  const handleTogglePlayMusic = useCallback(
+    (isPlaying: boolean) => {
+      if (!roomPlayback) return;
+      const updated: RoomPlaybackState = {
+        ...roomPlayback,
+        isPlaying,
+        updatedAt: Date.now(),
+      };
+      broadcastMusicState(updated);
+    },
+    [roomPlayback, broadcastMusicState]
+  );
+
+  const handleNextTrack = useCallback(() => {
+    if (!roomPlayback) return;
+    const currentIdx = CURATED_TRACKS.findIndex((t) => t.id === roomPlayback.track.id);
+    const nextIdx = (currentIdx + 1) % CURATED_TRACKS.length;
+    handlePlayTrack(CURATED_TRACKS[nextIdx]);
+  }, [roomPlayback, handlePlayTrack]);
+
+  const handlePrevTrack = useCallback(() => {
+    if (!roomPlayback) return;
+    const currentIdx = CURATED_TRACKS.findIndex((t) => t.id === roomPlayback.track.id);
+    const prevIdx = (currentIdx - 1 + CURATED_TRACKS.length) % CURATED_TRACKS.length;
+    handlePlayTrack(CURATED_TRACKS[prevIdx]);
+  }, [roomPlayback, handlePlayTrack]);
+
+  const handleSeekMusic = useCallback(
+    (seconds: number) => {
+      if (!roomPlayback) return;
+      const updated: RoomPlaybackState = {
+        ...roomPlayback,
+        currentTime: seconds,
+        updatedAt: Date.now(),
+      };
+      broadcastMusicState(updated);
+    },
+    [roomPlayback, broadcastMusicState]
+  );
+
+  const handleClosePlayer = useCallback(() => {
+    broadcastMusicState(null);
+    triggerToast('Music player closed');
+  }, [broadcastMusicState]);
+
+  // SEND MESSAGE (With Strict Deduplication Lock, Ghost Mode & Bot Commands)
   const handleSendMessage = useCallback(
     async (
       content: string,
@@ -610,6 +843,72 @@ export default function Home() {
       }
       if (msg_type === 'text' && !content.trim()) return;
       if (isSending) return;
+
+      const trimmedContent = content.trim();
+
+      // Check for Telegram Music Bot Slash Commands
+      if (msg_type === 'text' && trimmedContent.startsWith('/')) {
+        const lower = trimmedContent.toLowerCase();
+        if (lower.startsWith('/play')) {
+          setInputText('');
+          const query = lower.replace('/play', '').trim();
+          let targetTrack = CURATED_TRACKS[0];
+          if (query) {
+            const found = CURATED_TRACKS.find(
+              (t) =>
+                t.title.toLowerCase().includes(query) ||
+                t.genre.toLowerCase().includes(query) ||
+                t.id.toLowerCase().includes(query)
+            );
+            if (found) targetTrack = found;
+            else if (query.startsWith('http')) {
+              targetTrack = {
+                id: `cmd-${Date.now()}`,
+                title: 'Custom Stream Track',
+                artist: 'Online Stream',
+                genre: 'Custom Audio',
+                coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80',
+                audioUrl: query,
+                durationSec: 180,
+              };
+            }
+          }
+          handlePlayTrack(targetTrack);
+          return;
+        }
+
+        if (lower === '/pause') {
+          setInputText('');
+          handleTogglePlayMusic(false);
+          triggerToast('Music paused ⏸️');
+          return;
+        }
+
+        if (lower === '/resume') {
+          setInputText('');
+          handleTogglePlayMusic(true);
+          triggerToast('Music resumed ▶️');
+          return;
+        }
+
+        if (lower === '/stop') {
+          setInputText('');
+          handleClosePlayer();
+          return;
+        }
+
+        if (lower === '/next' || lower === '/skip') {
+          setInputText('');
+          handleNextTrack();
+          return;
+        }
+
+        if (lower === '/music' || lower === '/bot') {
+          setInputText('');
+          setShowMusicBotModal(true);
+          return;
+        }
+      }
 
       setIsSending(true);
 
@@ -630,12 +929,18 @@ export default function Home() {
         sender_name: user.name,
         sender_avatar: user.avatar || DEFAULT_AVATAR_DATA_URL,
         sender_bio: user.bio,
-        content: content.trim(),
+        content: trimmedContent,
         msg_type,
         media_url,
         reactions: {},
         created_at: new Date().toISOString(),
+        burn_after_read: ghostModeActive,
+        burn_seconds: ghostModeActive ? 10 : undefined,
       };
+
+      if (ghostModeActive) {
+        triggerToast('Ghost message sent! Burns 10s after read 🔥');
+      }
 
       // Optimistic update & LocalStorage persist
       setMessages((prev) => {
@@ -667,7 +972,17 @@ export default function Home() {
         setIsSending(false);
       }, 150);
     },
-    [user, activeGroupId, isMemberOfActiveGroup, isSending]
+    [
+      user,
+      activeGroupId,
+      isMemberOfActiveGroup,
+      isSending,
+      ghostModeActive,
+      handlePlayTrack,
+      handleTogglePlayMusic,
+      handleClosePlayer,
+      handleNextTrack,
+    ]
   );
 
   // Toggle Reaction
@@ -1244,6 +1559,16 @@ export default function Home() {
         />
       )}
 
+      {/* TELEGRAM MUSIC BOT & CHANNEL LOUNGE MODAL */}
+      {showMusicBotModal && (
+        <MusicBotModal
+          currentTrackId={roomPlayback?.track.id}
+          isPlaying={roomPlayback?.isPlaying}
+          onSelectTrack={handlePlayTrack}
+          onClose={() => setShowMusicBotModal(false)}
+        />
+      )}
+
       {/* CREATE NEW CHANNEL MODAL */}
       {showNewGroupModal && (
         <div className="fixed inset-0 z-[190] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
@@ -1729,6 +2054,18 @@ export default function Home() {
               <Video className="w-4 h-4 text-[#818CF8]" />
             </button>
 
+            {/* Telegram Music Bot & Room Player Button */}
+            <button
+              onClick={() => setShowMusicBotModal(true)}
+              className="w-9 h-9 rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all relative"
+              title="LMC Music Bot & Channel Player"
+            >
+              <Bot className="w-4 h-4 text-indigo-400" />
+              {roomPlayback?.isPlaying && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              )}
+            </button>
+
             {/* Channel Info Button */}
             <button
               onClick={() => setInfoOpen(!infoOpen)}
@@ -1741,6 +2078,20 @@ export default function Home() {
             </button>
           </div>
         </header>
+
+        {/* Telegram-style Pinned Audio Player Bar */}
+        {roomPlayback && (
+          <TelegramMusicPlayer
+            playbackState={roomPlayback}
+            currentUserId={user.name}
+            onTogglePlay={handleTogglePlayMusic}
+            onNextTrack={handleNextTrack}
+            onPrevTrack={handlePrevTrack}
+            onSeek={handleSeekMusic}
+            onOpenLounge={() => setShowMusicBotModal(true)}
+            onClosePlayer={handleClosePlayer}
+          />
+        )}
 
         {/* Message Stream */}
         <div className="flex-1 overflow-y-auto scroll p-3 sm:p-6 space-y-4">
@@ -1804,12 +2155,55 @@ export default function Home() {
                   {msg.msg_type === 'text' && (
                     <div
                       className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed break-words shadow-md select-text ${
-                        isMe
+                        msg.burn_after_read
+                          ? isMe
+                            ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white border border-amber-400/40 shadow-amber-500/20 rounded-tr-sm'
+                            : 'bg-[#18131B] text-[#F3E8FF] border border-amber-500/40 shadow-amber-500/10 rounded-tl-sm'
+                          : isMe
                           ? 'bg-gradient-to-r from-[#6366F1] to-[#4F46E5] text-white rounded-tr-sm'
                           : 'bg-[#141824] text-[#E9ECF4] border border-[#232B3E] rounded-tl-sm'
                       }`}
                     >
                       {msg.content}
+                      {msg.burn_after_read && (
+                        <GhostBurnTimer
+                          messageId={msg.id}
+                          totalSeconds={msg.burn_seconds || 10}
+                          onBurn={handleBurnMessage}
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Telegram Music Bot Announcement Card */}
+                  {msg.msg_type === 'music_bot' && (
+                    <div className="p-3 bg-gradient-to-br from-indigo-950/60 via-[#131726] to-[#0E121E] border border-indigo-500/30 rounded-2xl max-w-sm shadow-xl space-y-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-white/10 shadow-md">
+                          <img
+                            src={msg.media_url || '/logo.png'}
+                            alt="Music Cover"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                            <Disc className="w-5 h-5 text-white animate-spin" style={{ animationDuration: '4s' }} />
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-white leading-snug">{msg.content}</p>
+                          <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1 mt-1">
+                            <Bot className="w-3 h-3" /> @LMC Music Bot
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowMusicBotModal(true)}
+                        className="w-full bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 text-xs font-semibold py-1.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <Music className="w-3.5 h-3.5 text-indigo-300" />
+                        <span>Open Music Lounge / Change Song</span>
+                      </button>
                     </div>
                   )}
 
@@ -2087,6 +2481,23 @@ export default function Home() {
             </div>
           )}
 
+          {/* Ghost Mode Active Banner */}
+          {ghostModeActive && (
+            <div className="max-w-4xl mx-auto mb-2 px-3 py-1.5 bg-gradient-to-r from-amber-950/70 via-orange-950/50 to-amber-950/70 border border-amber-500/40 rounded-xl flex items-center justify-between text-xs text-amber-300 font-semibold animate-msg-in shadow-md">
+              <span className="flex items-center gap-1.5">
+                <Flame className="w-3.5 h-3.5 text-amber-400 animate-bounce" />
+                <span>Ghost Mode (Burn-on-Read): Message burns from screen & database 10s after read</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setGhostModeActive(false)}
+                className="text-[10px] text-amber-300 hover:text-white px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 transition-colors"
+              >
+                Disable
+              </button>
+            </div>
+          )}
+
           {/* Composer Input Bar */}
           <form
             onSubmit={(e) => {
@@ -2138,11 +2549,37 @@ export default function Home() {
                   handleSendMessage(inputText, 'text');
                 }
               }}
-              placeholder={`Message #${activeGroup.name}...`}
+              placeholder={
+                ghostModeActive
+                  ? 'Ghost Mode Active: Type self-destructing message...'
+                  : `Message #${activeGroup.name}... (try /play lofi)`
+              }
               className="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 text-sm text-[#E9ECF4] placeholder-[#5A6376] max-h-32 leading-relaxed"
             />
 
             <div className="flex items-center gap-1 shrink-0">
+              {/* Ghost Mode (Burn-on-Read) Toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  const nextState = !ghostModeActive;
+                  setGhostModeActive(nextState);
+                  triggerToast(
+                    nextState
+                      ? '🔥 Ghost Mode ON: Messages burn 10s after read!'
+                      : 'Ghost Mode OFF'
+                  );
+                }}
+                className={`p-2 rounded-xl transition-all ${
+                  ghostModeActive
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-md shadow-amber-500/20 animate-pulse'
+                    : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
+                }`}
+                title="Burn-on-Read Ghost Mode (Auto self-destruct in 10s)"
+              >
+                <Flame className={`w-4 h-4 ${ghostModeActive ? 'text-amber-400' : ''}`} />
+              </button>
+
               {/* Emoji Picker toggle */}
               <button
                 type="button"
@@ -2179,7 +2616,9 @@ export default function Home() {
                 disabled={!inputText.trim() || isSending}
                 className={`w-9 h-9 rounded-xl grid place-items-center text-white transition-all shadow-md ml-1 ${
                   inputText.trim() && !isSending
-                    ? 'bg-[#6366F1] hover:bg-[#5457E5] active:scale-95'
+                    ? ghostModeActive
+                      ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 active:scale-95 shadow-amber-500/30'
+                      : 'bg-[#6366F1] hover:bg-[#5457E5] active:scale-95 shadow-[#6366F1]/30'
                     : 'bg-[#1C2230] text-[#5A6376] cursor-not-allowed'
                 }`}
               >

@@ -20,10 +20,12 @@ export interface Message {
   sender_avatar: string;
   sender_bio?: string;
   content: string;
-  msg_type: 'text' | 'sticker' | 'gif' | 'image';
+  msg_type: 'text' | 'sticker' | 'gif' | 'image' | 'audio' | 'music_bot';
   media_url?: string;
   reactions: Record<string, number>;
   created_at: string;
+  burn_after_read?: boolean;
+  burn_seconds?: number;
 }
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
