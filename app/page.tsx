@@ -50,6 +50,8 @@ import {
   Bot,
   Radio,
   Disc,
+  AtSign,
+  Copy,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured, Group, Message } from '@/lib/supabase';
 import { STICKERS, AVATAR_OPTIONS, FALLBACK_GIFS, EMOJI_CATEGORIES } from '@/lib/data';
@@ -57,6 +59,13 @@ import AvatarCreatorModal from '@/components/AvatarCreatorModal';
 import TelegramMusicPlayer from '@/components/TelegramMusicPlayer';
 import MusicBotModal from '@/components/MusicBotModal';
 import GhostBurnTimer from '@/components/GhostBurnTimer';
+import AddMemberModal from '@/components/AddMemberModal';
+import {
+  UserProfile,
+  SEED_USERS,
+  validateUsernameFormat,
+  isUsernameAvailable,
+} from '@/lib/users';
 import { MusicTrack, RoomPlaybackState, CURATED_TRACKS } from '@/lib/musicPlayer';
 import {
   AvatarConfig,
@@ -68,6 +77,8 @@ import {
 } from '@/lib/avatarStudio';
 
 interface CurrentUser {
+  id: string;
+  username: string;
   name: string;
   avatar: string;
   bio?: string;
@@ -117,6 +128,8 @@ const INITIAL_MESSAGES: Message[] = [
 export default function Home() {
   // Current user state
   const [user, setUser] = useState<CurrentUser>({
+    id: '',
+    username: '',
     name: '',
     avatar: DEFAULT_AVATAR_DATA_URL,
     bio: 'Living life • LMC Squad member ⚡',
@@ -126,9 +139,22 @@ export default function Home() {
   const [showAvatarStudio, setShowAvatarStudio] = useState(false);
   const [avatarStudioConfig, setAvatarStudioConfig] = useState<AvatarConfig>(DEFAULT_AVATAR);
   const [profileNameInput, setProfileNameInput] = useState('');
+  const [profileUsernameInput, setProfileUsernameInput] = useState('');
   const [profileBioInput, setProfileBioInput] = useState('');
   const [profileAvatarSelected, setProfileAvatarSelected] = useState(DEFAULT_AVATAR_DATA_URL);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+
+  // Global Registered Users Directory & Search
+  const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>(SEED_USERS);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [showUserSearchDropdown, setShowUserSearchDropdown] = useState(false);
+
+  // Real-time username availability validation
+  const [usernameAvailability, setUsernameAvailability] = useState<{
+    checked: boolean;
+    available: boolean;
+    message: string;
+  }>({ checked: false, available: true, message: '' });
 
   // Ghost Mode (Burn-on-Read: 10s auto self-destruct)
   const [ghostModeActive, setGhostModeActive] = useState(false);
@@ -139,6 +165,8 @@ export default function Home() {
 
   // User Profile Viewer Modal (Visiting other users)
   const [viewingProfile, setViewingProfile] = useState<{
+    id?: string;
+    username?: string;
     name: string;
     avatar: string;
     bio?: string;
@@ -208,20 +236,78 @@ export default function Home() {
     }, 2400);
   };
 
+  // Check Username Uniqueness in Real-Time
+  useEffect(() => {
+    const raw = profileUsernameInput.trim().toLowerCase().replace(/^@/, '');
+    if (!raw) {
+      setUsernameAvailability({ checked: false, available: true, message: '' });
+      return;
+    }
+    const check = validateUsernameFormat(raw);
+    if (!check.valid) {
+      setUsernameAvailability({ checked: true, available: false, message: check.error || 'Invalid format' });
+      return;
+    }
+    const avail = isUsernameAvailable(raw, registeredUsers, user.id);
+    if (!avail) {
+      setUsernameAvailability({ checked: true, available: false, message: `@${raw} is already taken!` });
+    } else {
+      setUsernameAvailability({ checked: true, available: true, message: `@${raw} is available!` });
+    }
+  }, [profileUsernameInput, registeredUsers, user.id]);
+
   // Load User, Groups, Messages, and Custom Stickers from LocalStorage
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    // Load Registered Users Directory
+    let allUsers = [...SEED_USERS];
+    const storedUsers = localStorage.getItem('lmc_registered_users');
+    if (storedUsers) {
+      try {
+        const parsed = JSON.parse(storedUsers);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const merged = [...SEED_USERS];
+          for (const u of parsed) {
+            if (!merged.some((m) => m.username.toLowerCase() === u.username?.toLowerCase())) {
+              merged.push(u);
+            }
+          }
+          allUsers = merged;
+        }
+      } catch {}
+    }
+    setRegisteredUsers(allUsers);
 
     // 1. Load User Session
     const storedUser = localStorage.getItem('lmc_session');
     if (storedUser) {
       try {
         const parsed = JSON.parse(storedUser);
-        if (parsed && parsed.name) {
-          setUser(parsed);
-          setProfileNameInput(parsed.name);
-          setProfileAvatarSelected(parsed.avatar || DEFAULT_AVATAR_DATA_URL);
-          setProfileBioInput(parsed.bio || 'Living life • LMC Squad member ⚡');
+        if (parsed && (parsed.name || parsed.username)) {
+          const rawUsername =
+            parsed.username ||
+            parsed.name.toLowerCase().replace(/[^a-z0-9_]/g, '') ||
+            `user_${Math.floor(Math.random() * 1000)}`;
+          const normalizedUser: CurrentUser = {
+            id: parsed.id || `usr_${rawUsername}`,
+            username: rawUsername,
+            name: parsed.name || rawUsername,
+            avatar: parsed.avatar || DEFAULT_AVATAR_DATA_URL,
+            bio: parsed.bio || 'Living life • LMC Squad member ⚡',
+            status: parsed.status || 'online',
+          };
+          setUser(normalizedUser);
+          setProfileNameInput(normalizedUser.name);
+          setProfileUsernameInput(normalizedUser.username);
+          setProfileAvatarSelected(normalizedUser.avatar);
+          setProfileBioInput(normalizedUser.bio || '');
+
+          if (!allUsers.some((u) => u.username.toLowerCase() === rawUsername.toLowerCase())) {
+            const updated = [...allUsers, normalizedUser];
+            setRegisteredUsers(updated);
+            localStorage.setItem('lmc_registered_users', JSON.stringify(updated));
+          }
         } else {
           setShowProfileModal(true);
         }
@@ -560,6 +646,18 @@ export default function Home() {
       });
   }, [messages, activeGroupId, searchQuery]);
 
+  // User Search Matching by @username, user ID or display name
+  const matchingUsers = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim().replace(/^@/, '');
+    if (!q) return [];
+    return registeredUsers.filter(
+      (u) =>
+        u.username.toLowerCase().includes(q) ||
+        u.name.toLowerCase().includes(q) ||
+        (u.id && u.id.toLowerCase().includes(q))
+    );
+  }, [searchQuery, registeredUsers]);
+
   // Shared Media and Links
   const sharedMedia = useMemo(() => {
     return messages
@@ -587,39 +685,139 @@ export default function Home() {
     return links;
   }, [messages, activeGroupId]);
 
-  // Save Profile Handler (with custom PFP and Bio)
+  // Save Profile Handler (with unique username, display name, custom PFP and Bio)
   const handleSaveProfile = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const trimmed = profileNameInput.trim();
-    if (!trimmed) {
-      triggerToast('Please enter your name');
+    const trimmedName = profileNameInput.trim();
+    const rawUsername = profileUsernameInput.trim().toLowerCase().replace(/^@/, '');
+
+    if (!trimmedName) {
+      triggerToast('Please enter your display name');
       return;
     }
 
+    const usernameCheck = validateUsernameFormat(rawUsername);
+    if (!usernameCheck.valid) {
+      triggerToast(usernameCheck.error || 'Invalid username format');
+      return;
+    }
+
+    if (!isUsernameAvailable(rawUsername, registeredUsers, user.id)) {
+      triggerToast(`@${rawUsername} is already taken! Please choose another.`);
+      return;
+    }
+
+    const userId = user.id || `usr_${rawUsername}_${Math.random().toString(36).substring(2, 7)}`;
     const updatedUser: CurrentUser = {
-      name: trimmed,
+      id: userId,
+      username: rawUsername,
+      name: trimmedName,
       avatar: profileAvatarSelected,
       bio: profileBioInput.trim() || 'LMC Squad member ⚡',
       status: user.status || 'online',
     };
 
     saveUserSession(updatedUser);
+
+    // Update global registered users directory
+    const updatedDirectory = registeredUsers.filter(
+      (u) => u.id !== userId && u.username.toLowerCase() !== rawUsername
+    );
+    updatedDirectory.push(updatedUser);
+    setRegisteredUsers(updatedDirectory);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('lmc_registered_users', JSON.stringify(updatedDirectory));
+      try {
+        const bc = new BroadcastChannel('lmc_local_sync');
+        bc.postMessage({ type: 'user_registered', payload: updatedUser });
+        bc.close();
+      } catch {}
+    }
+
     setShowProfileModal(false);
 
     // Auto-register to public channels
     const updatedGroups = groups.map((g) => {
-      if (!g.is_private && !(g.members || []).some((m) => m.toLowerCase() === trimmed.toLowerCase())) {
-        return { ...g, members: [...(g.members || []), trimmed] };
+      const hasMember = (g.members || []).some(
+        (m) =>
+          m.toLowerCase() === rawUsername ||
+          m.toLowerCase() === `@${rawUsername}` ||
+          m.toLowerCase() === trimmedName.toLowerCase()
+      );
+      if (!g.is_private && !hasMember) {
+        return { ...g, members: [...(g.members || []), `@${rawUsername}`] };
       }
       return g;
     });
     savePersistedGroups(updatedGroups);
 
-    triggerToast(`Profile updated: ${trimmed}!`);
+    triggerToast(`Profile saved: @${rawUsername} (${trimmedName})!`);
     setTimeout(() => {
       textareaRef.current?.focus();
     }, 150);
   };
+
+  // Add Member to Current Channel Handler
+  const handleAddMemberToChannel = useCallback(
+    (targetUser: UserProfile) => {
+      if (!activeGroup) return;
+
+      const memberTag = `@${targetUser.username.toLowerCase()}`;
+      const isAlready = (activeGroup.members || []).some(
+        (m) =>
+          m.toLowerCase() === memberTag ||
+          m.toLowerCase() === targetUser.username.toLowerCase() ||
+          m.toLowerCase() === targetUser.name.toLowerCase()
+      );
+
+      if (isAlready) {
+        triggerToast(`@${targetUser.username} is already in #${activeGroup.name}`);
+        return;
+      }
+
+      const updatedMembers = [...(activeGroup.members || []), memberTag];
+      const updatedGroup = { ...activeGroup, members: updatedMembers };
+
+      setGroups((prev) => {
+        const list = prev.map((g) => (g.id === activeGroup.id ? updatedGroup : g));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('lmc_saved_groups', JSON.stringify(list));
+        }
+        return list;
+      });
+
+      // Post Announcement Message in Channel
+      const announcementMsg: Message = {
+        id: `ann-${Date.now()}`,
+        group_id: activeGroup.id,
+        sender_name: 'LMC Squad System',
+        sender_username: 'system',
+        sender_avatar: '/logo.png',
+        sender_bio: 'Official Squad Concierge',
+        content: `🎉 @${targetUser.username} (${targetUser.name}) was added to #${activeGroup.name} by @${user.username || user.name}! Welcome to the squad! 👋`,
+        msg_type: 'text',
+        reactions: { '🎉': 2, '👋': 1 },
+        created_at: new Date().toISOString(),
+      };
+
+      setMessages((prev) => {
+        const list = [...prev, announcementMsg];
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('lmc_saved_messages', JSON.stringify(list));
+        }
+        return list;
+      });
+
+      if (isSupabaseConfigured && supabase) {
+        Promise.resolve(supabase.from('groups').update({ members: updatedMembers }).eq('id', activeGroup.id)).catch(() => {});
+        Promise.resolve(supabase.from('messages').insert([announcementMsg])).catch(() => {});
+      }
+
+      triggerToast(`Added @${targetUser.username} to #${activeGroup.name}! 🎉`);
+      setShowAddMemberModal(false);
+    },
+    [activeGroup, user, isSupabaseConfigured]
+  );
 
   // Custom PFP Upload handler (File Reader to DataURL)
   const handleCustomPfpUpload = (file: File) => {
@@ -927,6 +1125,7 @@ export default function Home() {
         id: uniqueId,
         group_id: activeGroupId,
         sender_name: user.name,
+        sender_username: user.username,
         sender_avatar: user.avatar || DEFAULT_AVATAR_DATA_URL,
         sender_bio: user.bio,
         content: trimmedContent,
@@ -1344,7 +1543,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* USER PROFILE CARD MODAL (When clicking someone's avatar/name) */}
+      {/* USER PROFILE CARD MODAL (When clicking someone's avatar/name/search result) */}
       {viewingProfile && (
         <div className="fixed inset-0 z-[210] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-msg-in">
           <div className="w-full max-w-sm bg-[#131722] border border-[#232B3E] rounded-3xl p-6 shadow-2xl relative flex flex-col items-center text-center">
@@ -1356,44 +1555,93 @@ export default function Home() {
             </button>
 
             <div className="relative mb-3">
-              <div className="w-24 h-24 rounded-full overflow-hidden bg-[#F5F6F8] p-1 border-2 border-[#6366F1]/50 shadow-xl">
+              <div className="w-24 h-24 rounded-full overflow-hidden bg-[#161C28] p-1 border-2 border-indigo-500/50 shadow-xl">
                 <img
                   src={viewingProfile.avatar}
                   alt={viewingProfile.name}
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-cover rounded-full"
                 />
               </div>
               <span className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-[#22C55E] border-2 border-[#131722]" />
             </div>
 
             <h3 className="text-lg font-bold text-white">{viewingProfile.name}</h3>
-            <p className="text-xs text-[#818CF8] font-mono mb-2">@{viewingProfile.name.toLowerCase().replace(/\s+/g, '')}</p>
+            <p className="text-xs text-[#818CF8] font-mono font-semibold">
+              @{viewingProfile.username || viewingProfile.name.toLowerCase().replace(/\s+/g, '')}
+            </p>
 
-            <div className="bg-[#0D1017] border border-[#232B3E] rounded-2xl p-3 w-full mb-5">
+            {/* Unique User ID Pill with Copy button */}
+            <div className="mt-2 mb-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0D1017] border border-white/5">
+              <span className="text-[10px] text-[#7A8396] font-mono">
+                ID: {viewingProfile.id || `usr_${(viewingProfile.username || viewingProfile.name).toLowerCase()}`}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const idText = viewingProfile.id || `usr_${(viewingProfile.username || viewingProfile.name).toLowerCase()}`;
+                  if (typeof navigator !== 'undefined') {
+                    navigator.clipboard.writeText(idText);
+                    triggerToast(`Copied ID: ${idText} 📋`);
+                  }
+                }}
+                className="text-[#7A8396] hover:text-white p-0.5 rounded transition-colors"
+                title="Copy User ID"
+              >
+                <Copy className="w-3 h-3" />
+              </button>
+            </div>
+
+            <div className="bg-[#0D1017] border border-[#232B3E] rounded-2xl p-3 w-full mb-4 text-left">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#7A8396] mb-1">About & Bio</p>
               <p className="text-xs text-[#A8B2C7] leading-relaxed">
                 {viewingProfile.bio || 'Living life • LMC Squad member ⚡'}
               </p>
             </div>
 
-            <div className="flex gap-2 w-full">
-              <button
-                onClick={() => {
-                  setViewingProfile(null);
-                  startCall('audio', viewingProfile.name, viewingProfile.avatar);
-                }}
-                className="flex-1 bg-[#1A2234] hover:bg-[#253048] text-white py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
-              >
-                <Phone className="w-4 h-4 text-[#22C55E]" /> Voice Call
-              </button>
-              <button
-                onClick={() => {
-                  setViewingProfile(null);
-                  startCall('video', viewingProfile.name, viewingProfile.avatar);
-                }}
-                className="flex-1 bg-[#6366F1] hover:bg-[#5457E5] text-white py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-md"
-              >
-                <Video className="w-4 h-4" /> Video Call
-              </button>
+            {/* Quick Actions: Call & Add to active group */}
+            <div className="w-full space-y-2">
+              <div className="flex gap-2 w-full">
+                <button
+                  onClick={() => {
+                    setViewingProfile(null);
+                    startCall('audio', viewingProfile.name, viewingProfile.avatar);
+                  }}
+                  className="flex-1 bg-[#1A2234] hover:bg-[#253048] text-white py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <Phone className="w-4 h-4 text-[#22C55E]" /> Voice Call
+                </button>
+                <button
+                  onClick={() => {
+                    setViewingProfile(null);
+                    startCall('video', viewingProfile.name, viewingProfile.avatar);
+                  }}
+                  className="flex-1 bg-[#6366F1] hover:bg-[#5457E5] text-white py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-md"
+                >
+                  <Video className="w-4 h-4" /> Video Call
+                </button>
+              </div>
+
+              {/* Add to Active Channel button */}
+              {activeGroup && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const uProfile: UserProfile = {
+                      id: viewingProfile.id || `usr_${(viewingProfile.username || viewingProfile.name).toLowerCase()}`,
+                      username: viewingProfile.username || viewingProfile.name.toLowerCase().replace(/\s+/g, ''),
+                      name: viewingProfile.name,
+                      avatar: viewingProfile.avatar,
+                      bio: viewingProfile.bio,
+                    };
+                    handleAddMemberToChannel(uProfile);
+                    setViewingProfile(null);
+                  }}
+                  className="w-full bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Add @{viewingProfile.username || viewingProfile.name} to #{activeGroup.name}</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1515,17 +1763,68 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Username input */}
+            {/* Display Name input (Can be same for multiple people) */}
             <div className="mb-3">
-              <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">Username</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-[#A8B2C7]">Display Name</label>
+                <span className="text-[10px] text-[#7A8396]">Can be shared with others</span>
+              </div>
               <input
                 type="text"
                 value={profileNameInput}
                 onChange={(e) => setProfileNameInput(e.target.value)}
-                placeholder="Enter your username"
+                placeholder="e.g. Koshen Siwanchi"
                 className="w-full bg-[#0D1017] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-[#5A6376] outline-none"
                 required
               />
+            </div>
+
+            {/* Unique Username input (Only 1 person can own it) */}
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-[#A8B2C7] flex items-center gap-1">
+                  <AtSign className="w-3 h-3 text-indigo-400" />
+                  <span>Unique Username</span>
+                </label>
+                <span className="text-[10px] text-amber-400 font-medium">100% Unique</span>
+              </div>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-indigo-400">@</span>
+                <input
+                  type="text"
+                  value={profileUsernameInput}
+                  onChange={(e) =>
+                    setProfileUsernameInput(
+                      e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')
+                    )
+                  }
+                  placeholder="username (e.g. koshen)"
+                  className={`w-full bg-[#0D1017] border rounded-xl pl-8 pr-3.5 py-2.5 text-sm text-white placeholder-[#5A6376] outline-none transition-colors ${
+                    profileUsernameInput
+                      ? usernameAvailability.available
+                        ? 'border-emerald-500/60 focus:border-emerald-500'
+                        : 'border-rose-500/60 focus:border-rose-500'
+                      : 'border-[#232B3E] focus:border-[#6366F1]'
+                  }`}
+                  required
+                />
+              </div>
+
+              {/* Real-time uniqueness badge */}
+              {profileUsernameInput && (
+                <p
+                  className={`text-[11px] font-semibold flex items-center gap-1 mt-1.5 px-1 ${
+                    usernameAvailability.available ? 'text-emerald-400' : 'text-rose-400'
+                  }`}
+                >
+                  {usernameAvailability.available ? (
+                    <Check className="w-3 h-3 text-emerald-400" />
+                  ) : (
+                    <X className="w-3 h-3 text-rose-400" />
+                  )}
+                  <span>{usernameAvailability.message}</span>
+                </p>
+              )}
             </div>
 
             {/* Bio Input */}
@@ -1542,9 +1841,14 @@ export default function Home() {
 
             <button
               type="submit"
-              className="w-full bg-[#6366F1] hover:bg-[#5457E5] active:scale-[0.98] text-white font-semibold py-3 rounded-xl text-sm transition-all shadow-lg shadow-[#6366F1]/25 flex items-center justify-center gap-2"
+              disabled={!profileUsernameInput || !usernameAvailability.available}
+              className={`w-full font-semibold py-3 rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 ${
+                profileUsernameInput && usernameAvailability.available
+                  ? 'bg-[#6366F1] hover:bg-[#5457E5] active:scale-[0.98] text-white shadow-[#6366F1]/25'
+                  : 'bg-[#1C2230] text-[#5A6376] cursor-not-allowed'
+              }`}
             >
-              Save & Enter Chats <Send className="w-4 h-4" />
+              Save Profile & ID <Send className="w-4 h-4" />
             </button>
           </form>
         </div>
@@ -1566,6 +1870,17 @@ export default function Home() {
           isPlaying={roomPlayback?.isPlaying}
           onSelectTrack={handlePlayTrack}
           onClose={() => setShowMusicBotModal(false)}
+        />
+      )}
+
+      {/* ADD MEMBER TO CHANNEL MODAL */}
+      {showAddMemberModal && (
+        <AddMemberModal
+          channelName={activeGroup.name}
+          currentMembers={activeGroup.members || []}
+          registeredUsers={registeredUsers}
+          onAddMember={handleAddMemberToChannel}
+          onClose={() => setShowAddMemberModal(false)}
         />
       )}
 
@@ -2016,25 +2331,101 @@ export default function Home() {
 
           {/* Right Header Actions: Voice Call, Video Call, Search & Info */}
           <div className="flex items-center gap-1 sm:gap-2">
-            {/* Search Input */}
-            <div className="relative hidden md:block">
+            {/* Search Input with User @username & Message Search */}
+            <div className="relative">
               <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search..."
-                className="bg-[#131722] border border-[#232B3E] rounded-xl pl-8 pr-3 py-1.5 text-xs text-[#E9ECF4] placeholder-[#5A6376] focus:outline-none focus:border-[#6366F1] w-36 lg:w-48 transition-all"
+                onFocus={() => setShowUserSearchDropdown(true)}
+                placeholder="Search @username, ID, messages..."
+                className="bg-[#131722] border border-[#232B3E] rounded-xl pl-8 pr-7 py-1.5 text-xs text-[#E9ECF4] placeholder-[#5A6376] focus:outline-none focus:border-[#6366F1] w-32 sm:w-52 lg:w-64 transition-all"
               />
               {searchQuery && (
                 <button
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => {
+                    setSearchQuery('');
+                    setShowUserSearchDropdown(false);
+                  }}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-[#7A8396] hover:text-white"
                 >
                   <X className="w-3 h-3" />
                 </button>
               )}
+
+              {/* Live Search Results Dropdown for @username and User IDs */}
+              {showUserSearchDropdown && searchQuery.trim().length > 0 && (
+                <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 z-50 animate-msg-in">
+                  <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#7A8396] flex items-center justify-between border-b border-white/10 mb-1">
+                    <span>User Search (@username / ID)</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowUserSearchDropdown(false)}
+                      className="text-white hover:opacity-75"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto scroll space-y-1">
+                    {matchingUsers.length > 0 ? (
+                      matchingUsers.map((u) => (
+                        <div
+                          key={u.id || u.username}
+                          className="flex items-center justify-between p-2 rounded-xl bg-white/[0.02] hover:bg-white/[0.08] transition-colors"
+                        >
+                          <div
+                            onClick={() => {
+                              setViewingProfile({
+                                id: u.id,
+                                username: u.username,
+                                name: u.name,
+                                avatar: u.avatar,
+                                bio: u.bio,
+                                status: u.status,
+                              });
+                              setShowUserSearchDropdown(false);
+                            }}
+                            className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
+                          >
+                            <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/10" />
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-white truncate">{u.name}</p>
+                              <p className="text-[10px] text-indigo-400 font-mono truncate">@{u.username}</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleAddMemberToChannel(u);
+                              setShowUserSearchDropdown(false);
+                            }}
+                            className="text-[10px] font-semibold text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-600 px-2 py-1 rounded-lg transition-colors ml-2 shrink-0 flex items-center gap-1"
+                            title={`Add @${u.username} to #${activeGroup.name}`}
+                          >
+                            <UserPlus className="w-3 h-3" />
+                            <span>Add</span>
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-3 text-center text-xs text-[#7A8396]">
+                        No user found matching "{searchQuery}"
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Add Member Button */}
+            <button
+              onClick={() => setShowAddMemberModal(true)}
+              className="w-9 h-9 rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all"
+              title={`Add Members to #${activeGroup.name}`}
+            >
+              <UserPlus className="w-4 h-4 text-emerald-400" />
+            </button>
 
             {/* Voice Call Button */}
             <button
@@ -2112,16 +2503,23 @@ export default function Home() {
               >
                 {!isMe && (
                   <button
-                    onClick={() =>
+                    onClick={() => {
+                      const matched = registeredUsers.find(
+                        (u) =>
+                          (msg.sender_username && u.username.toLowerCase() === msg.sender_username.toLowerCase()) ||
+                          u.name.toLowerCase() === msg.sender_name.toLowerCase()
+                      );
                       setViewingProfile({
+                        id: matched?.id || `usr_${msg.sender_name.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
                         name: msg.sender_name,
+                        username: msg.sender_username || matched?.username,
                         avatar: msg.sender_avatar,
-                        bio: msg.sender_bio,
-                        status: 'online',
-                      })
-                    }
+                        bio: msg.sender_bio || matched?.bio,
+                        status: matched?.status || 'online',
+                      });
+                    }}
                     className="w-8 h-8 rounded-full overflow-hidden bg-[#161C28] p-0.5 shrink-0 mt-1 border border-white/10 hover:scale-105 transition-transform"
-                    title={`View @${msg.sender_name}'s profile`}
+                    title={`View @${msg.sender_username || msg.sender_name}'s profile`}
                   >
                     <img
                       src={msg.sender_avatar}
@@ -2134,17 +2532,27 @@ export default function Home() {
                 <div className={`flex flex-col max-w-[85%] sm:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
                   {!isMe && (
                     <button
-                      onClick={() =>
+                      onClick={() => {
+                        const matched = registeredUsers.find(
+                          (u) =>
+                            (msg.sender_username && u.username.toLowerCase() === msg.sender_username.toLowerCase()) ||
+                            u.name.toLowerCase() === msg.sender_name.toLowerCase()
+                        );
                         setViewingProfile({
+                          id: matched?.id || `usr_${msg.sender_name.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
                           name: msg.sender_name,
+                          username: msg.sender_username || matched?.username,
                           avatar: msg.sender_avatar,
-                          bio: msg.sender_bio,
-                          status: 'online',
-                        })
-                      }
-                      className="flex items-center gap-2 mb-1 px-1 hover:underline text-left"
+                          bio: msg.sender_bio || matched?.bio,
+                          status: matched?.status || 'online',
+                        });
+                      }}
+                      className="flex items-center gap-1.5 mb-1 px-1 hover:underline text-left group"
                     >
-                      <span className="text-xs font-bold text-[#DDE2EE]">{msg.sender_name}</span>
+                      <span className="text-xs font-bold text-[#DDE2EE] group-hover:text-white">{msg.sender_name}</span>
+                      {msg.sender_username && (
+                        <span className="text-[11px] text-[#818CF8] font-mono">@{msg.sender_username}</span>
+                      )}
                       <time className="text-[10px] text-[#7A8396]">
                         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </time>
@@ -2719,38 +3127,73 @@ export default function Home() {
           <div>
             <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[#7A8396] mb-2.5">
               <span>Members ({activeGroup.members?.length || 0})</span>
+              <button
+                onClick={() => setShowAddMemberModal(true)}
+                className="text-[11px] font-semibold text-[#818CF8] hover:text-white transition-colors flex items-center gap-1 normal-case bg-[#6366F1]/10 hover:bg-[#6366F1]/20 px-2 py-0.5 rounded-lg border border-[#6366F1]/20"
+                title="Add member from registered directory"
+              >
+                + Add Member
+              </button>
             </div>
             <div className="space-y-1.5">
               {(activeGroup.members || []).map((mName, idx) => {
                 const isCreator = activeGroup.created_by?.toLowerCase() === mName.toLowerCase();
                 const isCurrent = user.name && user.name.toLowerCase() === mName.toLowerCase();
-                const memberAvatar = isCurrent && user.avatar ? user.avatar : svgToDataUrl(renderAvatarSvgString(PRESET_AVATARS[idx % PRESET_AVATARS.length].config));
+                const matchedUser = registeredUsers.find(
+                  (u) =>
+                    u.name.toLowerCase() === mName.toLowerCase() ||
+                    u.username.toLowerCase() === mName.toLowerCase() ||
+                    u.id === mName
+                );
+                const displayName = matchedUser?.name || mName;
+                const displayUsername = matchedUser?.username
+                  ? `@${matchedUser.username}`
+                  : isCurrent && user.username
+                  ? `@${user.username}`
+                  : null;
+                const memberAvatar =
+                  isCurrent && user.avatar
+                    ? user.avatar
+                    : matchedUser?.avatar ||
+                      svgToDataUrl(renderAvatarSvgString(PRESET_AVATARS[idx % PRESET_AVATARS.length].config));
+                const memberBio = matchedUser?.bio || (isCreator ? 'Squad Admin & Creator' : 'Squad Member');
+                const memberId =
+                  matchedUser?.id ||
+                  (isCurrent ? user.id : `usr_${mName.toLowerCase().replace(/[^a-z0-9]/g, '')}`);
+
                 return (
                   <button
                     key={mName}
                     onClick={() =>
                       setViewingProfile({
-                        name: mName,
+                        id: memberId,
+                        name: displayName,
+                        username: matchedUser?.username || (isCurrent ? user.username : undefined),
                         avatar: memberAvatar,
-                        bio: isCreator ? 'Squad Admin & Creator' : 'Squad Member',
-                        status: 'online',
+                        bio: memberBio,
+                        status: matchedUser?.status || 'online',
                       })
                     }
-                    className="w-full flex items-center gap-2.5 p-2 rounded-xl bg-[#141824] border border-[#232B3E] hover:border-white/20 transition-all text-left"
+                    className="w-full flex items-center gap-2.5 p-2 rounded-xl bg-[#141824] border border-[#232B3E] hover:border-white/20 transition-all text-left group"
                   >
                     <div className="w-8 h-8 rounded-full overflow-hidden bg-[#F5F6F8] p-0.5 shrink-0 border border-white/5">
                       <img
                         src={memberAvatar}
-                        alt={mName}
+                        alt={displayName}
                         className="w-full h-full object-contain"
                       />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-white truncate">
-                        {mName} {isCurrent && '(You)'}
-                      </p>
-                      <p className="text-[10px] text-[#7A8396]">
-                        {isCreator ? 'Admin 👑' : 'Member'}
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-semibold text-white truncate">
+                          {displayName} {isCurrent && '(You)'}
+                        </p>
+                      </div>
+                      <p className="text-[10px] text-[#7A8396] truncate">
+                        {displayUsername ? (
+                          <span className="text-[#818CF8] font-mono mr-1">{displayUsername}</span>
+                        ) : null}
+                        • {isCreator ? 'Admin 👑' : 'Member'}
                       </p>
                     </div>
                     {isCreator && (

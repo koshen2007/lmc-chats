@@ -17,6 +17,7 @@ export interface Message {
   id: string;
   group_id: string;
   sender_name: string;
+  sender_username?: string;
   sender_avatar: string;
   sender_bio?: string;
   content: string;

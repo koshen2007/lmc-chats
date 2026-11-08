@@ -180,3 +180,4 @@ writeWav('acoustic_peace.wav', 26, 44100, (t, dur) => {
 });
 
 console.log('All 4 music tracks successfully generated in public/audio/');
+
