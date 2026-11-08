@@ -1259,7 +1259,7 @@ export default function Home() {
         <div className="p-3.5 flex items-center justify-between border-b border-[#1B212E]">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-10 h-10 rounded-full overflow-hidden bg-transparent shrink-0 shadow-md">
-              <img src="/logo.png" alt="LMC Mascot" className="w-full h-full object-contain rounded-full" />
+              <img src="/logo.png" alt="LMC Mascot" className="w-full h-full object-cover rounded-full" />
             </div>
             {!railCollapsed && (
               <div className="flex flex-col truncate">
