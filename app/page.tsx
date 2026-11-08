@@ -55,9 +55,9 @@ interface CurrentUser {
 
 const DEFAULT_GROUPS: Group[] = [
   {
-    id: 'lmc-main-lounge',
-    name: 'LMC Main Lounge',
-    description: 'The official squad lounge for chats, memes, music and media.',
+    id: 'lmc-squad',
+    name: 'LMC Squad',
+    description: 'Squad chats, memes, and media.',
     avatar: '/logo.png',
     created_by: 'Alex',
     is_private: false,
@@ -71,7 +71,7 @@ const DEFAULT_GROUPS: Group[] = [
 const INITIAL_MESSAGES: Message[] = [
   {
     id: 'init-1',
-    group_id: 'lmc-main-lounge',
+    group_id: 'lmc-squad',
     sender_name: 'Alex',
     sender_avatar: '/avatars/avatar-1.png',
     sender_bio: 'Squad founder & creator ⚡',
@@ -82,7 +82,7 @@ const INITIAL_MESSAGES: Message[] = [
   },
   {
     id: 'init-2',
-    group_id: 'lmc-main-lounge',
+    group_id: 'lmc-squad',
     sender_name: 'Sam',
     sender_avatar: '/avatars/avatar-2.png',
     sender_bio: 'Music producer & gamer 🎧',
@@ -202,27 +202,44 @@ export default function Home() {
       setShowProfileModal(true);
     }
 
-    // 2. Load Persisted Groups
+    // 2. Load Persisted Groups & auto-migrate old "LMC Main Lounge"
     const storedGroups = localStorage.getItem('lmc_saved_groups');
     if (storedGroups) {
       try {
         const parsedGroups = JSON.parse(storedGroups);
         if (Array.isArray(parsedGroups) && parsedGroups.length > 0) {
-          setGroups(parsedGroups);
-          setActiveGroupId(parsedGroups[0].id);
+          const sanitized = parsedGroups.map((g) => {
+            if (g.name === 'LMC Main Lounge' || g.id === 'lmc-main-lounge') {
+              return {
+                ...g,
+                id: 'lmc-squad',
+                name: 'LMC Squad',
+                avatar: '/logo.png',
+                description: 'Squad chats, memes, and media.',
+              };
+            }
+            return g;
+          });
+          setGroups(sanitized);
+          setActiveGroupId(sanitized[0].id);
+          localStorage.setItem('lmc_saved_groups', JSON.stringify(sanitized));
         }
       } catch {
         // ignore
       }
     }
 
-    // 3. Load Persisted Messages
+    // 3. Load Persisted Messages & auto-migrate
     const storedMessages = localStorage.getItem('lmc_saved_messages');
     if (storedMessages) {
       try {
         const parsedMessages = JSON.parse(storedMessages);
         if (Array.isArray(parsedMessages) && parsedMessages.length > 0) {
-          setMessages(parsedMessages);
+          const sanitizedMsgs = parsedMessages.map((m) =>
+            m.group_id === 'lmc-main-lounge' ? { ...m, group_id: 'lmc-squad' } : m
+          );
+          setMessages(sanitizedMsgs);
+          localStorage.setItem('lmc_saved_messages', JSON.stringify(sanitizedMsgs));
         }
       } catch {
         // ignore
@@ -1241,13 +1258,12 @@ export default function Home() {
         {/* Brand Header with Official Circular Mascot */}
         <div className="p-3.5 flex items-center justify-between border-b border-[#1B212E]">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 rounded-full overflow-hidden bg-[#162044] p-0.5 border border-white/10 shrink-0 shadow-md">
-              <img src="/logo.png" alt="LMC Mascot" className="w-full h-full object-contain" />
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-transparent shrink-0 shadow-md">
+              <img src="/logo.png" alt="LMC Mascot" className="w-full h-full object-contain rounded-full" />
             </div>
             {!railCollapsed && (
               <div className="flex flex-col truncate">
                 <span className="font-extrabold text-sm tracking-tight text-white leading-tight">LMC Chats</span>
-                <span className="text-[10px] font-semibold text-[#818CF8]">Since 2026</span>
               </div>
             )}
           </div>

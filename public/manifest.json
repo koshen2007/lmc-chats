@@ -1,13 +1,19 @@
 {
   "name": "LMC Chats",
-  "short_name": "LMC Chats",
-  "description": "LMC Chats — Real-time Public & Private Group Chat, Memes, Stickers & Media PWA",
+  "short_name": "LMC",
+  "description": "LMC Chats — Real-time Squad Chat, Memes, Stickers & Media PWA",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0B0E14",
-  "theme_color": "#0B0E14",
+  "background_color": "#0B0E17",
+  "theme_color": "#0B0E17",
   "orientation": "portrait-primary",
   "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
@@ -19,11 +25,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
-    },
-    {
-      "src": "/logo.png",
-      "sizes": "512x512",
-      "type": "image/png"
     }
   ]
 }

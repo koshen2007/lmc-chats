@@ -40,3 +40,4 @@ $dest.Save("public\apple-icon.png", [System.Drawing.Imaging.ImageFormat]::Png)
 $dest.Dispose()
 $src.Dispose()
 Write-Output "Logo icons created successfully"
+
