@@ -11,8 +11,9 @@ import {
   Bot,
   Sparkles,
   Volume2,
+  FileAudio,
 } from 'lucide-react';
-import { MusicTrack, CURATED_TRACKS, formatTime } from '@/lib/musicPlayer';
+import { MusicTrack, FEATURED_STATIONS, formatTime } from '@/lib/musicPlayer';
 
 interface MusicBotModalProps {
   currentTrackId?: string;
@@ -27,23 +28,28 @@ export default function MusicBotModal({
   onSelectTrack,
   onClose,
 }: MusicBotModalProps) {
-  const [activeTab, setActiveTab] = useState<'curated' | 'url' | 'upload'>('curated');
+  const [activeTab, setActiveTab] = useState<'upload' | 'url' | 'stations'>('upload');
   const [customUrl, setCustomUrl] = useState('');
   const [customTitle, setCustomTitle] = useState('');
   const [customArtist, setCustomArtist] = useState('');
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
 
   const handlePlayCustomUrl = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customUrl.trim()) return;
 
+    const trimmedUrl = customUrl.trim();
+    const isStream = trimmedUrl.includes('stream') || trimmedUrl.includes('radio');
+
     const newTrack: MusicTrack = {
       id: `custom-${Date.now()}`,
-      title: customTitle.trim() || 'Custom Stream Track',
+      title: customTitle.trim() || 'Custom Audio Stream',
       artist: customArtist.trim() || 'Online Audio',
-      genre: 'Custom Stream',
-      coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80',
-      audioUrl: customUrl.trim(),
-      durationSec: 180,
+      genre: isStream ? 'Live Radio Stream' : 'Web Audio',
+      coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&auto=format&fit=crop&q=80',
+      audioUrl: trimmedUrl,
+      durationSec: isStream ? 0 : 240,
+      isLiveStream: isStream,
     };
 
     onSelectTrack(newTrack);
@@ -54,23 +60,46 @@ export default function MusicBotModal({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        const newTrack: MusicTrack = {
-          id: `upload-${Date.now()}`,
-          title: file.name.replace(/\.[^/.]+$/, ''),
-          artist: 'Uploaded Audio',
-          genre: 'Local Track',
-          coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&auto=format&fit=crop&q=80',
-          audioUrl: reader.result,
-          durationSec: 120,
-        };
-        onSelectTrack(newTrack);
-        onClose();
-      }
+    setIsProcessingFile(true);
+    const fileBlobUrl = URL.createObjectURL(file);
+    const tempAudio = new Audio();
+    tempAudio.src = fileBlobUrl;
+
+    const finalize = (duration: number) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setIsProcessingFile(false);
+        if (typeof reader.result === 'string') {
+          const rawName = file.name.replace(/\.[^/.]+$/, '');
+          const newTrack: MusicTrack = {
+            id: `upload-${Date.now()}`,
+            title: rawName,
+            artist: 'Your Device Audio',
+            genre: 'Uploaded Track',
+            coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80',
+            audioUrl: reader.result,
+            durationSec: Math.round(duration) || 180,
+            isLiveStream: false,
+          };
+          onSelectTrack(newTrack);
+          onClose();
+        }
+      };
+      reader.readAsDataURL(file);
     };
-    reader.readAsDataURL(file);
+
+    tempAudio.onloadedmetadata = () => {
+      finalize(tempAudio.duration);
+    };
+
+    tempAudio.onerror = () => {
+      finalize(180);
+    };
+
+    // Fallback if metadata takes too long
+    setTimeout(() => {
+      if (isProcessingFile) finalize(180);
+    }, 2000);
   };
 
   return (
@@ -84,13 +113,13 @@ export default function MusicBotModal({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-white tracking-tight">LMC Music Bot</h2>
+                <h2 className="text-base font-bold text-white tracking-tight">LMC Music Lounge</h2>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   Bot Online
                 </span>
               </div>
-              <p className="text-xs text-[#7A8396]">Telegram-style room synced music for everyone</p>
+              <p className="text-xs text-[#7A8396]">Play any song from phone/PC or stream live to the room</p>
             </div>
           </div>
           <button
@@ -106,15 +135,15 @@ export default function MusicBotModal({
         <div className="flex items-center gap-1 p-2 border-b border-white/10 bg-[#0E121E]">
           <button
             type="button"
-            onClick={() => setActiveTab('curated')}
+            onClick={() => setActiveTab('upload')}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-              activeTab === 'curated'
+              activeTab === 'upload'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                 : 'text-[#8892B0] hover:text-white hover:bg-white/5'
             }`}
           >
-            <Music className="w-3.5 h-3.5" />
-            <span>Curated Tracks</span>
+            <Upload className="w-3.5 h-3.5" />
+            <span>Upload Song</span>
           </button>
           <button
             type="button"
@@ -126,31 +155,125 @@ export default function MusicBotModal({
             }`}
           >
             <LinkIcon className="w-3.5 h-3.5" />
-            <span>Direct Audio URL</span>
+            <span>Play Any Link</span>
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('upload')}
+            onClick={() => setActiveTab('stations')}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
-              activeTab === 'upload'
+              activeTab === 'stations'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                 : 'text-[#8892B0] hover:text-white hover:bg-white/5'
             }`}
           >
-            <Upload className="w-3.5 h-3.5" />
-            <span>Upload MP3</span>
+            <Radio className="w-3.5 h-3.5" />
+            <span>Live Radio</span>
           </button>
         </div>
 
         {/* Tab Contents */}
         <div className="p-4 sm:p-5 overflow-y-auto scroll flex-1 space-y-3">
-          {/* 1. Curated Tracks */}
-          {activeTab === 'curated' && (
+          {/* 1. Upload Any Song from Device */}
+          {activeTab === 'upload' && (
+            <div className="space-y-4 text-center p-6 bg-[#0E121E] border border-dashed border-[#232B3E] rounded-2xl">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 grid place-items-center text-indigo-400 mx-auto">
+                <FileAudio className="w-7 h-7" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white">Choose Any Audio File from Device</p>
+                <p className="text-xs text-[#7A8396] mt-1 max-w-sm mx-auto">
+                  Select any MP3, WAV, M4A, or AAC song from your phone or PC. It will automatically play and sync for everyone in this channel!
+                </p>
+              </div>
+
+              {isProcessingFile ? (
+                <div className="py-2 text-indigo-400 font-semibold text-xs flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                  Loading audio file into room...
+                </div>
+              ) : (
+                <label className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer transition-all active:scale-95 shadow-lg shadow-indigo-600/25">
+                  <Upload className="w-4 h-4" />
+                  <span>Choose Song from Mobile / PC</span>
+                  <input
+                    type="file"
+                    accept="audio/*,.mp3,.wav,.m4a,.aac,.flac,.ogg"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
+              )}
+
+              <div className="pt-2 border-t border-white/5 text-[11px] text-[#7A8396]">
+                Supported formats: MP3, M4A, WAV, AAC, FLAC, OGG
+              </div>
+            </div>
+          )}
+
+          {/* 2. Direct Audio Stream URL */}
+          {activeTab === 'url' && (
+            <form onSubmit={handlePlayCustomUrl} className="space-y-3.5">
+              <div className="p-3 bg-indigo-950/30 border border-indigo-500/20 rounded-2xl">
+                <p className="text-xs text-indigo-300 font-medium leading-relaxed">
+                  Paste any direct public MP3 link, audio file URL (Google Drive direct stream, Dropbox, Discord attachment, Archive.org), or Internet Radio stream.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">
+                  Audio Stream / Direct MP3 Link *
+                </label>
+                <input
+                  type="url"
+                  value={customUrl}
+                  onChange={(e) => setCustomUrl(e.target.value)}
+                  placeholder="https://example.com/song.mp3 or radio stream"
+                  className="w-full bg-[#0D1017] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-[#5A6376] outline-none"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">Track Title</label>
+                  <input
+                    type="text"
+                    value={customTitle}
+                    onChange={(e) => setCustomTitle(e.target.value)}
+                    placeholder="e.g. My Favorite Song"
+                    className="w-full bg-[#0D1017] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2 text-xs text-white placeholder-[#5A6376] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">Artist / Channel</label>
+                  <input
+                    type="text"
+                    value={customArtist}
+                    onChange={(e) => setCustomArtist(e.target.value)}
+                    placeholder="e.g. Arijit / DJ / Online"
+                    className="w-full bg-[#0D1017] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2 text-xs text-white placeholder-[#5A6376] outline-none"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={!customUrl.trim()}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.98]"
+              >
+                <Radio className="w-4 h-4" />
+                <span>Broadcast Track to Room</span>
+              </button>
+            </form>
+          )}
+
+          {/* 3. Real 24/7 Live Radio Stations */}
+          {activeTab === 'stations' && (
             <div className="space-y-2">
               <p className="text-[11px] font-bold tracking-wider uppercase text-[#7A8396] mb-1">
-                Select a track to broadcast to everyone
+                Real 24/7 Continuous Music Broadcasts
               </p>
-              {CURATED_TRACKS.map((t) => {
+              {FEATURED_STATIONS.map((t) => {
                 const isSelected = currentTrackId === t.id;
                 return (
                   <div
@@ -177,8 +300,9 @@ export default function MusicBotModal({
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-white truncate">{t.title}</p>
                         <p className="text-[11px] text-[#7A8396] truncate">{t.artist}</p>
-                        <span className="inline-block text-[9px] font-semibold text-indigo-400 bg-indigo-500/10 px-1.5 py-0.2 rounded-md mt-0.5">
-                          {t.genre} • {formatTime(t.durationSec)}
+                        <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded-md mt-0.5">
+                          {t.isLiveStream && <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />}
+                          {t.genre} {t.durationSec ? `• ${formatTime(t.durationSec)}` : '• 24/7 Live'}
                         </span>
                       </div>
                     </div>
@@ -204,106 +328,24 @@ export default function MusicBotModal({
             </div>
           )}
 
-          {/* 2. Direct Audio Stream URL */}
-          {activeTab === 'url' && (
-            <form onSubmit={handlePlayCustomUrl} className="space-y-3.5">
-              <div className="p-3 bg-indigo-950/30 border border-indigo-500/20 rounded-2xl">
-                <p className="text-xs text-indigo-300 font-medium">
-                  Paste any direct audio stream or public MP3 URL. The bot will broadcast it across all members in this channel.
-                </p>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">
-                  Audio Stream / MP3 URL *
-                </label>
-                <input
-                  type="url"
-                  value={customUrl}
-                  onChange={(e) => setCustomUrl(e.target.value)}
-                  placeholder="https://example.com/audio.mp3"
-                  className="w-full bg-[#0D1017] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-[#5A6376] outline-none"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">Track Name</label>
-                  <input
-                    type="text"
-                    value={customTitle}
-                    onChange={(e) => setCustomTitle(e.target.value)}
-                    placeholder="My Custom Song"
-                    className="w-full bg-[#0D1017] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2 text-xs text-white placeholder-[#5A6376] outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">Artist</label>
-                  <input
-                    type="text"
-                    value={customArtist}
-                    onChange={(e) => setCustomArtist(e.target.value)}
-                    placeholder="Artist Name"
-                    className="w-full bg-[#0D1017] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2 text-xs text-white placeholder-[#5A6376] outline-none"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.98]"
-              >
-                <Radio className="w-4 h-4" />
-                <span>Broadcast Stream to Room</span>
-              </button>
-            </form>
-          )}
-
-          {/* 3. Upload MP3 */}
-          {activeTab === 'upload' && (
-            <div className="space-y-4 text-center p-6 bg-[#0E121E] border border-dashed border-[#232B3E] rounded-2xl">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 grid place-items-center text-indigo-400 mx-auto">
-                <Upload className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-white">Upload MP3 / Audio from Device</p>
-                <p className="text-[11px] text-[#7A8396] mt-0.5">
-                  Play songs from your phone or PC directly in the channel
-                </p>
-              </div>
-
-              <label className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer transition-colors shadow-md shadow-indigo-600/25">
-                <Music className="w-4 h-4" />
-                <span>Choose Audio File</span>
-                <input
-                  type="file"
-                  accept="audio/*,.mp3,.wav,.m4a,.ogg"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-              </label>
-            </div>
-          )}
-
           {/* Bot Command Cheatsheet */}
           <div className="p-3 bg-white/[0.02] border border-white/5 rounded-2xl mt-4">
             <p className="text-[10px] font-bold uppercase tracking-wider text-[#7A8396] mb-1.5 flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-yellow-400" />
-              Chat Bot Commands (Telegram Style)
+              Telegram-Style Chat Commands
             </p>
             <div className="grid grid-cols-2 gap-1.5 text-[10px] text-[#A8B2C7] font-mono">
-              <div className="p-1 rounded bg-black/30">
-                <span className="text-indigo-400 font-bold">/play</span> [song name]
+              <div className="p-1.5 rounded bg-black/30">
+                <span className="text-indigo-400 font-bold">/play</span> [audio-link]
               </div>
-              <div className="p-1 rounded bg-black/30">
+              <div className="p-1.5 rounded bg-black/30">
                 <span className="text-indigo-400 font-bold">/pause</span> - Pause audio
               </div>
-              <div className="p-1 rounded bg-black/30">
-                <span className="text-indigo-400 font-bold">/resume</span> - Resume audio
+              <div className="p-1.5 rounded bg-black/30">
+                <span className="text-indigo-400 font-bold">/music</span> - Open lounge
               </div>
-              <div className="p-1 rounded bg-black/30">
-                <span className="text-indigo-400 font-bold">/stop</span> - Stop & close
+              <div className="p-1.5 rounded bg-black/30">
+                <span className="text-indigo-400 font-bold">/stop</span> - Close player
               </div>
             </div>
           </div>
@@ -312,4 +354,3 @@ export default function MusicBotModal({
     </div>
   );
 }
-

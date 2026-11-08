@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { X, Search, UserPlus, Check, Users } from 'lucide-react';
+import { X, Search, UserPlus, Check, Users, Sparkles } from 'lucide-react';
 import { UserProfile } from '@/lib/users';
 
 interface AddMemberModalProps {
@@ -20,6 +20,7 @@ export default function AddMemberModal({
   onClose,
 }: AddMemberModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [directInput, setDirectInput] = useState('');
 
   const filteredUsers = useMemo(() => {
     const q = searchQuery.toLowerCase().trim().replace(/^@/, '');
@@ -40,6 +41,33 @@ export default function AddMemberModal({
     );
   };
 
+  const handleDirectAdd = (e: React.FormEvent) => {
+    e.preventDefault();
+    const raw = directInput.trim().replace(/^@/, '');
+    if (!raw) return;
+
+    // Check if user already exists in directory
+    const existing = registeredUsers.find(
+      (u) => u.username.toLowerCase() === raw.toLowerCase() || u.name.toLowerCase() === raw.toLowerCase()
+    );
+
+    if (existing) {
+      onAddMember(existing);
+    } else {
+      // Add custom username profile
+      const newProfile: UserProfile = {
+        id: `usr_${raw.toLowerCase().replace(/[^a-z0-9_]/g, '')}_${Math.floor(Math.random() * 1000)}`,
+        username: raw.toLowerCase().replace(/[^a-z0-9_]/g, ''),
+        name: directInput.trim(),
+        avatar: '/logo.png',
+        bio: 'Channel member ⚡',
+        status: 'online',
+      };
+      onAddMember(newProfile);
+    }
+    setDirectInput('');
+  };
+
   return (
     <div className="fixed inset-0 z-[230] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-msg-in">
       <div className="w-full max-w-md bg-[#111522] border border-[#232B3E] rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
@@ -54,7 +82,7 @@ export default function AddMemberModal({
                 <span>Add Members</span>
                 <span className="text-xs text-indigo-400 font-normal">#{channelName}</span>
               </h2>
-              <p className="text-xs text-[#7A8396]">Search by @username or display name</p>
+              <p className="text-xs text-[#7A8396]">Add anyone by @username or choose from directory</p>
             </div>
           </div>
           <button
@@ -66,20 +94,43 @@ export default function AddMemberModal({
           </button>
         </div>
 
-        {/* Search input */}
-        <div className="p-3 border-b border-white/10 bg-[#0E121E]">
-          <div className="relative">
-            <Search className="w-4 h-4 text-[#7A8396] absolute left-3 top-1/2 -translate-y-1/2" />
+        {/* Direct Add Input Box */}
+        <form onSubmit={handleDirectAdd} className="p-3 border-b border-white/10 bg-[#0E121E] flex gap-2">
+          <div className="relative flex-1">
+            <span className="text-[#818CF8] font-bold text-xs absolute left-3 top-1/2 -translate-y-1/2">@</span>
             <input
               type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by @username or name..."
-              className="w-full bg-[#151A28] border border-[#232B3E] focus:border-indigo-500 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-[#5A6376] outline-none transition-colors"
-              autoFocus
+              value={directInput}
+              onChange={(e) => setDirectInput(e.target.value)}
+              placeholder="Enter exact @username to add..."
+              className="w-full bg-[#151A28] border border-[#232B3E] focus:border-indigo-500 rounded-xl pl-7 pr-3 py-2 text-xs text-white placeholder-[#5A6376] outline-none transition-colors"
             />
           </div>
-        </div>
+          <button
+            type="submit"
+            disabled={!directInput.trim()}
+            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 flex items-center gap-1 shadow-md shadow-indigo-600/20 transition-all active:scale-95"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>Add</span>
+          </button>
+        </form>
+
+        {/* Search input (only shown if there are registered users to filter) */}
+        {registeredUsers.length > 0 && (
+          <div className="p-3 border-b border-white/5 bg-[#111522]">
+            <div className="relative">
+              <Search className="w-4 h-4 text-[#7A8396] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Filter registered users..."
+                className="w-full bg-[#151A28] border border-[#232B3E] focus:border-indigo-500 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-[#5A6376] outline-none transition-colors"
+              />
+            </div>
+          </div>
+        )}
 
         {/* User list */}
         <div className="p-3 sm:p-4 overflow-y-auto scroll flex-1 space-y-2">
@@ -136,10 +187,12 @@ export default function AddMemberModal({
               );
             })
           ) : (
-            <div className="text-center py-8 text-[#7A8396]">
-              <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-xs font-semibold text-white">No users found</p>
-              <p className="text-[10px] mt-0.5">Try searching with a different @username</p>
+            <div className="text-center py-10 px-4 text-[#7A8396]">
+              <Users className="w-10 h-10 mx-auto mb-2.5 opacity-40 text-indigo-400" />
+              <p className="text-xs font-bold text-white mb-1">No Other Users Registered Yet</p>
+              <p className="text-[11px] leading-relaxed max-w-xs mx-auto">
+                All fake dummy members have been removed. When your friends register with a unique <span className="text-indigo-400 font-mono">@username</span>, they will appear here, or you can add them directly using the box above!
+              </p>
             </div>
           )}
         </div>
@@ -147,3 +200,4 @@ export default function AddMemberModal({
     </div>
   );
 }
+

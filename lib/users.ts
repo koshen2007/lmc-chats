@@ -10,63 +10,8 @@ export interface UserProfile {
   created_at?: string;
 }
 
-// Pre-seeded community members for instant discovery & adding
-export const SEED_USERS: UserProfile[] = [
-  {
-    id: 'usr_kai',
-    username: 'kai',
-    name: 'Kai Renner',
-    avatar: svgToDataUrl(renderAvatarSvgString(PRESET_AVATARS[0].config)),
-    bio: 'Streetwear & Valorant enthusiast • Late-night gamer 🎮',
-    status: 'online',
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: 'usr_aria',
-    username: 'aria',
-    name: 'Aria Chen',
-    avatar: svgToDataUrl(renderAvatarSvgString(PRESET_AVATARS[1].config)),
-    bio: 'UI designer & Lofi music creator 🎧☕',
-    status: 'online',
-    created_at: '2026-01-02T00:00:00.000Z',
-  },
-  {
-    id: 'usr_zayn',
-    username: 'zayn',
-    name: 'Zayn Malik',
-    avatar: svgToDataUrl(renderAvatarSvgString(PRESET_AVATARS[2].config)),
-    bio: 'Beats producer & Cyber night rider 🏎️⚡',
-    status: 'idle',
-    created_at: '2026-01-03T00:00:00.000Z',
-  },
-  {
-    id: 'usr_rin',
-    username: 'rin',
-    name: 'Rin Takahashi',
-    avatar: svgToDataUrl(renderAvatarSvgString(PRESET_AVATARS[3].config)),
-    bio: 'Cyberpunk anime coder • Tokyo vibes 🌸',
-    status: 'online',
-    created_at: '2026-01-04T00:00:00.000Z',
-  },
-  {
-    id: 'usr_marcus',
-    username: 'marcus',
-    name: 'Marcus Vance',
-    avatar: svgToDataUrl(renderAvatarSvgString(PRESET_AVATARS[4].config)),
-    bio: 'Senior engineer & squad community admin 🛡️',
-    status: 'dnd',
-    created_at: '2026-01-05T00:00:00.000Z',
-  },
-  {
-    id: 'usr_elena',
-    username: 'elena',
-    name: 'Elena Rostova',
-    avatar: svgToDataUrl(renderAvatarSvgString(PRESET_AVATARS[5].config)),
-    bio: 'Digital artist & coffee addict ☕✨',
-    status: 'online',
-    created_at: '2026-01-06T00:00:00.000Z',
-  },
-];
+// Global registered users directory (starts empty; only real users who register will appear)
+export const SEED_USERS: UserProfile[] = [];
 
 /**
  * Validate username format:
@@ -104,3 +49,4 @@ export function isUsernameAvailable(
     (u) => u.username.toLowerCase() === normalized && u.id !== currentUserId
   );
 }
+

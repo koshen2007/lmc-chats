@@ -89,41 +89,18 @@ const DEFAULT_GROUPS: Group[] = [
   {
     id: 'lmc-squad',
     name: 'LMC Squad',
-    description: 'Squad chats, memes, and media.',
+    description: 'Official squad room for chats, calls & music.',
     avatar: '/logo.png',
-    created_by: 'Alex',
+    created_by: 'LMC',
     is_private: false,
-    members: ['Alex', 'Sam', 'Kira'],
+    members: [],
     join_requests: [],
-    created_at: new Date(Date.now() - 86400000).toISOString(),
+    created_at: new Date().toISOString(),
     unreadCount: 0,
   },
 ];
 
-const INITIAL_MESSAGES: Message[] = [
-  {
-    id: 'init-1',
-    group_id: 'lmc-squad',
-    sender_name: 'Alex',
-    sender_avatar: '/avatars/avatar-1.png',
-    sender_bio: 'Squad founder & creator ⚡',
-    content: 'Welcome to **LMC Chats**! Pick your avatar or upload your own photo, set your bio, and enjoy the squad vibes 🚀',
-    msg_type: 'text',
-    reactions: { '🔥': 4, '❤️': 3 },
-    created_at: new Date(Date.now() - 7200000).toISOString(),
-  },
-  {
-    id: 'init-2',
-    group_id: 'lmc-squad',
-    sender_name: 'Sam',
-    sender_avatar: '/avatars/avatar-2.png',
-    sender_bio: 'Music producer & gamer 🎧',
-    content: 'You can now create custom WhatsApp-style stickers, search all Instagram emojis, and make audio/video calls right from your phone!',
-    msg_type: 'text',
-    reactions: { '💯': 5, '✨': 2 },
-    created_at: new Date(Date.now() - 3600000).toISOString(),
-  },
-];
+const INITIAL_MESSAGES: Message[] = [];
 
 export default function Home() {
   // Current user state
@@ -260,20 +237,21 @@ export default function Home() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Load Registered Users Directory
-    let allUsers = [...SEED_USERS];
+    // Load Registered Users Directory (Purge any old dummy seed users)
+    const FAKE_USER_IDS = ['usr_kai', 'usr_aria', 'usr_zayn', 'usr_rin', 'usr_marcus', 'usr_elena'];
+    const FAKE_USERNAMES = ['kai', 'aria', 'zayn', 'rin', 'marcus', 'elena'];
+    let allUsers: UserProfile[] = [];
     const storedUsers = localStorage.getItem('lmc_registered_users');
     if (storedUsers) {
       try {
         const parsed = JSON.parse(storedUsers);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const merged = [...SEED_USERS];
-          for (const u of parsed) {
-            if (!merged.some((m) => m.username.toLowerCase() === u.username?.toLowerCase())) {
-              merged.push(u);
-            }
-          }
-          allUsers = merged;
+          allUsers = parsed.filter(
+            (u: UserProfile) =>
+              !FAKE_USER_IDS.includes(u.id) &&
+              !FAKE_USERNAMES.includes(u.username?.toLowerCase())
+          );
+          localStorage.setItem('lmc_registered_users', JSON.stringify(allUsers));
         }
       } catch {}
     }
@@ -329,23 +307,28 @@ export default function Home() {
       } catch {}
     }
 
-    // 2. Load Persisted Groups & auto-migrate old "LMC Main Lounge"
+    // 2. Load Persisted Groups & auto-migrate old "LMC Main Lounge" and purge dummy members
+    const FAKE_MEMBERS = ['alex', 'sam', 'kira'];
     const storedGroups = localStorage.getItem('lmc_saved_groups');
     if (storedGroups) {
       try {
         const parsedGroups = JSON.parse(storedGroups);
         if (Array.isArray(parsedGroups) && parsedGroups.length > 0) {
           const sanitized = parsedGroups.map((g) => {
+            const cleanMembers = (g.members || []).filter(
+              (m: string) => !FAKE_MEMBERS.includes(m.toLowerCase())
+            );
             if (g.name === 'LMC Main Lounge' || g.id === 'lmc-main-lounge') {
               return {
                 ...g,
                 id: 'lmc-squad',
                 name: 'LMC Squad',
                 avatar: '/logo.png',
-                description: 'Squad chats, memes, and media.',
+                description: 'Official squad room for chats, calls & music.',
+                members: cleanMembers,
               };
             }
-            return g;
+            return { ...g, members: cleanMembers };
           });
           setGroups(sanitized);
           setActiveGroupId(sanitized[0].id);
@@ -356,15 +339,23 @@ export default function Home() {
       }
     }
 
-    // 3. Load Persisted Messages & auto-migrate
+    // 3. Load Persisted Messages & auto-migrate, removing dummy messages
     const storedMessages = localStorage.getItem('lmc_saved_messages');
     if (storedMessages) {
       try {
         const parsedMessages = JSON.parse(storedMessages);
         if (Array.isArray(parsedMessages) && parsedMessages.length > 0) {
-          const sanitizedMsgs = parsedMessages.map((m) =>
-            m.group_id === 'lmc-main-lounge' ? { ...m, group_id: 'lmc-squad' } : m
-          );
+          const sanitizedMsgs = parsedMessages
+            .filter(
+              (m) =>
+                m.id !== 'init-1' &&
+                m.id !== 'init-2' &&
+                m.sender_name !== 'Alex' &&
+                m.sender_name !== 'Sam'
+            )
+            .map((m) =>
+              m.group_id === 'lmc-main-lounge' ? { ...m, group_id: 'lmc-squad' } : m
+            );
           setMessages(sanitizedMsgs);
           localStorage.setItem('lmc_saved_messages', JSON.stringify(sanitizedMsgs));
         }

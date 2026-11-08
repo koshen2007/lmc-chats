@@ -169,24 +169,36 @@ export default function TelegramMusicPlayer({
             </span>
           </div>
 
-          {/* Scrubber Progress Slider */}
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[10px] text-[#7A8396] font-mono shrink-0">
-              {formatTime(currentTime)}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={duration || track.durationSec || 100}
-              step={0.5}
-              value={currentTime}
-              onChange={handleSliderChange}
-              className="w-full h-1 bg-[#1E2538] rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400"
-            />
-            <span className="text-[10px] text-[#7A8396] font-mono shrink-0">
-              {formatTime(duration || track.durationSec)}
-            </span>
-          </div>
+          {/* Scrubber Progress Slider / Live Stream Indicator */}
+          {track.isLiveStream ? (
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] font-bold tracking-wider uppercase">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+                Live Radio
+              </span>
+              <span className="text-[10px] text-[#7A8396] font-mono">
+                {formatTime(currentTime)} elapsed
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[10px] text-[#7A8396] font-mono shrink-0">
+                {formatTime(currentTime)}
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={duration || track.durationSec || 100}
+                step={0.5}
+                value={currentTime}
+                onChange={handleSliderChange}
+                className="w-full h-1 bg-[#1E2538] rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400"
+              />
+              <span className="text-[10px] text-[#7A8396] font-mono shrink-0">
+                {formatTime(duration || track.durationSec)}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Player Controls (Prev, Play/Pause, Next) */}
