@@ -16,6 +16,15 @@ export interface Group {
   slow_mode?: boolean;
 }
 
+export interface MessageReplyContext {
+  id: string;
+  sender_name: string;
+  sender_username?: string;
+  content: string;
+  msg_type?: 'text' | 'sticker' | 'gif' | 'image' | 'audio' | 'music_bot';
+  media_url?: string;
+}
+
 export interface Message {
   id: string;
   group_id: string;
@@ -30,6 +39,8 @@ export interface Message {
   created_at: string;
   burn_after_read?: boolean;
   burn_seconds?: number;
+  read_by?: string[];
+  reply_to?: MessageReplyContext | null;
 }
 
 export interface BannedUser {

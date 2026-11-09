@@ -16,6 +16,15 @@ export interface ApiMessage {
   created_at: string;
   burn_after_read?: boolean;
   burn_seconds?: number;
+  read_by?: string[];
+  reply_to?: {
+    id: string;
+    sender_name: string;
+    sender_username?: string;
+    content: string;
+    msg_type?: string;
+    media_url?: string;
+  } | null;
 }
 
 declare global {
@@ -134,6 +143,10 @@ export async function POST(request: Request) {
       created_at: body.created_at || new Date().toISOString(),
       burn_after_read: Boolean(body.burn_after_read),
       burn_seconds: body.burn_seconds || 10,
+      read_by: Array.isArray(body.read_by) && body.read_by.length > 0
+        ? body.read_by
+        : [body.sender_username || body.sender_name || 'Anonymous'],
+      reply_to: body.reply_to || null,
     };
 
     const current = getMessages();
@@ -184,10 +197,39 @@ export async function DELETE(request: Request) {
   }
 }
 
-// PATCH /api/messages (update reactions, content, etc.)
+// PATCH /api/messages (update reactions, mark as read, etc.)
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
+
+    // Action 1: Mark messages as read for a user in a room
+    if (body && body.action === 'mark_read') {
+      const group_id = (body.group_id || '').trim();
+      const username = (body.username || body.reader || '').trim();
+      if (!group_id || !username) {
+        return NextResponse.json(
+          { success: false, error: 'group_id and username required' },
+          { status: 400 }
+        );
+      }
+      const current = getMessages();
+      let changed = false;
+      const updated = current.map((m) => {
+        if (m.group_id === group_id) {
+          const reads = Array.isArray(m.read_by) ? m.read_by : [];
+          if (!reads.includes(username)) {
+            changed = true;
+            return { ...m, read_by: [...reads, username] };
+          }
+        }
+        return m;
+      });
+      if (changed) {
+        saveMessages(updated);
+      }
+      return NextResponse.json({ success: true, action: 'mark_read' });
+    }
+
     if (!body || !body.id) {
       return NextResponse.json(
         { success: false, error: 'Message ID is required' },

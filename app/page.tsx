@@ -17,6 +17,7 @@ import {
   Check,
   CheckCheck,
   Pin,
+  Bell,
   BellOff,
   Image as ImageIcon,
   Link as LinkIcon,
@@ -57,6 +58,7 @@ import {
   Compass,
   Users,
   MoreVertical,
+  Reply,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured, Group, Message, BannedUser } from '@/lib/supabase';
 import { STICKERS, AVATAR_OPTIONS, FALLBACK_GIFS, EMOJI_CATEGORIES } from '@/lib/data';
@@ -71,6 +73,7 @@ import InstagramSearchModal from '@/components/InstagramSearchModal';
 import AuthLoginScreen from '@/components/AuthLoginScreen';
 import DiscoverChannelsModal from '@/components/DiscoverChannelsModal';
 import UserWelcomeModal from '@/components/UserWelcomeModal';
+import VoiceNotePlayer from '@/components/VoiceNotePlayer';
 import {
   UserProfile,
   SEED_USERS,
@@ -215,6 +218,35 @@ export default function Home() {
   const [reactionPopForMsg, setReactionPopForMsg] = useState<string | null>(null);
   const [reactionPopCoords, setReactionPopCoords] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  // 1. Quoted Message Reply
+  const [replyingToMessage, setReplyingToMessage] = useState<Message | null>(null);
+
+  // 2. Real-time Typing Indicators
+  const [activeTypers, setActiveTypers] = useState<Array<{ username: string; name: string }>>([]);
+  const lastTypingSentRef = useRef<number>(0);
+
+  // 3. Voice Note Audio Recording
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
+  const [voiceRecordingDuration, setVoiceRecordingDuration] = useState(0);
+  const voiceMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const voiceAudioChunksRef = useRef<Blob[]>([]);
+  const voiceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 4. Browser Notifications & Audio Chime
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>('default');
+  const lastKnownMessageIdsRef = useRef<Set<string>>(new Set());
+  const isInitialLoadDoneRef = useRef(false);
+
+  // 5. Real-Time Online Presence & Last Seen Heartbeat
+  const [presenceMap, setPresenceMap] = useState<Record<string, {
+    is_online: boolean;
+    last_seen: number;
+    last_seen_text: string;
+    name?: string;
+    avatar?: string;
+  }>>({});
+  const [totalOnlineCount, setTotalOnlineCount] = useState<number>(0);
+
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [infoMediaTab, setInfoMediaTab] = useState<'media' | 'links'>('media');
 
@@ -227,6 +259,98 @@ export default function Home() {
       setToastMessage(null);
     }, 2400);
   };
+
+  // Web Audio Synth Notification Chime (Zero external audio file dependencies)
+  const playNotificationChime = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+
+      // Two-tone marimba chime (E5 -> C6)
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'sine';
+      osc2.type = 'triangle';
+
+      osc1.frequency.setValueAtTime(659.25, now); // E5
+      osc1.frequency.exponentialRampToValueAtTime(1046.5, now + 0.12); // C6
+
+      osc2.frequency.setValueAtTime(329.63, now); // E4
+
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.38);
+      osc2.stop(now + 0.38);
+    } catch {}
+  }, []);
+
+  // Request Browser Notification Permission
+  const requestNotificationPermission = useCallback(async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      triggerToast('ℹ️ Notifications are not supported in this browser');
+      return;
+    }
+    try {
+      const result = await Notification.requestPermission();
+      setNotificationPermission(result);
+      if (result === 'granted') {
+        playNotificationChime();
+        triggerToast('🔔 Notifications enabled for incoming messages & voice notes!');
+      } else if (result === 'denied') {
+        triggerToast('⚠️ Notifications blocked. Please allow in browser settings.');
+      }
+    } catch {}
+  }, [playNotificationChime]);
+
+  // Dispatch Audio Chime and Browser Push Notification
+  const notifyIncomingMessage = useCallback(
+    (msg: Message) => {
+      const myHandle = (user.username || user.name || '').toLowerCase();
+      const senderHandle = (msg.sender_username || msg.sender_name || '').toLowerCase();
+      if (senderHandle === myHandle) return; // Ignore own sent message
+
+      // 1. Play sound alert
+      playNotificationChime();
+
+      // 2. Dispatch desktop/mobile push notification if tab blurred or hidden
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'granted' && (document.hidden || !document.hasFocus())) {
+          try {
+            const title = msg.sender_name ? `${msg.sender_name} (@${msg.sender_username || 'user'})` : 'LMC Chats';
+            let body = msg.content || '';
+            if (msg.msg_type === 'audio') body = '🎙️ Sent a voice note';
+            else if (msg.msg_type === 'image') body = '📷 Sent a photo';
+            else if (msg.msg_type === 'sticker') body = '✨ Sent a sticker';
+
+            const notif = new Notification(title, {
+              body,
+              icon: msg.sender_avatar || '/logo.png',
+              badge: '/logo.png',
+              tag: msg.id,
+            });
+
+            notif.onclick = () => {
+              window.focus();
+              notif.close();
+              if (msg.group_id) setActiveGroupId(msg.group_id);
+            };
+          } catch {}
+        }
+      }
+    },
+    [user.username, user.name, playNotificationChime]
+  );
 
   // Check Username Uniqueness in Real-Time
   useEffect(() => {
@@ -482,6 +606,19 @@ export default function Home() {
           if (msgRes.ok && isMounted) {
             const msgData = await msgRes.json();
             if (msgData.messages && Array.isArray(msgData.messages)) {
+              // Trigger notification chime / push notification for new incoming messages
+              if (isInitialLoadDoneRef.current) {
+                for (const m of msgData.messages) {
+                  if (!lastKnownMessageIdsRef.current.has(m.id)) {
+                    notifyIncomingMessage(m);
+                  }
+                }
+              }
+              for (const m of msgData.messages) {
+                lastKnownMessageIdsRef.current.add(m.id);
+              }
+              isInitialLoadDoneRef.current = true;
+
               setMessages((prev) => {
                 const otherGroupMessages = prev.filter((m) => m.group_id !== activeGroupId);
                 const now = Date.now();
@@ -507,12 +644,38 @@ export default function Home() {
           }
         }
 
+        // 2b. Sync Typing status for current room
+        if (activeGroupId && isMounted) {
+          fetch(`/api/typing?group_id=${encodeURIComponent(activeGroupId)}`)
+            .then((res) => res.json())
+            .then((tData) => {
+              if (tData && Array.isArray(tData.typers) && isMounted) {
+                const myHandle = (user.username || user.name || '').toLowerCase();
+                const others = tData.typers.filter(
+                  (t: { username: string }) => (t.username || '').toLowerCase() !== myHandle
+                );
+                setActiveTypers(others);
+              }
+            })
+            .catch(() => {});
+        }
+
         // 3. Sync Registered Users
         const usrRes = await fetch('/api/users');
         if (usrRes.ok && isMounted) {
           const usrData = await usrRes.json();
           if (usrData.users && Array.isArray(usrData.users)) {
             setRegisteredUsers(usrData.users);
+          }
+        }
+
+        // 4. Sync Real-Time Online Presence & Last Seen
+        const presRes = await fetch('/api/presence');
+        if (presRes.ok && isMounted) {
+          const presData = await presRes.json();
+          if (presData && presData.presence) {
+            setPresenceMap(presData.presence);
+            setTotalOnlineCount(presData.online_count || 0);
           }
         }
       } catch {
@@ -526,7 +689,109 @@ export default function Home() {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [isLoggedIn, activeGroupId]);
+  }, [isLoggedIn, activeGroupId, notifyIncomingMessage]);
+
+  // Presence Heartbeat Effect: Pings /api/presence every 20s while active
+  useEffect(() => {
+    if (!isLoggedIn || !user.username) return;
+
+    const sendHeartbeat = () => {
+      fetch('/api/presence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: user.username,
+          name: user.name,
+          avatar: user.avatar,
+        }),
+      }).catch(() => {});
+    };
+
+    sendHeartbeat();
+    const heartbeatInterval = setInterval(sendHeartbeat, 20000);
+
+    return () => {
+      clearInterval(heartbeatInterval);
+    };
+  }, [isLoggedIn, user.username, user.name, user.avatar]);
+
+  // Reset Document Title on Window Focus
+  useEffect(() => {
+    const handleFocus = () => {
+      if (typeof document !== 'undefined') {
+        document.title = 'LMC Chats';
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
+  // Auto-mark messages as read in active channel for double blue ticks (read receipts)
+  useEffect(() => {
+    if (!activeGroupId || !user.username) return;
+
+    const myHandle = user.username.toLowerCase();
+    const hasUnread = messages.some(
+      (m) => m.group_id === activeGroupId && !(m.read_by || []).some((r) => r.toLowerCase() === myHandle)
+    );
+
+    if (hasUnread) {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.group_id === activeGroupId) {
+            const currentReads = Array.isArray(m.read_by) ? m.read_by : [];
+            if (!currentReads.some((r) => r.toLowerCase() === myHandle)) {
+              return { ...m, read_by: [...currentReads, user.username!] };
+            }
+          }
+          return m;
+        })
+      );
+
+      fetch('/api/messages', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'mark_read',
+          group_id: activeGroupId,
+          username: user.username,
+        }),
+      }).catch(() => {});
+
+      try {
+        const channel = new BroadcastChannel('lmc_chat_sync');
+        channel.postMessage({
+          type: 'MESSAGES_READ',
+          payload: { group_id: activeGroupId, username: user.username },
+        });
+        channel.close();
+      } catch {}
+    }
+  }, [activeGroupId, messages.length, user.username]);
+
+  // BroadcastChannel for instant typing sync across tabs
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const bc = new BroadcastChannel('lmc_typing_sync');
+    bc.onmessage = (event) => {
+      const { group_id, username, name, is_typing } = event.data || {};
+      if (group_id !== activeGroupId) return;
+      const myHandle = (user.username || user.name || '').toLowerCase();
+      if ((username || '').toLowerCase() === myHandle) return;
+
+      setActiveTypers((prev) => {
+        if (is_typing) {
+          if (prev.some((t) => (t.username || '').toLowerCase() === username.toLowerCase())) return prev;
+          return [...prev, { username, name: name || username }];
+        } else {
+          return prev.filter((t) => (t.username || '').toLowerCase() !== username.toLowerCase());
+        }
+      });
+    };
+    return () => bc.close();
+  }, [activeGroupId, user.username, user.name]);
 
   // Deep Linking for ?join=<groupId> and ?user=<username>
   useEffect(() => {
@@ -658,6 +923,10 @@ export default function Home() {
     channel.onmessage = (event) => {
       const { type, payload } = event.data;
       if (type === 'NEW_MESSAGE') {
+        if (!lastKnownMessageIdsRef.current.has(payload.id)) {
+          lastKnownMessageIdsRef.current.add(payload.id);
+          notifyIncomingMessage(payload);
+        }
         setMessages((prev) => {
           if (prev.some((m) => m.id === payload.id)) return prev;
           const updated = [...prev, payload];
@@ -698,6 +967,20 @@ export default function Home() {
           const updated = prev.map((m) =>
             m.id === payload.id ? { ...m, reactions: payload.reactions } : m
           );
+          localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+          return updated;
+        });
+      } else if (type === 'MESSAGES_READ') {
+        setMessages((prev) => {
+          const updated = prev.map((m) => {
+            if (m.group_id === payload.group_id) {
+              const reads = Array.isArray(m.read_by) ? m.read_by : [];
+              if (!reads.includes(payload.username)) {
+                return { ...m, read_by: [...reads, payload.username] };
+              }
+            }
+            return m;
+          });
           localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
           return updated;
         });
@@ -765,6 +1048,10 @@ export default function Home() {
         { event: 'INSERT', schema: 'public', table: 'messages' },
         (payload) => {
           const newMsg = payload.new as Message;
+          if (!lastKnownMessageIdsRef.current.has(newMsg.id)) {
+            lastKnownMessageIdsRef.current.add(newMsg.id);
+            notifyIncomingMessage(newMsg);
+          }
           setMessages((prev) => {
             if (prev.some((m) => m.id === newMsg.id)) return prev;
             const updated = [...prev, newMsg];
@@ -1471,11 +1758,44 @@ export default function Home() {
     });
   };
 
-  // SEND MESSAGE (With Strict Deduplication Lock, Ghost Mode & Bot Commands)
+  // Real-time Typing notification throttled
+  const notifyTyping = useCallback(
+    (isTyping: boolean) => {
+      if (!activeGroupId || !user.username) return;
+      const now = Date.now();
+      if (isTyping && now - lastTypingSentRef.current < 1500) return;
+      lastTypingSentRef.current = now;
+
+      fetch('/api/typing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          group_id: activeGroupId,
+          username: user.username,
+          name: user.name,
+          is_typing: isTyping,
+        }),
+      }).catch(() => {});
+
+      try {
+        const bc = new BroadcastChannel('lmc_typing_sync');
+        bc.postMessage({
+          group_id: activeGroupId,
+          username: user.username,
+          name: user.name,
+          is_typing: isTyping,
+        });
+        bc.close();
+      } catch {}
+    },
+    [activeGroupId, user.username, user.name]
+  );
+
+  // SEND MESSAGE (With Strict Deduplication Lock, Ghost Mode, Quoted Reply & Bot Commands)
   const handleSendMessage = useCallback(
     async (
       content: string,
-      msg_type: 'text' | 'sticker' | 'gif' | 'image' = 'text',
+      msg_type: 'text' | 'sticker' | 'gif' | 'image' | 'audio' = 'text',
       media_url: string = ''
     ) => {
       if (!user.name) {
@@ -1590,7 +1910,21 @@ export default function Home() {
         created_at: new Date().toISOString(),
         burn_after_read: ghostModeActive,
         burn_seconds: ghostModeActive ? 10 : undefined,
+        read_by: [user.username || user.name],
+        reply_to: replyingToMessage
+          ? {
+              id: replyingToMessage.id,
+              sender_name: replyingToMessage.sender_name,
+              sender_username: replyingToMessage.sender_username,
+              content: replyingToMessage.content,
+              msg_type: replyingToMessage.msg_type,
+              media_url: replyingToMessage.media_url,
+            }
+          : null,
       };
+
+      setReplyingToMessage(null);
+      notifyTyping(false);
 
       if (ghostModeActive) {
         triggerToast('Ghost message sent! Burns 10s after read 🔥');
@@ -1645,8 +1979,82 @@ export default function Home() {
       handleTogglePlayMusic,
       handleClosePlayer,
       handleNextTrack,
+      replyingToMessage,
+      notifyTyping,
     ]
   );
+
+  // Voice Memo / Audio Recording Handlers
+  const handleStartVoiceRecording = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        triggerToast('Microphone not supported on this device/browser');
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      voiceAudioChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      voiceMediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          voiceAudioChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.start(200);
+      setIsVoiceRecording(true);
+      setVoiceRecordingDuration(0);
+
+      voiceTimerRef.current = setInterval(() => {
+        setVoiceRecordingDuration((prev) => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Microphone error:', err);
+      triggerToast('Microphone permission required for voice notes');
+    }
+  };
+
+  const handleCancelVoiceRecording = () => {
+    if (voiceMediaRecorderRef.current) {
+      voiceMediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+      voiceMediaRecorderRef.current = null;
+    }
+    if (voiceTimerRef.current) {
+      clearInterval(voiceTimerRef.current);
+      voiceTimerRef.current = null;
+    }
+    voiceAudioChunksRef.current = [];
+    setIsVoiceRecording(false);
+    setVoiceRecordingDuration(0);
+    triggerToast('Voice note discarded');
+  };
+
+  const handleFinishVoiceRecording = () => {
+    if (!voiceMediaRecorderRef.current) return;
+    const recorder = voiceMediaRecorderRef.current;
+
+    recorder.onstop = () => {
+      const audioBlob = new Blob(voiceAudioChunksRef.current, { type: 'audio/webm' });
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64Audio = reader.result as string;
+        handleSendMessage('', 'audio', base64Audio);
+      };
+      reader.readAsDataURL(audioBlob);
+
+      recorder.stream.getTracks().forEach((track) => track.stop());
+      voiceMediaRecorderRef.current = null;
+    };
+
+    recorder.stop();
+    if (voiceTimerRef.current) {
+      clearInterval(voiceTimerRef.current);
+      voiceTimerRef.current = null;
+    }
+    setIsVoiceRecording(false);
+    setVoiceRecordingDuration(0);
+  };
 
   // Toggle Reaction
   const handleToggleReaction = async (msgId: string, emoji: string) => {
@@ -3168,12 +3576,22 @@ export default function Home() {
                           className="w-full h-full object-cover rounded-full"
                         />
                       </div>
-                      <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 border border-[#0A0D14]" />
+                      {presenceMap[targetHandle.toLowerCase()]?.is_online ? (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 border border-[#0A0D14] animate-pulse" />
+                      ) : (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-slate-500 border border-[#0A0D14]" />
+                      )}
                     </div>
                     {!railCollapsed && (
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] truncate">{targetProfile?.name || `@${targetHandle}`}</p>
-                        <p className="text-[10px] text-[#7A8396] truncate">@{targetHandle}</p>
+                        <p className="text-[10px] truncate">
+                          {presenceMap[targetHandle.toLowerCase()]?.is_online ? (
+                            <span className="text-emerald-400 font-medium">Online</span>
+                          ) : (
+                            <span className="text-[#7A8396]">{presenceMap[targetHandle.toLowerCase()]?.last_seen_text || `@${targetHandle}`}</span>
+                          )}
+                        </p>
                       </div>
                     )}
                   </button>
@@ -3544,16 +3962,87 @@ export default function Home() {
                         </button>
                       )}
                     </h1>
-                    <p className="text-[10px] sm:text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
-                      <span>{(activeGroup.members || []).length} members</span>
-                      <span className="hidden xs:inline">• Info</span>
-                    </p>
+                    {activeTypers.length > 0 ? (
+                      <p className="text-[10px] sm:text-[11px] text-indigo-400 font-semibold flex items-center gap-1.5 truncate animate-pulse">
+                        <span className="flex gap-0.5 items-center">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </span>
+                        <span>
+                          {activeTypers.length === 1
+                            ? `${activeTypers[0].name} is typing...`
+                            : `${activeTypers[0].name} and ${activeTypers.length - 1} other${activeTypers.length > 2 ? 's' : ''} are typing...`}
+                        </span>
+                      </p>
+                    ) : activeGroupId.startsWith('dm_') ? (
+                      (() => {
+                        const dmPartnerHandle = activeGroupId
+                          .replace('dm_', '')
+                          .split('_')
+                          .find((u) => u.toLowerCase() !== (user.username || user.name || '').toLowerCase());
+                        const dmPresence = dmPartnerHandle ? presenceMap[dmPartnerHandle.toLowerCase()] : null;
+                        if (dmPresence?.is_online) {
+                          return (
+                            <p className="text-[10px] sm:text-[11px] text-emerald-400 font-semibold flex items-center gap-1 truncate">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                              <span>Online</span>
+                            </p>
+                          );
+                        }
+                        return (
+                          <p className="text-[10px] sm:text-[11px] text-[#7A8396] flex items-center gap-1 truncate">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0" />
+                            <span>{dmPresence?.last_seen_text || 'Offline'}</span>
+                          </p>
+                        );
+                      })()
+                    ) : (
+                      (() => {
+                        const grpMembers = (activeGroup.members || []).map((m: string) => m.toLowerCase());
+                        const onlineInGrp = Object.entries(presenceMap).filter(
+                          ([h, p]) => p.is_online && grpMembers.includes(h)
+                        ).length;
+                        return (
+                          <p className="text-[10px] sm:text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
+                            <span>{(activeGroup.members || []).length} members</span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                              {Math.max(1, onlineInGrp)} online
+                            </span>
+                          </p>
+                        );
+                      })()
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Right Header Actions */}
               <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 relative">
+                {/* Notification Bell Button */}
+                <button
+                  type="button"
+                  onClick={requestNotificationPermission}
+                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center transition-all shrink-0 ${
+                    notificationPermission === 'granted'
+                      ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                      : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
+                  }`}
+                  title={
+                    notificationPermission === 'granted'
+                      ? 'Sound & Browser Push Alerts Active'
+                      : 'Enable Browser Push Notifications & Sound'
+                  }
+                >
+                  {notificationPermission === 'granted' ? (
+                    <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
+                  ) : (
+                    <BellOff className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#7A8396]" />
+                  )}
+                </button>
+
                 {/* Instagram Search Button */}
                 <button
                   type="button"
@@ -3863,11 +4352,12 @@ export default function Home() {
           </div>
 
           {displayedMessages.map((msg) => {
-            const isMe = user.name && msg.sender_name.toLowerCase() === user.name.toLowerCase();
+            const isMe = Boolean(user.name && msg.sender_name.toLowerCase() === user.name.toLowerCase());
             return (
               <div
                 key={msg.id}
-                className={`flex gap-2.5 sm:gap-3 group relative animate-msg-in ${
+                id={`msg-${msg.id}`}
+                className={`flex gap-2.5 sm:gap-3 group relative animate-msg-in transition-colors rounded-2xl p-1 ${
                   isMe ? 'flex-row-reverse' : 'flex-row'
                 }`}
               >
@@ -3929,6 +4419,37 @@ export default function Home() {
                     </button>
                   )}
 
+                  {/* Quoted Message Reply Context */}
+                  {msg.reply_to && (
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const el = document.getElementById(`msg-${msg.reply_to?.id}`);
+                        if (el) {
+                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          el.classList.add('ring-2', 'ring-indigo-400', 'bg-indigo-500/10');
+                          setTimeout(() => {
+                            el.classList.remove('ring-2', 'ring-indigo-400', 'bg-indigo-500/10');
+                          }, 2000);
+                        }
+                      }}
+                      className={`mb-1 p-2 rounded-xl text-left cursor-pointer border-l-2 transition-all max-w-full shadow-sm ${
+                        isMe
+                          ? 'bg-indigo-950/70 border-indigo-300 text-white hover:bg-indigo-900/80'
+                          : 'bg-[#181E2E] border-indigo-400 text-[#E9ECF4] hover:bg-[#20273B]'
+                      }`}
+                      title="Click to jump to quoted message"
+                    >
+                      <p className="text-[10px] font-bold text-indigo-300 truncate flex items-center gap-1">
+                        <Reply className="w-2.5 h-2.5" />
+                        <span>{msg.reply_to.sender_name}</span>
+                      </p>
+                      <p className="text-[11px] text-[#A8B2C7] truncate mt-0.5 max-w-xs">
+                        {msg.reply_to.content || (msg.reply_to.msg_type === 'audio' ? '🎙️ Voice Note' : msg.reply_to.msg_type === 'image' ? '📷 Photo' : '📎 Attachment')}
+                      </p>
+                    </div>
+                  )}
+
                   {/* Message Content */}
                   {msg.msg_type === 'text' && (
                     <div
@@ -3950,6 +4471,48 @@ export default function Home() {
                           onBurn={handleBurnMessage}
                         />
                       )}
+
+                      {/* WhatsApp & Telegram Double Ticks + Time */}
+                      <div className={`flex items-center gap-1 mt-1 text-[10px] select-none ${isMe ? 'justify-end text-white/70' : 'justify-end text-[#7A8396]'}`}>
+                        <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        {isMe && (() => {
+                          const isDm = activeGroupId.startsWith('dm_');
+                          const otherUser = isDm
+                            ? activeGroupId.replace('dm_', '').split('_').find((u) => u.toLowerCase() !== (user.username || user.name || '').toLowerCase())
+                            : null;
+                          const isSeen = otherUser
+                            ? (msg.read_by || []).some((r) => r.toLowerCase() === otherUser.toLowerCase())
+                            : (msg.read_by || []).length > 1;
+
+                          if (isSeen) {
+                            return (
+                              <span title={isDm ? "Seen" : "Read by members"} className="inline-flex items-center">
+                                <CheckCheck className="w-3.5 h-3.5 text-[#38BDF8] shrink-0" />
+                              </span>
+                            );
+                          }
+                          return (
+                            <span title="Delivered" className="inline-flex items-center">
+                              <CheckCheck className="w-3.5 h-3.5 text-white/60 shrink-0" />
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Voice Note Audio Memo */}
+                  {msg.msg_type === 'audio' && msg.media_url && (
+                    <div className="space-y-1">
+                      <VoiceNotePlayer audioUrl={msg.media_url} isMe={isMe} />
+                      <div className={`flex items-center gap-1 text-[10px] px-1 select-none ${isMe ? 'justify-end text-[#7A8396]' : 'justify-start text-[#7A8396]'}`}>
+                        <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        {isMe && (
+                          <span title="Delivered" className="inline-flex items-center">
+                            <CheckCheck className="w-3.5 h-3.5 text-[#38BDF8] shrink-0" />
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -4066,6 +4629,21 @@ export default function Home() {
                       <SmilePlus className="w-3.5 h-3.5" />
                     </button>
 
+                    {/* Reply to message */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReplyingToMessage(msg);
+                        if (textareaRef.current) {
+                          textareaRef.current.focus();
+                        }
+                      }}
+                      className="opacity-75 sm:opacity-0 sm:group-hover:opacity-100 hover:opacity-100 p-1.5 rounded-full text-[#7A8396] hover:text-indigo-400 transition-all text-xs touch-manipulation active:scale-110"
+                      title="Reply to message"
+                    >
+                      <Reply className="w-3.5 h-3.5" />
+                    </button>
+
                     {(isAdminOfActiveGroup || isMe) && (
                       <button
                         onClick={() => handleDeleteMessage(msg.id)}
@@ -4080,6 +4658,21 @@ export default function Home() {
               </div>
             );
           })}
+          {/* Real-time Floating Typing Indicator Bubble */}
+          {activeTypers.length > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-[#141826]/90 border border-indigo-500/30 text-indigo-300 text-xs w-fit shadow-lg animate-msg-in mb-2">
+              <span className="flex gap-1 items-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </span>
+              <span className="text-[11px] font-semibold">
+                {activeTypers.length === 1
+                  ? `${activeTypers[0].name} is typing...`
+                  : `${activeTypers.map((t) => t.name).join(', ')} are typing...`}
+              </span>
+            </div>
+          )}
           <div ref={streamEndRef} />
         </div>
 
@@ -4350,6 +4943,32 @@ export default function Home() {
             </div>
           )}
 
+          {/* Replying Banner Above Input */}
+          {replyingToMessage && (
+            <div className="max-w-4xl mx-auto flex items-center justify-between px-3.5 py-2 bg-[#131724] border border-white/10 rounded-2xl mb-1.5 animate-msg-in shadow-md">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-1 h-8 rounded-full bg-indigo-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-indigo-400 truncate flex items-center gap-1">
+                    <Reply className="w-3 h-3 text-indigo-400" />
+                    <span>Replying to {replyingToMessage.sender_name}</span>
+                  </p>
+                  <p className="text-xs text-[#A8B2C7] truncate mt-0.5 max-w-sm">
+                    {replyingToMessage.content || (replyingToMessage.msg_type === 'audio' ? '🎙️ Voice Note' : replyingToMessage.msg_type === 'image' ? '📷 Photo' : '📎 Attachment')}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReplyingToMessage(null)}
+                className="w-6 h-6 rounded-full hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white transition-colors shrink-0"
+                title="Cancel reply"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Composer Input Bar or Join Channel CTA */}
           {!isJoinedToActiveGroup ? (
             <div className="max-w-4xl mx-auto flex items-center justify-between p-3.5 rounded-2xl bg-[#131722] border border-[#232B3E] shadow-xl animate-msg-in">
@@ -4392,132 +5011,187 @@ export default function Home() {
               }}
               className="max-w-4xl mx-auto flex items-end gap-1.5 sm:gap-2 bg-[#131722] border border-[#232B3E] focus-within:border-[#6366F1] rounded-2xl p-1.5 sm:p-2 transition-all shadow-xl"
             >
-            {/* Upload Image button with Compression */}
-            <label
-              className="p-1.5 sm:p-2 rounded-xl text-[#A8B2C7] hover:text-white hover:bg-white/5 cursor-pointer shrink-0 active:scale-95 transition-all"
-              title="Upload Image"
-            >
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  try {
-                    const compressedDataUrl = await compressImage(file);
-                    handleSendMessage('', 'image', compressedDataUrl);
-                  } catch (err) {
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      if (typeof reader.result === 'string') {
-                        handleSendMessage('', 'image', reader.result);
+              {isVoiceRecording ? (
+                /* LIVE VOICE RECORDING STUDIO */
+                <div className="flex-1 flex items-center justify-between gap-3 px-2 py-1.5 select-none animate-msg-in">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping shrink-0" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+                    <span className="text-xs font-mono font-bold text-rose-400">
+                      {Math.floor(voiceRecordingDuration / 60)}:{(voiceRecordingDuration % 60).toString().padStart(2, '0')}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      {[12, 24, 38, 20, 45, 30, 16, 40, 25, 35].map((h, i) => (
+                        <span
+                          key={i}
+                          style={{ height: `${h}px` }}
+                          className="w-[2.5px] rounded-full bg-rose-400/80 animate-pulse"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCancelVoiceRecording}
+                      className="p-2 rounded-xl text-[#7A8396] hover:text-rose-400 hover:bg-rose-500/10 active:scale-95 transition-all text-xs font-semibold flex items-center gap-1"
+                      title="Discard recording"
+                    >
+                      <Trash2 className="w-4 h-4 text-rose-400" />
+                      <span className="hidden sm:inline">Cancel</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleFinishVoiceRecording}
+                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition-all"
+                      title="Send voice note"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Send</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Upload Image button with Compression */}
+                  <label
+                    className="p-1.5 sm:p-2 rounded-xl text-[#A8B2C7] hover:text-white hover:bg-white/5 cursor-pointer shrink-0 active:scale-95 transition-all"
+                    title="Upload Image"
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const compressedDataUrl = await compressImage(file);
+                          handleSendMessage('', 'image', compressedDataUrl);
+                        } catch (err) {
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            if (typeof reader.result === 'string') {
+                              handleSendMessage('', 'image', reader.result);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        } finally {
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                    <Upload className="w-4 h-4" />
+                  </label>
+
+                  {/* Input Textarea with Enter key & typing indicator */}
+                  <textarea
+                    ref={textareaRef}
+                    rows={1}
+                    value={inputText}
+                    onChange={(e) => {
+                      setInputText(e.target.value);
+                      notifyTyping(Boolean(e.target.value.trim()));
+                      e.target.style.height = 'auto';
+                      e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!inputText.trim()) return;
+                        handleSendMessage(inputText, 'text');
                       }
-                    };
-                    reader.readAsDataURL(file);
-                  } finally {
-                    e.target.value = '';
-                  }
-                }}
-              />
-              <Upload className="w-4 h-4" />
-            </label>
+                    }}
+                    placeholder={
+                      ghostModeActive
+                        ? 'Ghost Mode: Burns in 10s...'
+                        : `Message #${activeGroup.name}... (try /play lofi)`
+                    }
+                    className="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 text-base sm:text-sm text-[#E9ECF4] placeholder-[#5A6376] max-h-32 leading-relaxed no-scrollbar"
+                  />
 
-            {/* Input Textarea with Enter key deduplication */}
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              value={inputText}
-              onChange={(e) => {
-                setInputText(e.target.value);
-                e.target.style.height = 'auto';
-                e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!inputText.trim()) return;
-                  handleSendMessage(inputText, 'text');
-                }
-              }}
-              placeholder={
-                ghostModeActive
-                  ? 'Ghost Mode: Burns in 10s...'
-                  : `Message #${activeGroup.name}... (try /play lofi)`
-              }
-              className="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 text-base sm:text-sm text-[#E9ECF4] placeholder-[#5A6376] max-h-32 leading-relaxed no-scrollbar"
-            />
+                  <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+                    {/* Ghost Mode (Burn-on-Read) Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextState = !ghostModeActive;
+                        setGhostModeActive(nextState);
+                        triggerToast(
+                          nextState
+                            ? '🔥 Ghost Mode ON: Messages burn 10s after read!'
+                            : 'Ghost Mode OFF'
+                        );
+                      }}
+                      className={`p-1.5 sm:p-2 rounded-xl transition-all ${
+                        ghostModeActive
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-md shadow-amber-500/20 animate-pulse'
+                          : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
+                      }`}
+                      title="Burn-on-Read Ghost Mode (Auto self-destruct in 10s)"
+                    >
+                      <Flame className={`w-4 h-4 ${ghostModeActive ? 'text-amber-400' : ''}`} />
+                    </button>
 
-            <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-              {/* Ghost Mode (Burn-on-Read) Toggle */}
-              <button
-                type="button"
-                onClick={() => {
-                  const nextState = !ghostModeActive;
-                  setGhostModeActive(nextState);
-                  triggerToast(
-                    nextState
-                      ? '🔥 Ghost Mode ON: Messages burn 10s after read!'
-                      : 'Ghost Mode OFF'
-                  );
-                }}
-                className={`p-1.5 sm:p-2 rounded-xl transition-all ${
-                  ghostModeActive
-                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-md shadow-amber-500/20 animate-pulse'
-                    : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
-                }`}
-                title="Burn-on-Read Ghost Mode (Auto self-destruct in 10s)"
-              >
-                <Flame className={`w-4 h-4 ${ghostModeActive ? 'text-amber-400' : ''}`} />
-              </button>
+                    {/* Emoji Picker toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEmojiPicker(!showEmojiPicker);
+                        setShowTray(false);
+                      }}
+                      className={`p-1.5 sm:p-2 rounded-xl transition-all ${
+                        showEmojiPicker ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
+                      }`}
+                      title="Instagram Emojis"
+                    >
+                      <Smile className="w-4 h-4" />
+                    </button>
 
-              {/* Emoji Picker toggle */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowEmojiPicker(!showEmojiPicker);
-                  setShowTray(false);
-                }}
-                className={`p-1.5 sm:p-2 rounded-xl transition-all ${
-                  showEmojiPicker ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
-                }`}
-                title="Instagram Emojis"
-              >
-                <Smile className="w-4 h-4" />
-              </button>
+                    {/* Stickers & GIFs toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowTray(!showTray);
+                        setShowEmojiPicker(false);
+                      }}
+                      className={`p-1.5 sm:p-2 rounded-xl transition-all ${
+                        showTray ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
+                      }`}
+                      title="Stickers & GIFs"
+                    >
+                      <Layers className="w-4 h-4" />
+                    </button>
 
-              {/* Stickers & GIFs toggle */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowTray(!showTray);
-                  setShowEmojiPicker(false);
-                }}
-                className={`p-1.5 sm:p-2 rounded-xl transition-all ${
-                  showTray ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
-                }`}
-                title="Stickers & GIFs"
-              >
-                <Layers className="w-4 h-4" />
-              </button>
-
-              {/* Send Button */}
-              <button
-                type="submit"
-                disabled={!inputText.trim() || isSending}
-                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl grid place-items-center text-white transition-all shadow-md ml-0.5 sm:ml-1 ${
-                  inputText.trim() && !isSending
-                    ? ghostModeActive
-                      ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 active:scale-95 shadow-amber-500/30'
-                      : 'bg-[#6366F1] hover:bg-[#5457E5] active:scale-95 shadow-[#6366F1]/30'
-                    : 'bg-[#1C2230] text-[#5A6376] cursor-not-allowed'
-                }`}
-              >
-                <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-            </div>
-          </form>
+                    {/* Send Button or Mic Button (WhatsApp style: Mic when empty, Send when text typed) */}
+                    {inputText.trim() ? (
+                      <button
+                        type="submit"
+                        disabled={isSending}
+                        className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl grid place-items-center text-white transition-all shadow-md ml-0.5 sm:ml-1 ${
+                          ghostModeActive
+                            ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 active:scale-95 shadow-amber-500/30'
+                            : 'bg-[#6366F1] hover:bg-[#5457E5] active:scale-95 shadow-[#6366F1]/30'
+                        }`}
+                        title="Send message"
+                      >
+                        <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleStartVoiceRecording}
+                        className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl grid place-items-center bg-[#181E2E] hover:bg-indigo-600/30 text-indigo-400 hover:text-indigo-200 border border-white/5 hover:border-indigo-500/40 active:scale-95 transition-all shadow-md ml-0.5 sm:ml-1"
+                        title="Record Voice Note (Audio Memo)"
+                      >
+                        <Mic className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </form>
           )}
         </div>
           </>
@@ -4670,6 +5344,9 @@ export default function Home() {
                 const memberId =
                   matchedUser?.id ||
                   (isCurrent ? user.id : `usr_${mName.toLowerCase().replace(/[^a-z0-9]/g, '')}`);
+                const memberHandle = (matchedUser?.username || (isCurrent ? user.username : mName) || '').toLowerCase();
+                const memberPresence = presenceMap[memberHandle];
+                const isMemberOnline = isCurrent || memberPresence?.is_online;
 
                 return (
                   <button
@@ -4686,12 +5363,19 @@ export default function Home() {
                     }
                     className="w-full flex items-center gap-2.5 p-2 rounded-xl bg-[#141824] border border-[#232B3E] hover:border-white/20 transition-all text-left group"
                   >
-                    <div className="w-8 h-8 rounded-full overflow-hidden bg-[#F5F6F8] p-0.5 shrink-0 border border-white/5">
-                      <img
-                        src={memberAvatar}
-                        alt={displayName}
-                        className="w-full h-full object-contain"
-                      />
+                    <div className="relative shrink-0">
+                      <div className="w-8 h-8 rounded-full overflow-hidden bg-[#F5F6F8] p-0.5 border border-white/5">
+                        <img
+                          src={memberAvatar}
+                          alt={displayName}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      {isMemberOnline ? (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-[#141824] animate-pulse" />
+                      ) : (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-slate-500 border border-[#141824]" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
@@ -4699,11 +5383,18 @@ export default function Home() {
                           {displayName} {isCurrent && '(You)'}
                         </p>
                       </div>
-                      <p className="text-[10px] text-[#7A8396] truncate">
+                      <p className="text-[10px] text-[#7A8396] flex items-center gap-1 truncate">
                         {displayUsername ? (
-                          <span className="text-[#818CF8] font-mono mr-1">{displayUsername}</span>
+                          <span className="text-[#818CF8] font-mono mr-0.5">{displayUsername}</span>
                         ) : null}
-                        • {isCreator ? 'Admin 👑' : 'Member'}
+                        <span>•</span>
+                        {isMemberOnline ? (
+                          <span className="text-emerald-400 font-medium">Online</span>
+                        ) : (
+                          <span>{memberPresence?.last_seen_text || 'Offline'}</span>
+                        )}
+                        <span>•</span>
+                        <span>{isCreator ? 'Admin 👑' : 'Member'}</span>
                       </p>
                     </div>
                     {isCreator && (
