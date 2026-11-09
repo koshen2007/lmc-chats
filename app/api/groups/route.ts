@@ -82,12 +82,29 @@ function saveGroups(groups: ApiGroup[]): void {
 }
 
 // GET /api/groups
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const groups = getGroups();
+    const { searchParams } = new URL(request.url);
+    const q = (searchParams.get('q') || '').trim().toLowerCase();
+
+    const allGroups = getGroups().filter((g) => g && !g.id.startsWith('dm_'));
+
+    if (!q) {
+      return NextResponse.json({
+        success: true,
+        groups: allGroups,
+      });
+    }
+
+    const filtered = allGroups.filter((g) => {
+      const name = (g.name || '').toLowerCase();
+      const desc = (g.description || '').toLowerCase();
+      return name.includes(q) || desc.includes(q) || name.startsWith(q);
+    });
+
     return NextResponse.json({
       success: true,
-      groups,
+      groups: filtered,
     });
   } catch (err: unknown) {
     return NextResponse.json(
@@ -104,6 +121,25 @@ export async function POST(request: Request) {
     const action = body.action || 'create';
 
     const currentGroups = getGroups();
+
+    if (action === 'sync' && Array.isArray(body.groups)) {
+      const map = new Map<string, ApiGroup>();
+      for (const g of currentGroups) {
+        if (g && g.id && !g.id.startsWith('dm_')) map.set(g.id, g);
+      }
+      for (const g of body.groups) {
+        if (g && g.id && !g.id.startsWith('dm_')) {
+          const existing = map.get(g.id);
+          map.set(g.id, existing ? { ...existing, ...g } : g);
+        }
+      }
+      const updated = Array.from(map.values());
+      saveGroups(updated);
+      return NextResponse.json({
+        success: true,
+        groups: updated,
+      });
+    }
 
     if (action === 'create') {
       const newGroup: ApiGroup = {

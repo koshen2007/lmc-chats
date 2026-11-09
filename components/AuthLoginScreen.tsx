@@ -272,7 +272,7 @@ export default function AuthLoginScreen({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold text-white">Your Avatar</p>
-                <p className="text-[10px] text-[#7A8396] truncate">Snapchat 3D Vector style</p>
+                <p className="text-[10px] text-[#7A8396] truncate">Choose preset or customize below</p>
                 <button
                   type="button"
                   onClick={() => setShowAvatarStudio(true)}

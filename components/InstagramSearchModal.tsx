@@ -59,22 +59,31 @@ export default function InstagramSearchModal({
   const [activeTab, setActiveTab] = useState<SearchTab>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [serverUsers, setServerUsers] = useState<UserProfile[]>([]);
+  const [serverGroups, setServerGroups] = useState<Group[]>([]);
 
   const cleanQuery = query.trim().toLowerCase().replace(/^@/, '');
 
-  // Live fetch from server directory across all devices
+  // Live fetch from server directory across all devices (Users + Groups)
   React.useEffect(() => {
     if (!isOpen) return;
     let active = true;
 
-    const fetchUsers = async () => {
+    const fetchDirectory = async () => {
       try {
-        const url = cleanQuery
+        const userUrl = cleanQuery
           ? `/api/users?q=${encodeURIComponent(cleanQuery)}`
           : '/api/users';
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
+        const groupUrl = cleanQuery
+          ? `/api/groups?q=${encodeURIComponent(cleanQuery)}`
+          : '/api/groups';
+
+        const [userRes, groupRes] = await Promise.all([
+          fetch(userUrl).catch(() => null),
+          fetch(groupUrl).catch(() => null),
+        ]);
+
+        if (userRes && userRes.ok) {
+          const data = await userRes.json();
           if (active && Array.isArray(data.users)) {
             setServerUsers(data.users);
             if (onSyncUsers) {
@@ -82,13 +91,20 @@ export default function InstagramSearchModal({
             }
           }
         }
+
+        if (groupRes && groupRes.ok) {
+          const gData = await groupRes.json();
+          if (active && Array.isArray(gData.groups)) {
+            setServerGroups(gData.groups);
+          }
+        }
       } catch (err) {
-        // Fallback silently to client registeredUsers
+        // Fallback silently to client props
       }
     };
 
-    fetchUsers();
-    const timer = setTimeout(fetchUsers, 150);
+    fetchDirectory();
+    const timer = setTimeout(fetchDirectory, 150);
     return () => {
       active = false;
       clearTimeout(timer);
@@ -111,18 +127,39 @@ export default function InstagramSearchModal({
 
   // Instagram-Style Ranked Filter
   const matchedUsers = useMemo(() => {
+    if (!cleanQuery) return allAvailableUsers;
     return searchUsersInstagramStyle(cleanQuery, allAvailableUsers);
   }, [cleanQuery, allAvailableUsers]);
 
-  // Filter Channels / Groups
+  // Merge local groups and serverGroups (exclude virtual DM rooms)
+  const allAvailableGroups = useMemo(() => {
+    const map = new Map<string, Group>();
+    for (const g of groups) {
+      if (g && g.id && !g.id.startsWith('dm_')) map.set(g.id, g);
+    }
+    for (const g of serverGroups) {
+      if (g && g.id && !g.id.startsWith('dm_')) map.set(g.id, g);
+    }
+    return Array.from(map.values());
+  }, [groups, serverGroups]);
+
+  // Filter & Rank Channels / Groups
   const matchedGroups = useMemo(() => {
-    if (!cleanQuery) return groups;
-    return groups.filter((g) => {
-      const matchName = g.name.toLowerCase().includes(cleanQuery);
-      const matchDesc = (g.description || '').toLowerCase().includes(cleanQuery);
-      return matchName || matchDesc;
-    });
-  }, [cleanQuery, groups]);
+    if (!cleanQuery) return allAvailableGroups;
+    return allAvailableGroups
+      .filter((g) => {
+        const matchName = (g.name || '').toLowerCase().includes(cleanQuery);
+        const matchDesc = (g.description || '').toLowerCase().includes(cleanQuery);
+        return matchName || matchDesc;
+      })
+      .sort((a, b) => {
+        const aStarts = (a.name || '').toLowerCase().startsWith(cleanQuery);
+        const bStarts = (b.name || '').toLowerCase().startsWith(cleanQuery);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+        return (a.name || '').localeCompare(b.name || '');
+      });
+  }, [cleanQuery, allAvailableGroups]);
 
   const handleCopyId = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -429,7 +466,9 @@ export default function InstagramSearchModal({
                 </div>
               ) : (
                 <div className="p-6 text-center bg-black/20 rounded-2xl border border-white/5">
-                  <p className="text-xs text-[#7A8396]">No squad users found matching "{query}"</p>
+                  <p className="text-xs text-[#7A8396]">
+                    {cleanQuery ? `No squad users found matching "${query}"` : 'No squad accounts registered yet'}
+                  </p>
                 </div>
               )}
             </div>
@@ -505,7 +544,9 @@ export default function InstagramSearchModal({
                 </div>
               ) : (
                 <div className="p-6 text-center bg-black/20 rounded-2xl border border-white/5">
-                  <p className="text-xs text-[#7A8396]">No channels found matching "{query}"</p>
+                  <p className="text-xs text-[#7A8396]">
+                    {cleanQuery ? `No channels found matching "${query}"` : 'No public channels created yet. Tap + to start one!'}
+                  </p>
                 </div>
               )}
             </div>

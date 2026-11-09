@@ -19,8 +19,6 @@ export interface ApiUserProfile {
 // Initial empty directory (only real registered users exist)
 const INITIAL_USERS: ApiUserProfile[] = [];
 
-const LEGACY_FAKE_USERNAMES = ['harshita', 'koshen', 'kai', 'aria', 'zayn', 'rin', 'marcus', 'elena'];
-
 // In-memory cache across server requests
 declare global {
   // eslint-disable-next-line no-var
@@ -54,7 +52,7 @@ function loadUsers(): ApiUserProfile[] {
       if (Array.isArray(parsed) && parsed.length > 0) {
         const map = new Map<string, ApiUserProfile>();
         for (const u of parsed) {
-          if (u && u.username && !LEGACY_FAKE_USERNAMES.includes(u.username.toLowerCase())) {
+          if (u && u.username) {
             map.set(u.username.toLowerCase(), u);
           }
         }
