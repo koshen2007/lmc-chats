@@ -96,6 +96,8 @@ import {
   sendBrowserNotification,
 } from '@/lib/notifications';
 import { isSuperAdmin } from '@/lib/security/shield';
+import { initClientShield } from '@/lib/clientShield';
+import { signMessagePayload } from '@/lib/cryptoIdentity';
 import { UserStory } from '@/types/story';
 import { fetchServerStories, postNewStory, markStoryAsViewed, getLocalStories } from '@/lib/stories';
 import {
@@ -736,9 +738,12 @@ export default function Home() {
           }
         }
 
-        // 2. Sync Messages for current channel or DM room
+        // 2. Sync Messages for current channel or DM room (with Zero-Trust requester context)
         if (activeGroupId && isMounted) {
-          const msgRes = await fetch(`/api/messages?group_id=${encodeURIComponent(activeGroupId)}`);
+          const reqIdent = encodeURIComponent(user.username || user.name || '');
+          const msgRes = await fetch(
+            `/api/messages?group_id=${encodeURIComponent(activeGroupId)}&requester=${reqIdent}`
+          );
           if (msgRes.ok && isMounted) {
             const msgData = await msgRes.json();
             if (msgData.messages && Array.isArray(msgData.messages)) {
@@ -1107,6 +1112,11 @@ export default function Home() {
       } catch {}
     }
   };
+
+  // Initialize Zero-Trust Client Security Shield & DevTools Honeypots
+  useEffect(() => {
+    initClientShield();
+  }, []);
 
   // Cross-tab synchronization via BroadcastChannel with strict deduplication
   useEffect(() => {
@@ -2230,6 +2240,26 @@ export default function Home() {
           ? crypto.randomUUID()
           : `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
+      const nowIso = new Date().toISOString();
+
+      // Cryptographically sign outgoing message with Hardware-Bound WebCrypto Key (ECDSA P-256)
+      let signedNonce: string | undefined;
+      let signatureB64: string | undefined;
+      let publicKeyB64: string | undefined;
+      try {
+        const signResult = await signMessagePayload(
+          trimmedContent,
+          activeGroupId,
+          nowIso,
+          user.username || user.name
+        );
+        signedNonce = signResult.nonce;
+        signatureB64 = signResult.signature;
+        publicKeyB64 = signResult.publicKey;
+      } catch (err) {
+        console.warn('Cryptographic signing non-blocking notice:', err);
+      }
+
       const newMsg: Message = {
         id: uniqueId,
         group_id: activeGroupId,
@@ -2241,7 +2271,10 @@ export default function Home() {
         msg_type,
         media_url,
         reactions: {},
-        created_at: new Date().toISOString(),
+        created_at: nowIso,
+        nonce: signedNonce,
+        signature: signatureB64,
+        public_key: publicKeyB64,
         burn_after_read: ghostModeActive,
         burn_seconds: ghostModeActive ? 10 : undefined,
         read_by: [user.username || user.name],

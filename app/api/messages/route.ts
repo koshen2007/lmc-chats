@@ -10,12 +10,21 @@ import {
   validateMediaPayload,
   isSuperAdmin,
 } from '@/lib/security/shield';
-import { isUserBanned } from '@/lib/security/serverShield';
+import {
+  isUserBanned,
+  verifyAndConsumeNonce,
+  validateReplayWindow,
+  evaluateTokenBucket,
+  computeMerkleHash,
+  isUserShadowbanned,
+} from '@/lib/security/serverShield';
+import { verifyMessageSignature } from '@/lib/cryptoIdentity';
 import { getSupabaseServerClient } from '@/lib/supabase';
 
 export interface ApiMessage {
   id: string;
   group_id: string;
+  sender_id?: string;
   sender_name: string;
   sender_username?: string;
   sender_avatar: string;
@@ -36,6 +45,13 @@ export interface ApiMessage {
     msg_type?: string;
     media_url?: string;
   } | null;
+  // Zero-Trust Cryptographic & Integrity Fields
+  nonce?: string;
+  signature?: string;
+  public_key?: string;
+  prev_hash?: string;
+  msg_hash?: string;
+  is_shadow?: boolean;
 }
 
 declare global {
@@ -99,6 +115,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const groupId = searchParams.get('group_id');
     const after = searchParams.get('after');
+    const requester = searchParams.get('requester') || request.headers.get('x-lmc-user') || '';
 
     // If Supabase is configured, fetch live from Supabase
     const sb = getSupabaseServerClient();
@@ -113,10 +130,19 @@ export async function GET(request: Request) {
         }
         const { data, error } = await query;
         if (!error && Array.isArray(data) && data.length > 0) {
+          // Zero-Trust Shadowban Filter on remote data
+          const visibleData = data.filter((m) => {
+            if (!m.is_shadow) return true;
+            if (!requester) return false;
+            const cleanReq = requester.trim().toLowerCase().replace(/^@/, '');
+            const cleanSender = (m.sender_username || '').trim().toLowerCase().replace(/^@/, '');
+            return cleanReq === cleanSender || requester === m.sender_id || isSuperAdmin(cleanReq);
+          });
+
           return NextResponse.json({
             success: true,
-            messages: data,
-            count: data.length,
+            messages: visibleData,
+            count: visibleData.length,
             timestamp: new Date().toISOString(),
           });
         }
@@ -137,6 +163,17 @@ export async function GET(request: Request) {
         filtered = filtered.filter((m) => new Date(m.created_at).getTime() > afterTime);
       }
     }
+
+    // Zero-Trust Shadowban Filter:
+    // If a message is flagged as is_shadow, only the original sender sees it.
+    // To other college students, it is completely invisible!
+    filtered = filtered.filter((m) => {
+      if (!m.is_shadow) return true;
+      if (!requester) return false;
+      const cleanReq = requester.trim().toLowerCase().replace(/^@/, '');
+      const cleanSender = (m.sender_username || '').trim().toLowerCase().replace(/^@/, '');
+      return cleanReq === cleanSender || requester === m.sender_id || isSuperAdmin(cleanReq);
+    });
 
     return NextResponse.json({
       success: true,
@@ -190,6 +227,62 @@ export async function POST(request: Request) {
       );
     }
 
+    // 2a. 15-Second Replay Window Lock
+    const replayCheck = validateReplayWindow(body.created_at, 15);
+    if (!replayCheck.valid) {
+      return NextResponse.json(
+        { success: false, error: replayCheck.error },
+        { status: 400 }
+      );
+    }
+
+    // 2b. Nonce Deduplication & Replay Attack Protection
+    if (body.nonce) {
+      const nonceCheck = verifyAndConsumeNonce(body.nonce);
+      if (!nonceCheck.allowed) {
+        return NextResponse.json(
+          { success: false, error: nonceCheck.error },
+          { status: 409 }
+        );
+      }
+    }
+
+    // 2c. Cryptographic Signature Verification (Hardware-Bound WebCrypto ECDSA P-256)
+    if (body.signature && body.public_key) {
+      const isSigValid = await verifyMessageSignature(
+        body.content || '',
+        body.group_id,
+        body.created_at || '',
+        body.nonce || '',
+        senderUsername || senderId,
+        body.signature,
+        body.public_key
+      );
+      if (!isSigValid) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'CRYPTOGRAPHIC_SIGNATURE_INVALID: ECDSA P-256 signature verification failed. Message may have been tampered with.',
+          },
+          { status: 401 }
+        );
+      }
+    }
+
+    // 2d. Token Bucket Burst & Shadowban Engine (Max 4 burst per 5s)
+    const senderIdent = senderUsername || senderId || body.sender_name || clientIp;
+    const bucketEval = evaluateTokenBucket(senderIdent, senderId);
+    if (!bucketEval.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Rate limit exceeded: Token bucket burst limit reached (Max 4 messages per 5s).',
+        },
+        { status: 429 }
+      );
+    }
+    const isShadowMessage = bucketEval.isShadow || isUserShadowbanned(senderUsername, senderId);
+
     // 3. Payload Bombing Protection (Max 1000 characters)
     if (body.content && body.content.length > 1000) {
       return NextResponse.json(
@@ -199,7 +292,6 @@ export async function POST(request: Request) {
     }
 
     // 4. 2-Second Cooldown Engine (Anti-Console-Spam Loop)
-    const senderIdent = senderUsername || senderId || body.sender_name || clientIp;
     const cooldownCheck = checkMessageCooldown(senderIdent, 2000);
     if (!cooldownCheck.allowed) {
       return NextResponse.json(
@@ -237,10 +329,10 @@ export async function POST(request: Request) {
       }
     }
 
-    // 7. Sanitize Text & Length Capping (Max 1,000 characters via DOMPurify)
+    // 7. Sanitize Text & Length Capping (Max 1,000 characters)
     const sanitizedContent = sanitizeInputText(body.content || '', 1000);
 
-    // 8. Strict Media Whitelist & Size Validation (Tenor, Giphy, Supabase Storage only)
+    // 8. Strict Media Whitelist, SVG Prohibiton & EXIF Stripping
     const mediaCheck = validateMediaPayload(body.media_url);
     if (!mediaCheck.valid) {
       return NextResponse.json(
@@ -249,16 +341,24 @@ export async function POST(request: Request) {
       );
     }
 
+    // 9. Merkle Hash Chain Computation (SHA-256)
+    const current = getMessages();
+    const groupMsgs = current.filter((m) => m.group_id === body.group_id);
+    const lastMsg = groupMsgs[groupMsgs.length - 1];
+    const prevHash = lastMsg?.msg_hash || 'GENESIS';
+    const msgHash = computeMerkleHash(prevHash, sanitizedContent, body.signature || '');
+
     const newMessage: ApiMessage = {
       id: body.id || `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       group_id: body.group_id,
+      sender_id: senderId || undefined,
       sender_name: sanitizeInputText(body.sender_name || 'Anonymous', 50),
       sender_username: senderUsername || undefined,
       sender_avatar: body.sender_avatar || '',
       sender_bio: body.sender_bio ? sanitizeInputText(body.sender_bio, 150) : undefined,
       content: sanitizedContent,
       msg_type: body.msg_type || 'text',
-      media_url: body.media_url,
+      media_url: mediaCheck.cleanedUrl || body.media_url,
       reactions: body.reactions || {},
       created_at: body.created_at || new Date().toISOString(),
       burn_after_read: Boolean(body.burn_after_read),
@@ -267,9 +367,16 @@ export async function POST(request: Request) {
         ? body.read_by
         : [senderUsername || 'Anonymous'],
       reply_to: body.reply_to || null,
+
+      // Zero-Trust Cryptographic & Integrity Fields
+      nonce: body.nonce || undefined,
+      signature: body.signature || 'LEGACY_UNSIGNED',
+      public_key: body.public_key || undefined,
+      prev_hash: prevHash,
+      msg_hash: msgHash,
+      is_shadow: isShadowMessage,
     };
 
-    const current = getMessages();
     // Prevent duplicate IDs
     const exists = current.some((m) => m.id === newMessage.id);
     const updated = exists ? current : [...current, newMessage];
@@ -297,6 +404,12 @@ export async function POST(request: Request) {
             burn_seconds: newMessage.burn_seconds,
             read_by: newMessage.read_by,
             reply_to: newMessage.reply_to,
+            nonce: newMessage.nonce,
+            signature: newMessage.signature,
+            public_key: newMessage.public_key,
+            prev_hash: newMessage.prev_hash,
+            msg_hash: newMessage.msg_hash,
+            is_shadow: newMessage.is_shadow,
           },
         ])
       ).catch((err) => console.error('Supabase async upsert failed:', err));

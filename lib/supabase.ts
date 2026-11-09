@@ -41,6 +41,26 @@ export interface Message {
   burn_seconds?: number;
   read_by?: string[];
   reply_to?: MessageReplyContext | null;
+  // Zero-Trust Cryptographic & Integrity Fields
+  nonce?: string;
+  signature?: string;
+  public_key?: string;
+  prev_hash?: string;
+  msg_hash?: string;
+  is_shadow?: boolean;
+}
+
+export interface UserDevice {
+  user_id: string;
+  public_key: string;
+  trust_score: number;
+  is_shadowbanned: boolean;
+  created_at: string;
+}
+
+export interface MessageNonce {
+  nonce: string;
+  created_at: string;
 }
 
 export interface BannedUser {

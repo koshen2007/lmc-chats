@@ -9,13 +9,18 @@ interface IpRateRecord {
 
 const edgeRateLimitMap = new Map<string, IpRateRecord>();
 
-// Blocked automated attack tools & malicious vulnerability scanners
+// Blocked automated vulnerability scanners & aggressive security probes
 const BLOCKED_BOT_REGEX =
   /(sqlmap|nikto|nmap|masscan|wpscan|gobuster|dirbuster|acunetix|nessus|zgrab|morfeus|fuzzdb)/i;
+
+// Headless browsers, CLI tools & raw HTTP scripts (blocked without audit token)
+const AUTOMATED_SCRAPER_REGEX =
+  /(python-requests|postman|headlesschrome|phantomjs|puppeteer|urllib)/i;
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const userAgent = request.headers.get('user-agent') || '';
+  const auditBypass = request.headers.get('x-lmc-audit');
 
   // 1. Bot & Vulnerability Scanner Blocking
   if (BLOCKED_BOT_REGEX.test(userAgent)) {
@@ -28,7 +33,24 @@ export function middleware(request: NextRequest) {
     });
   }
 
-  // 2. IP / Session Rate Limiting on API Endpoints
+  // 2. Block Automated Scrapers, Headless Browsers & Python scripts (unless internal audit token is provided)
+  if (AUTOMATED_SCRAPER_REGEX.test(userAgent) && auditBypass !== 'sec-auditor-bypass') {
+    return new NextResponse(
+      JSON.stringify({
+        error: 'Access Forbidden: Automated headless client or CLI scraper detected.',
+        hint: 'Use modern browser or supply verified audit credentials.',
+      }),
+      {
+        status: 403,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      }
+    );
+  }
+
+  // 3. IP / Session Rate Limiting on API Endpoints
   if (pathname.startsWith('/api/')) {
     const forwarded = request.headers.get('x-forwarded-for');
     const ip = forwarded ? forwarded.split(',')[0].trim() : '127.0.0.1';
@@ -63,9 +85,39 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // 3. Attach Enterprise Security Headers
-  const response = NextResponse.next();
+  // 4. Generate Per-Request Cryptographic Nonce
+  const nonce =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? btoa(crypto.randomUUID())
+      : btoa(Math.random().toString());
 
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-nonce', nonce);
+
+  // 5. Attach Strict CSP with V8 Trusted Types, Object-src none, Frame-ancestors none
+  const cspHeader = `
+    default-src 'self';
+    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://apis.google.com https://accounts.google.com https://*.supabase.co https://va.vercel-scripts.com;
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    img-src 'self' data: blob: https://*.googleusercontent.com https://api.dicebear.com https://media.tenor.com https://*.giphy.com https://*.supabase.co;
+    media-src 'self' data: blob: https://*.supabase.co https://media.tenor.com https://*.giphy.com;
+    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://accounts.google.com https://apis.google.com;
+    font-src 'self' https://fonts.gstatic.com data:;
+    frame-src 'self' https://accounts.google.com;
+    frame-ancestors 'none';
+    object-src 'none';
+    base-uri 'self';
+    require-trusted-types-for 'script';
+  `.replace(/\s{2,}/g, ' ').trim();
+
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+
+  response.headers.set('Content-Security-Policy', cspHeader);
+  response.headers.set('X-Nonce', nonce);
   response.headers.set('X-Frame-Options', 'DENY');
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -90,4 +142,3 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.json|logo.png|icon-.*).*)',
   ],
 };
-

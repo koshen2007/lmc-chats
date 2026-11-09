@@ -1,1 +1,25 @@
-[]
+[
+  {
+    "id": "msg-1794256297394-qnslj",
+    "group_id": "sec-zero-trust-room",
+    "sender_name": "Alice",
+    "sender_username": "alice_crypto_1794256297031",
+    "sender_avatar": "",
+    "content": "Valid First Message",
+    "msg_type": "text",
+    "reactions": {},
+    "created_at": "2026-11-09T20:31:37.031Z",
+    "burn_after_read": false,
+    "burn_seconds": 10,
+    "read_by": [
+      "alice_crypto_1794256297031"
+    ],
+    "reply_to": null,
+    "nonce": "nonce_replay_test_1794256297031",
+    "signature": "n6YpCZ1xW9vMD1VkcUoQECjRRmVmTx+Q5UAINbFR7GZipnrEeeaAQG/cCK4kMKwt0lNBGcqSqLbYd4hfs50Zvg==",
+    "public_key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEogyS0TKMPhaqeXRD0thpklbUTl6t4MlQsY6v03IKnARNMV8eGNGGOgenokEHu3/OWHtPbe9jwm7s4ZxDROjWuw==",
+    "prev_hash": "GENESIS",
+    "msg_hash": "4e197ada740c49a3eab418cde611313e5f4db05137a50bf8783114940b812bc6",
+    "is_shadow": false
+  }
+]

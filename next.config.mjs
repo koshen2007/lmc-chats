@@ -12,6 +12,7 @@ const cspHeader = `
   frame-ancestors 'none';
   object-src 'none';
   base-uri 'self';
+  require-trusted-types-for 'script';
 `.replace(/\s{2,}/g, ' ').trim();
 
 const nextConfig = {

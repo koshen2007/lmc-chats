@@ -241,7 +241,10 @@ export function sanitizeInputText(input: string, maxLength = 1000): string {
  * - https://media.tenor.com/*
  * - https://media.giphy.com/* or https://media[0-9].giphy.com/*
  * - Supabase storage (*.supabase.co/storage/*)
- * - Safe image Data URLs (data:image/(png|jpeg|jpg|webp);base64,...)
+ * - Safe raster image Data URLs (data:image/(png|jpeg|jpg|webp);base64,...)
+ *
+ * CRITICAL ZERO-TRUST RULE:
+ * SVG format is STRICTLY PROHIBITED (blocks stored XML/SVG XSS).
  * Blocks all unknown external URLs, tracking pixels, and malicious redirects.
  */
 export function validateMediaWhitelist(mediaUrl?: string): { valid: boolean; error?: string } {
@@ -251,7 +254,21 @@ export function validateMediaWhitelist(mediaUrl?: string): { valid: boolean; err
 
   const trimmed = mediaUrl.trim();
 
-  // Safe data URL (drawings, avatars)
+  // 1. ZERO-TOLERANCE SVG PROHIBITION (Stored XML/SVG XSS Eradication)
+  if (
+    trimmed.toLowerCase().includes('.svg') ||
+    trimmed.toLowerCase().includes('/svg') ||
+    trimmed.toLowerCase().includes('image/svg+xml') ||
+    trimmed.toLowerCase().includes('<svg') ||
+    trimmed.toLowerCase().includes('<?xml')
+  ) {
+    return {
+      valid: false,
+      error: 'Security Violation: SVG format is strictly prohibited to eliminate stored XML/SVG XSS vulnerabilities.',
+    };
+  }
+
+  // 2. Safe raster image data URL (PNG, JPEG, WebP only)
   if (trimmed.startsWith('data:image/')) {
     if (/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(trimmed)) {
       return { valid: true };
@@ -259,7 +276,7 @@ export function validateMediaWhitelist(mediaUrl?: string): { valid: boolean; err
     return { valid: false, error: 'Invalid or unsupported image data payload format.' };
   }
 
-  // Whitelisted external domains
+  // 3. Whitelisted external domains
   const ALLOWED_DOMAIN_REGEX =
     /^https:\/\/(media\.tenor\.com|media[0-9]*\.giphy\.com|[a-z0-9\-]+\.supabase\.co\/storage)\//i;
 
@@ -275,15 +292,49 @@ export function validateMediaWhitelist(mediaUrl?: string): { valid: boolean; err
 }
 
 /**
- * Validate media data URL size (limit base64 upload to max 5MB)
+ * Strip EXIF metadata from JPEG Base64 payload
+ * Removes APP1 (0xFF 0xE1) markers where malicious scripts or metadata reside.
+ */
+export function stripExifFromJpeg(dataUrl: string): string {
+  if (!dataUrl.startsWith('data:image/jpeg;base64,')) {
+    return dataUrl;
+  }
+  try {
+    const base64Data = dataUrl.split(',')[1];
+    if (typeof Buffer === 'undefined') return dataUrl;
+    const buffer = Buffer.from(base64Data, 'base64');
+    
+    // Look for APP1 EXIF marker (0xFF 0xE1)
+    let offset = 2;
+    while (offset < buffer.length - 4) {
+      if (buffer[offset] === 0xff && buffer[offset + 1] === 0xe1) {
+        // Found EXIF segment: calculate length
+        const segmentLength = buffer.readUInt16BE(offset + 2);
+        // Zero out or skip segment to neutralize EXIF
+        const cleaned = Buffer.concat([
+          buffer.subarray(0, offset),
+          buffer.subarray(offset + 2 + segmentLength)
+        ]);
+        return `data:image/jpeg;base64,${cleaned.toString('base64')}`;
+      }
+      offset++;
+    }
+    return dataUrl;
+  } catch {
+    return dataUrl;
+  }
+}
+
+/**
+ * Validate media data URL size & strip EXIF metadata
  */
 export function validateMediaPayload(
   mediaUrl?: string,
   maxBytes = 5 * 1024 * 1024
-): { valid: boolean; error?: string } {
+): { valid: boolean; error?: string; cleanedUrl?: string } {
   if (!mediaUrl) return { valid: true };
 
-  // Whitelist check
+  // Whitelist & SVG check
   const whitelistCheck = validateMediaWhitelist(mediaUrl);
   if (!whitelistCheck.valid) {
     return whitelistCheck;
@@ -295,8 +346,11 @@ export function validateMediaPayload(
     if (sizeInBytes > maxBytes) {
       return { valid: false, error: 'Media payload exceeds maximum size limit (5MB)' };
     }
+    // Strip EXIF metadata
+    const cleaned = stripExifFromJpeg(mediaUrl);
+    return { valid: true, cleanedUrl: cleaned };
   }
-  return { valid: true };
+  return { valid: true, cleanedUrl: mediaUrl };
 }
 
 /**
