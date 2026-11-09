@@ -38,6 +38,7 @@ interface AdminModerationModalProps {
   onPromoteAdmin: (username: string) => void;
   onDemoteAdmin: (username: string) => void;
   onClearMessages: () => void;
+  onPurgeUserMessages?: (username: string) => void;
   onToggleReadOnly: (enabled: boolean) => void;
   onToggleSlowMode: (enabled: boolean) => void;
   onDeleteChannel: () => void;
@@ -56,6 +57,7 @@ export default function AdminModerationModal({
   onPromoteAdmin,
   onDemoteAdmin,
   onClearMessages,
+  onPurgeUserMessages,
   onToggleReadOnly,
   onToggleSlowMode,
   onDeleteChannel,
@@ -348,14 +350,31 @@ export default function AdminModerationModal({
                           Banned by {b.banned_by} • {new Date(b.banned_at).toLocaleDateString()}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => onUnbanUser(b.username)}
-                        className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 transition-all flex items-center gap-1 shrink-0"
-                      >
-                        <UserCheck className="w-3.5 h-3.5" />
-                        <span>Unban</span>
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {onPurgeUserMessages && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`Purge all messages sent by @${b.username}?`)) {
+                                onPurgeUserMessages(b.username);
+                              }
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 transition-all flex items-center gap-1"
+                            title="Purge all messages by this user"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Purge</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => onUnbanUser(b.username)}
+                          className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 transition-all flex items-center gap-1"
+                        >
+                          <UserCheck className="w-3.5 h-3.5" />
+                          <span>Unban</span>
+                        </button>
+                      </div>
                     </div>
                   ))
                 ) : (

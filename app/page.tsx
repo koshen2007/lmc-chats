@@ -95,6 +95,7 @@ import {
   requestBrowserNotificationPermission,
   sendBrowserNotification,
 } from '@/lib/notifications';
+import { isSuperAdmin } from '@/lib/security/shield';
 import { UserStory } from '@/types/story';
 import { fetchServerStories, postNewStory, markStoryAsViewed, getLocalStories } from '@/lib/stories';
 import {
@@ -1611,12 +1612,12 @@ export default function Home() {
         a.toLowerCase() === user.name.toLowerCase() ||
         (user.username && a.toLowerCase() === user.username.toLowerCase())
     );
-    const isSuperAdmin = user.role === 'admin';
-    const isDefaultLmcAdmin =
-      activeGroup.id === 'lmc-squad' &&
-      (!activeGroup.created_by || activeGroup.created_by === 'LMC' || isOwner || isChannelAdmin);
-    return isOwner || isChannelAdmin || isSuperAdmin || isDefaultLmcAdmin;
-  }, [activeGroup, user.name, user.username, user.role]);
+    const isSuper =
+      user.role === 'admin' ||
+      isSuperAdmin(user.email) ||
+      isSuperAdmin(user.username);
+    return isOwner || isChannelAdmin || isSuper;
+  }, [activeGroup, user.name, user.username, user.email, user.role]);
 
   const isCurrentUserBanned = useMemo(() => {
     return bannedUsers.some((b) => {
@@ -2699,6 +2700,40 @@ export default function Home() {
       triggerToast(`Unbanned @${cleanTarget}`);
     },
     [bannedUsers]
+  );
+
+  // ADMIN: PURGE ALL MESSAGES BY USER
+  const handlePurgeUserMessages = useCallback(
+    async (targetUsername: string) => {
+      const cleanTarget = targetUsername.replace(/^@/, '').toLowerCase();
+      try {
+        const res = await fetch('/api/admin/moderation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'purge',
+            target_username: cleanTarget,
+            requester: user.email || user.username || 'admin',
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setMessages((prev) =>
+            prev.filter(
+              (m) =>
+                (m.sender_username || m.sender_name || '').toLowerCase().replace(/^@/, '') !==
+                cleanTarget
+            )
+          );
+          triggerToast(`Purged ${data.purgedCount || 'all'} messages from @${cleanTarget} 🧹`);
+        } else {
+          triggerToast(`⚠️ ${data.error || 'Failed to purge messages'}`);
+        }
+      } catch {
+        triggerToast('⚠️ Server error during purge');
+      }
+    },
+    [user.email, user.username]
   );
 
   // ADMIN: PROMOTE TO ADMIN
@@ -3836,6 +3871,7 @@ export default function Home() {
           onPromoteAdmin={handlePromoteAdmin}
           onDemoteAdmin={handleDemoteAdmin}
           onClearMessages={handleClearChannelMessages}
+          onPurgeUserMessages={handlePurgeUserMessages}
           onToggleReadOnly={handleToggleReadOnly}
           onToggleSlowMode={handleToggleSlowMode}
           onDeleteChannel={handleDeleteChannel}

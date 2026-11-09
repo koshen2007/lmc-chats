@@ -178,3 +178,4 @@ function fallbackNotification(
     }
   } catch {}
 }
+

@@ -1,11 +1,14 @@
 /**
- * LMC Chats Enterprise Security Shield
+ * LMC Chats Enterprise Security Shield (Client & Server Isomorphic)
  * Provides:
  * 1. Distributed/Sliding-window IP & User Rate Limiting (Anti-DDoS, Anti-Flood)
- * 2. Strict XSS Sanitization & HTML Escape
- * 3. Payload size enforcement & Link spam protection
- * 4. Authorization guards for Channel & Message deletion
+ * 2. 2-Second Insertion Cooldown Engine (Console loop spam prevention)
+ * 3. Strict XSS Neutralization via DOMPurify & HTML Entity Escaping
+ * 4. Media URL Whitelist Validator (Tenor, Giphy, Supabase Storage)
+ * 5. Role-based Authorization guards for Super Admin moderation
  */
+
+import DOMPurify from 'isomorphic-dompurify';
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -23,10 +26,16 @@ interface RateLimitRecord {
 declare global {
   // eslint-disable-next-line no-var
   var __LMC_RATE_LIMIT_STORE__: Map<string, RateLimitRecord> | undefined;
+  // eslint-disable-next-line no-var
+  var __LMC_LAST_MESSAGE_TIMESTAMP__: Map<string, number> | undefined;
 }
 
 const rateLimitStore = globalThis.__LMC_RATE_LIMIT_STORE__ || new Map<string, RateLimitRecord>();
 globalThis.__LMC_RATE_LIMIT_STORE__ = rateLimitStore;
+
+const lastMessageTimestampStore =
+  globalThis.__LMC_LAST_MESSAGE_TIMESTAMP__ || new Map<string, number>();
+globalThis.__LMC_LAST_MESSAGE_TIMESTAMP__ = lastMessageTimestampStore;
 
 // Clean up stale entries every 5 minutes to prevent memory leaks
 if (typeof setInterval !== 'undefined') {
@@ -37,7 +46,30 @@ if (typeof setInterval !== 'undefined') {
         rateLimitStore.delete(key);
       }
     });
+    lastMessageTimestampStore.forEach((ts, key) => {
+      if (now - ts > 60_000) {
+        lastMessageTimestampStore.delete(key);
+      }
+    });
   }, 300_000);
+}
+
+/**
+ * Super Admin Identity Whitelist
+ */
+export const SUPER_ADMIN_EMAILS = [
+  'koshensiwanchi@gmail.com',
+  'admin@lmc.chats',
+];
+
+export function isSuperAdmin(emailOrIdent?: string): boolean {
+  if (!emailOrIdent) return false;
+  const clean = emailOrIdent.trim().toLowerCase().replace(/^@/, '');
+  return (
+    SUPER_ADMIN_EMAILS.some((e) => e.toLowerCase() === clean) ||
+    clean === 'admin' ||
+    clean === 'lmc'
+  );
 }
 
 /**
@@ -57,10 +89,34 @@ export function getClientIp(request: Request): string {
 }
 
 /**
+ * 2-Second Cooldown Check (Anti-Console-Spam Loop)
+ * Enforces that a single user cannot insert messages faster than once every 2 seconds.
+ */
+export function checkMessageCooldown(
+  senderIdentifier: string,
+  cooldownMs = 2000
+): { allowed: boolean; retryAfterSeconds: number } {
+  if (!senderIdentifier) return { allowed: true, retryAfterSeconds: 0 };
+  const key = `cooldown:${senderIdentifier.trim().toLowerCase()}`;
+  const now = Date.now();
+  const lastSent = lastMessageTimestampStore.get(key);
+
+  if (lastSent && now - lastSent < cooldownMs) {
+    const diffMs = cooldownMs - (now - lastSent);
+    const retryAfterSeconds = Math.max(1, Math.ceil(diffMs / 1000));
+    return {
+      allowed: false,
+      retryAfterSeconds,
+    };
+  }
+
+  // Update last sent timestamp
+  lastMessageTimestampStore.set(key, now);
+  return { allowed: true, retryAfterSeconds: 0 };
+}
+
+/**
  * Check Rate Limit for an identifier (IP or Username)
- * @param key unique identifier (e.g. `msg:ip_1.2.3.4` or `msg:user_priya`)
- * @param limit max allowed actions in window
- * @param windowMs time window in milliseconds (e.g. 10_000ms = 10s)
  */
 export function checkRateLimit(
   key: string,
@@ -112,7 +168,7 @@ export function checkDuplicateSpam(
   windowMs = 15_000
 ): boolean {
   if (!content || content.length < 3) return false;
-  const hashKey = `dup:${identifier}`;
+  const hashKey = `dup:${identifier.trim().toLowerCase()}`;
   const now = Date.now();
   const record = rateLimitStore.get(hashKey);
 
@@ -143,29 +199,98 @@ export function checkDuplicateSpam(
 
 /**
  * Sanitize user input against Cross-Site Scripting (XSS)
+ * Uses DOMPurify to strip executable tags & scripts, then encodes unsafe entities.
  */
-export function sanitizeInputText(input: string, maxLength = 3000): string {
+export function sanitizeInputText(input: string, maxLength = 1000): string {
   if (!input) return '';
   let str = input.trim();
+
+  // Enforce Max 1000 characters limit
   if (str.length > maxLength) {
     str = str.substring(0, maxLength);
   }
 
-  // Neutralize dangerous JavaScript/Data protocol injections
-  str = str.replace(/javascript\s*:/gi, 'blocked:');
-  str = str.replace(/vbscript\s*:/gi, 'blocked:');
-  str = str.replace(/data\s*:\s*text\/html/gi, 'blocked:');
+  // 1. Pass through DOMPurify with strict zero-tag/zero-attr config
+  const purified = DOMPurify.sanitize(str, {
+    ALLOWED_TAGS: [],
+    ALLOWED_ATTR: [],
+    KEEP_CONTENT: true,
+  });
+
+  // 2. Neutralize dangerous script/data protocol injections
+  str = purified
+    .replace(/javascript\s*:/gi, 'blocked:')
+    .replace(/vbscript\s*:/gi, 'blocked:')
+    .replace(/data\s*:\s*text\/html/gi, 'blocked:')
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/on\w+\s*=/gi, 'blocked_attr=');
+
+  // 3. Escape HTML entities
+  str = str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 
   return str;
 }
 
 /**
+ * Strict Media URL Whitelist Check:
+ * Allows ONLY:
+ * - https://media.tenor.com/*
+ * - https://media.giphy.com/* or https://media[0-9].giphy.com/*
+ * - Supabase storage (*.supabase.co/storage/*)
+ * - Safe image Data URLs (data:image/(png|jpeg|jpg|webp);base64,...)
+ * Blocks all unknown external URLs, tracking pixels, and malicious redirects.
+ */
+export function validateMediaWhitelist(mediaUrl?: string): { valid: boolean; error?: string } {
+  if (!mediaUrl || !mediaUrl.trim()) {
+    return { valid: true };
+  }
+
+  const trimmed = mediaUrl.trim();
+
+  // Safe data URL (drawings, avatars)
+  if (trimmed.startsWith('data:image/')) {
+    if (/^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/.test(trimmed)) {
+      return { valid: true };
+    }
+    return { valid: false, error: 'Invalid or unsupported image data payload format.' };
+  }
+
+  // Whitelisted external domains
+  const ALLOWED_DOMAIN_REGEX =
+    /^https:\/\/(media\.tenor\.com|media[0-9]*\.giphy\.com|[a-z0-9\-]+\.supabase\.co\/storage)\//i;
+
+  if (ALLOWED_DOMAIN_REGEX.test(trimmed)) {
+    return { valid: true };
+  }
+
+  return {
+    valid: false,
+    error:
+      'Security Violation: Media URL must belong to approved providers (Tenor, Giphy, or Supabase Storage).',
+  };
+}
+
+/**
  * Validate media data URL size (limit base64 upload to max 5MB)
  */
-export function validateMediaPayload(mediaUrl?: string, maxBytes = 5 * 1024 * 1024): { valid: boolean; error?: string } {
+export function validateMediaPayload(
+  mediaUrl?: string,
+  maxBytes = 5 * 1024 * 1024
+): { valid: boolean; error?: string } {
   if (!mediaUrl) return { valid: true };
+
+  // Whitelist check
+  const whitelistCheck = validateMediaWhitelist(mediaUrl);
+  if (!whitelistCheck.valid) {
+    return whitelistCheck;
+  }
+
   if (mediaUrl.startsWith('data:')) {
-    // Approximate base64 decoded size
     const stringLength = mediaUrl.length - mediaUrl.indexOf(',') - 1;
     const sizeInBytes = 4 * Math.ceil(stringLength / 3) * 0.562489633438312;
     if (sizeInBytes > maxBytes) {
@@ -177,7 +302,7 @@ export function validateMediaPayload(mediaUrl?: string, maxBytes = 5 * 1024 * 10
 
 /**
  * Authorization Check: Can requester delete this channel?
- * Only the original creator (`created_by`) or someone in `admins` list can delete it.
+ * Only the original creator (`created_by`), someone in `admins` list, or super admin can delete it.
  */
 export function canDeleteChannel(
   group: { created_by?: string; admins?: string[] },
@@ -187,10 +312,10 @@ export function canDeleteChannel(
   const req = requesterUsername.trim().toLowerCase().replace(/^@/, '');
   const creator = (group.created_by || '').trim().toLowerCase().replace(/^@/, '');
 
-  if (creator && (creator === req || creator === 'lmc' || creator === 'admin')) {
+  if (creator && (creator === req || isSuperAdmin(req))) {
     return true;
   }
 
   const admins = (group.admins || []).map((a) => a.trim().toLowerCase().replace(/^@/, ''));
-  return admins.includes(req);
+  return admins.includes(req) || isSuperAdmin(req);
 }

@@ -5,9 +5,12 @@ import {
   getClientIp,
   checkRateLimit,
   checkDuplicateSpam,
+  checkMessageCooldown,
   sanitizeInputText,
   validateMediaPayload,
+  isSuperAdmin,
 } from '@/lib/security/shield';
+import { isUserBanned } from '@/lib/security/serverShield';
 import { getSupabaseServerClient } from '@/lib/supabase';
 
 export interface ApiMessage {
@@ -177,8 +180,39 @@ export async function POST(request: Request) {
     }
 
     const senderUsername = (body.sender_username || '').trim().toLowerCase().replace(/^@/, '');
+    const senderId = (body.sender_id || '').trim();
 
-    // 2. User Rate Limiting (max 15 msgs / 10s per user)
+    // 2. Banned User Check (Row Level Security Enforcement)
+    if (isUserBanned(senderUsername, senderId)) {
+      return NextResponse.json(
+        { success: false, error: 'Access Denied: Your account has been banned from sending messages.' },
+        { status: 403 }
+      );
+    }
+
+    // 3. Payload Bombing Protection (Max 1000 characters)
+    if (body.content && body.content.length > 1000) {
+      return NextResponse.json(
+        { success: false, error: 'Payload too large: Message content exceeds 1000 character limit.' },
+        { status: 400 }
+      );
+    }
+
+    // 4. 2-Second Cooldown Engine (Anti-Console-Spam Loop)
+    const senderIdent = senderUsername || senderId || body.sender_name || clientIp;
+    const cooldownCheck = checkMessageCooldown(senderIdent, 2000);
+    if (!cooldownCheck.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Rate limit exceeded: You cannot send messages faster than once every 2 seconds.',
+          retryAfterSeconds: cooldownCheck.retryAfterSeconds,
+        },
+        { status: 429 }
+      );
+    }
+
+    // 5. User Rate Limiting (max 15 msgs / 10s per user)
     if (senderUsername) {
       const userLimit = checkRateLimit(`msg_user:${senderUsername}`, 15, 10_000);
       if (!userLimit.allowed) {
@@ -191,7 +225,7 @@ export async function POST(request: Request) {
         );
       }
 
-      // 3. Repetitive Content Spam Detection (e.g. spamming exact text 3+ times in 15s)
+      // 6. Repetitive Content Spam Detection (e.g. spamming exact text 3+ times in 15s)
       if (body.content && checkDuplicateSpam(senderUsername, body.content)) {
         return NextResponse.json(
           {
@@ -203,15 +237,15 @@ export async function POST(request: Request) {
       }
     }
 
-    // 4. Sanitize Text & Length Capping (Max 3,000 characters)
-    const sanitizedContent = sanitizeInputText(body.content || '', 3000);
+    // 7. Sanitize Text & Length Capping (Max 1,000 characters via DOMPurify)
+    const sanitizedContent = sanitizeInputText(body.content || '', 1000);
 
-    // 5. Media Payload Size Validation (Max 5MB)
+    // 8. Strict Media Whitelist & Size Validation (Tenor, Giphy, Supabase Storage only)
     const mediaCheck = validateMediaPayload(body.media_url);
     if (!mediaCheck.valid) {
       return NextResponse.json(
         { success: false, error: mediaCheck.error },
-        { status: 413 }
+        { status: 400 }
       );
     }
 
@@ -297,14 +331,22 @@ export async function DELETE(request: Request) {
     const current = getMessages();
     const targetMsg = current.find((m) => m.id === messageId);
 
-    // If message exists, verify authorization (sender or admin)
-    if (targetMsg && requester) {
+    // Strict Authorization check: Anonymous or unauthorized delete attempts blocked
+    if (!requester) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized: Missing requester credentials' },
+        { status: 403 }
+      );
+    }
+
+    // If message exists, verify authorization (sender or super admin)
+    if (targetMsg) {
       const msgSender = (targetMsg.sender_username || targetMsg.sender_name || '').toLowerCase().replace(/^@/, '');
       const isSender = msgSender === requester;
-      const isAdmin = requester === 'admin' || requester === 'lmc';
+      const isAdmin = isSuperAdmin(requester);
       if (!isSender && !isAdmin) {
         return NextResponse.json(
-          { success: false, error: 'Unauthorized: You can only delete your own messages' },
+          { success: false, error: "Unauthorized: You cannot delete another user's message" },
           { status: 403 }
         );
       }

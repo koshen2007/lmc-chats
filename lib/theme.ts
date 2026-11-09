@@ -157,3 +157,4 @@ export function getBubbleClass(bubbleThemeId: BubbleThemeId): string {
   const found = BUBBLE_THEMES.find((b) => b.id === bubbleThemeId);
   return found ? found.className : BUBBLE_THEMES[0].className;
 }
+
