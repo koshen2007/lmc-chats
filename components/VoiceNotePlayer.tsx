@@ -173,3 +173,4 @@ export default function VoiceNotePlayer({ audioUrl, isMe }: VoiceNotePlayerProps
     </div>
   );
 }
+

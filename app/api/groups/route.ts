@@ -168,7 +168,7 @@ export async function POST(request: Request) {
     }
 
     if (action === 'delete') {
-      const { groupId } = body;
+      const groupId = body.groupId || body.id;
       const updated = currentGroups.filter((g) => g.id !== groupId);
       saveGroups(updated);
       return NextResponse.json({
@@ -182,6 +182,36 @@ export async function POST(request: Request) {
       { success: false, error: 'Unknown action' },
       { status: 400 }
     );
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { success: false, error: (err as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/groups?id=<groupId>
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const groupId = searchParams.get('id');
+
+    if (!groupId) {
+      return NextResponse.json(
+        { success: false, error: 'Group ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const currentGroups = getGroups();
+    const updated = currentGroups.filter((g) => g.id !== groupId);
+    saveGroups(updated);
+
+    return NextResponse.json({
+      success: true,
+      deletedId: groupId,
+      groups: updated,
+    });
   } catch (err: unknown) {
     return NextResponse.json(
       { success: false, error: (err as Error).message },
