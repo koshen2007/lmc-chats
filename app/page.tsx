@@ -59,6 +59,7 @@ import {
   Users,
   MoreVertical,
   Reply,
+  Download,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured, Group, Message, BannedUser } from '@/lib/supabase';
 import { STICKERS, AVATAR_OPTIONS, FALLBACK_GIFS, EMOJI_CATEGORIES } from '@/lib/data';
@@ -79,6 +80,21 @@ import WhatsAppChatsList from '@/components/WhatsAppChatsList';
 import CreateStoryModal from '@/components/CreateStoryModal';
 import StoryViewerModal from '@/components/StoryViewerModal';
 import NewChatModal from '@/components/NewChatModal';
+import PWAInstallModal from '@/components/PWAInstallModal';
+import ChatThemeModal from '@/components/ChatThemeModal';
+import {
+  WallpaperPresetId,
+  BubbleThemeId,
+  getWallpaperStyle,
+  getBubbleClass,
+} from '@/lib/theme';
+import {
+  playWebAudioChime,
+  getSoundMuted,
+  setSoundMuted,
+  requestBrowserNotificationPermission,
+  sendBrowserNotification,
+} from '@/lib/notifications';
 import { UserStory } from '@/types/story';
 import { fetchServerStories, postNewStory, markStoryAsViewed, getLocalStories } from '@/lib/stories';
 import {
@@ -272,10 +288,23 @@ export default function Home() {
 
   // 4. Browser Notifications & Audio Chime
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>('default');
+  const [soundMuted, setSoundMutedState] = useState<boolean>(false);
   const lastKnownMessageIdsRef = useRef<Set<string>>(new Set());
   const isInitialLoadDoneRef = useRef(false);
 
-  // 5. Real-Time Online Presence & Last Seen Heartbeat
+  // 5. PWA & Offline Service Worker State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isAppInstalled, setIsAppInstalled] = useState<boolean>(false);
+  const [isIOSDevice, setIsIOSDevice] = useState<boolean>(false);
+  const [showPWAInstallModal, setShowPWAInstallModal] = useState<boolean>(false);
+
+  // 6. Custom Chat Wallpaper & Bubble Theme State
+  const [wallpaperPreset, setWallpaperPreset] = useState<WallpaperPresetId>('doodle');
+  const [customWallpaperImage, setCustomWallpaperImage] = useState<string | null>(null);
+  const [bubbleTheme, setBubbleTheme] = useState<BubbleThemeId>('emerald');
+  const [showChatThemeModal, setShowChatThemeModal] = useState<boolean>(false);
+
+  // 7. Real-Time Online Presence & Last Seen Heartbeat
   const [presenceMap, setPresenceMap] = useState<Record<string, {
     is_online: boolean;
     last_seen: number;
@@ -298,58 +327,16 @@ export default function Home() {
     }, 2400);
   };
 
-  // Web Audio Synth Notification Chime (Zero external audio file dependencies)
-  const playNotificationChime = useCallback(() => {
-    try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const now = ctx.currentTime;
-
-      // Two-tone marimba chime (E5 -> C6)
-      const osc1 = ctx.createOscillator();
-      const osc2 = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc1.type = 'sine';
-      osc2.type = 'triangle';
-
-      osc1.frequency.setValueAtTime(659.25, now); // E5
-      osc1.frequency.exponentialRampToValueAtTime(1046.5, now + 0.12); // C6
-
-      osc2.frequency.setValueAtTime(329.63, now); // E4
-
-      gain.gain.setValueAtTime(0.18, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
-
-      osc1.connect(gain);
-      osc2.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc1.start(now);
-      osc2.start(now);
-      osc1.stop(now + 0.38);
-      osc2.stop(now + 0.38);
-    } catch {}
-  }, []);
-
   // Request Browser Notification Permission
   const requestNotificationPermission = useCallback(async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      triggerToast('ℹ️ Notifications are not supported in this browser');
-      return;
+    const result = await requestBrowserNotificationPermission();
+    setNotificationPermission(result);
+    if (result === 'granted') {
+      triggerToast('🔔 Notifications enabled for incoming messages & voice notes!');
+    } else if (result === 'denied') {
+      triggerToast('⚠️ Notifications blocked. Please allow in browser settings.');
     }
-    try {
-      const result = await Notification.requestPermission();
-      setNotificationPermission(result);
-      if (result === 'granted') {
-        playNotificationChime();
-        triggerToast('🔔 Notifications enabled for incoming messages & voice notes!');
-      } else if (result === 'denied') {
-        triggerToast('⚠️ Notifications blocked. Please allow in browser settings.');
-      }
-    } catch {}
-  }, [playNotificationChime]);
+  }, []);
 
   // Dispatch Audio Chime and Browser Push Notification
   const notifyIncomingMessage = useCallback(
@@ -358,36 +345,79 @@ export default function Home() {
       const senderHandle = (msg.sender_username || msg.sender_name || '').toLowerCase();
       if (senderHandle === myHandle) return; // Ignore own sent message
 
-      // 1. Play sound alert
-      playNotificationChime();
+      // 1. Play Web Audio chime
+      playWebAudioChime('message');
 
-      // 2. Dispatch desktop/mobile push notification if tab blurred or hidden
-      if (typeof window !== 'undefined' && 'Notification' in window) {
-        if (Notification.permission === 'granted' && (document.hidden || !document.hasFocus())) {
-          try {
-            const title = msg.sender_name ? `${msg.sender_name} (@${msg.sender_username || 'user'})` : 'LMC Chats';
-            let body = msg.content || '';
-            if (msg.msg_type === 'audio') body = '🎙️ Sent a voice note';
-            else if (msg.msg_type === 'image') body = '📷 Sent a photo';
-            else if (msg.msg_type === 'sticker') body = '✨ Sent a sticker';
+      // 2. Dispatch desktop/mobile push notification if tab blurred or in another chat
+      if (typeof window !== 'undefined') {
+        const isHidden = document.hidden || !document.hasFocus();
+        const isInDifferentChat = activeGroupId !== msg.group_id;
 
-            const notif = new Notification(title, {
-              body,
-              icon: msg.sender_avatar || '/logo.png',
-              badge: '/logo.png',
-              tag: msg.id,
-            });
+        if (isHidden || isInDifferentChat) {
+          const title = msg.sender_name ? `${msg.sender_name} (@${msg.sender_username || 'user'})` : 'LMC Chats';
+          let body = msg.content || '';
+          if (msg.msg_type === 'audio') body = '🎙️ Sent a voice note';
+          else if (msg.msg_type === 'image') body = '📷 Sent a photo';
+          else if (msg.msg_type === 'sticker') body = '✨ Sent a sticker';
 
-            notif.onclick = () => {
-              window.focus();
-              notif.close();
+          sendBrowserNotification(title, {
+            body,
+            icon: msg.sender_avatar || '/logo.png',
+            tag: msg.id,
+            groupId: msg.group_id,
+            onClick: () => {
               if (msg.group_id) setActiveGroupId(msg.group_id);
-            };
-          } catch {}
+            },
+          });
         }
       }
     },
-    [user.username, user.name, playNotificationChime]
+    [user.username, user.name, activeGroupId]
+  );
+
+  // Toggle sound or request push notifications
+  const handleToggleSoundOrNotification = useCallback(async () => {
+    if (notificationPermission !== 'granted') {
+      const res = await requestBrowserNotificationPermission();
+      setNotificationPermission(res);
+      if (res === 'granted') {
+        triggerToast('🔔 Push notifications & sound alerts enabled!');
+      } else if (res === 'denied') {
+        triggerToast('⚠️ Notifications are blocked in browser settings.');
+      }
+    } else {
+      const nextMuted = !soundMuted;
+      setSoundMutedState(nextMuted);
+      setSoundMuted(nextMuted);
+      if (nextMuted) {
+        triggerToast('🔕 Sound alerts muted');
+      } else {
+        playWebAudioChime('message');
+        triggerToast('🔔 Sound alerts enabled');
+      }
+    }
+  }, [notificationPermission, soundMuted]);
+
+  // Save customized theme & wallpaper
+  const handleSaveTheme = useCallback(
+    (wp: WallpaperPresetId, customImg: string | null, bt: BubbleThemeId) => {
+      setWallpaperPreset(wp);
+      setCustomWallpaperImage(customImg);
+      setBubbleTheme(bt);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('lmc_chat_wallpaper_preset', wp);
+        if (customImg) {
+          try {
+            localStorage.setItem('lmc_chat_wallpaper_custom', customImg);
+          } catch {}
+        } else {
+          localStorage.removeItem('lmc_chat_wallpaper_custom');
+        }
+        localStorage.setItem('lmc_chat_bubble_theme', bt);
+      }
+      triggerToast('🎨 Chat theme & wallpaper updated!');
+    },
+    []
   );
 
   // Check Username Uniqueness in Real-Time
@@ -643,6 +673,45 @@ export default function Home() {
         }
       };
     } catch {}
+
+    // 8. Register PWA Service Worker & detect installability
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .catch((err) => console.warn('LMC SW registration warning:', err));
+    }
+
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as any).standalone === true;
+    setIsAppInstalled(Boolean(isStandalone));
+
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    setIsIOSDevice(Boolean(isIOS));
+
+    // 9. Load Sound Preferences & Notification Permission
+    setSoundMutedState(getSoundMuted());
+    if ('Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
+
+    // 10. Load Chat Themes & Wallpapers
+    const savedWallpaper = localStorage.getItem('lmc_chat_wallpaper_preset') as WallpaperPresetId;
+    if (savedWallpaper) setWallpaperPreset(savedWallpaper);
+    const savedCustomImg = localStorage.getItem('lmc_chat_wallpaper_custom');
+    if (savedCustomImg) setCustomWallpaperImage(savedCustomImg);
+    const savedBubbleTheme = localStorage.getItem('lmc_chat_bubble_theme') as BubbleThemeId;
+    if (savedBubbleTheme) setBubbleTheme(savedBubbleTheme);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    };
   }, []);
 
   // Real-Time Cross-Device Sync Poller (Phone 1 <-> Phone 2 live updates)
@@ -3950,6 +4019,12 @@ export default function Home() {
           presenceMap={presenceMap}
           stories={stories}
           pendingDmRequestsCount={pendingIncomingRequests.length}
+          canInstallPwa={!isAppInstalled}
+          soundMuted={soundMuted}
+          notificationPermission={notificationPermission}
+          onOpenInstallPwa={() => setShowPWAInstallModal(true)}
+          onOpenThemeModal={() => setShowChatThemeModal(true)}
+          onToggleSoundOrNotification={handleToggleSoundOrNotification}
           onSelectChat={(groupId) => {
             setActiveGroupId(groupId);
           }}
@@ -4053,6 +4128,28 @@ export default function Home() {
             >
               <Palette className="w-3.5 h-3.5 text-indigo-400" />
               <span>Snapchat Avatar Studio</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowStatusMenu(false);
+                setShowChatThemeModal(true);
+              }}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-purple-300 font-medium transition-colors"
+            >
+              <Palette className="w-3.5 h-3.5 text-purple-400" />
+              <span>Chat Wallpaper & Bubble Colors</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowStatusMenu(false);
+                setShowPWAInstallModal(true);
+              }}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-emerald-400 font-medium transition-colors"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{isAppInstalled ? 'App Installed (PWA)' : 'Install App to Phone / PC'}</span>
             </button>
 
             <button
@@ -4336,6 +4433,16 @@ export default function Home() {
 
               {/* Right Header Actions - Sleek & Lightweight */}
               <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 relative">
+                {/* Theme & Wallpaper Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowChatThemeModal(true)}
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 active:scale-90 transition-all shrink-0"
+                  title="Chat Wallpaper & Bubble Themes"
+                >
+                  <Palette className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
+                </button>
+
                 {/* Search Button */}
                 <button
                   type="button"
@@ -4403,6 +4510,18 @@ export default function Home() {
                           type="button"
                           onClick={() => {
                             setMobileHeaderMenuOpen(false);
+                            setShowChatThemeModal(true);
+                          }}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                        >
+                          <Palette className="w-4 h-4 text-purple-400" />
+                          <span>Wallpaper & Bubble Colors</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMobileHeaderMenuOpen(false);
                             setShowMusicBotModal(true);
                           }}
                           className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
@@ -4421,11 +4540,11 @@ export default function Home() {
                           type="button"
                           onClick={() => {
                             setMobileHeaderMenuOpen(false);
-                            requestNotificationPermission();
+                            handleToggleSoundOrNotification();
                           }}
                           className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
                         >
-                          {notificationPermission === 'granted' ? (
+                          {!soundMuted && notificationPermission === 'granted' ? (
                             <>
                               <Bell className="w-4 h-4 text-emerald-400" />
                               <span>Sound Alerts: On</span>
@@ -4433,9 +4552,21 @@ export default function Home() {
                           ) : (
                             <>
                               <BellOff className="w-4 h-4 text-[#7A8396]" />
-                              <span>Enable Sound Alerts</span>
+                              <span>{soundMuted ? 'Sound: Muted' : 'Enable Notifications'}</span>
                             </>
                           )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMobileHeaderMenuOpen(false);
+                            setShowPWAInstallModal(true);
+                          }}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-emerald-400 hover:bg-white/5 transition-all text-left"
+                        >
+                          <Download className="w-4 h-4 text-emerald-400" />
+                          <span>Install App (PWA)</span>
                         </button>
 
                         {!isDmMode && (
@@ -4620,7 +4751,10 @@ export default function Home() {
         )}
 
         {/* Message Stream */}
-        <div className="flex-1 overflow-y-auto scroll p-3 sm:p-6 space-y-4">
+        <div
+          className="flex-1 overflow-y-auto scroll p-3 sm:p-6 space-y-4 transition-all duration-300 relative"
+          style={getWallpaperStyle(wallpaperPreset, customWallpaperImage)}
+        >
           <div className="flex items-center justify-center my-2">
             <span className="text-[10px] font-semibold text-[#7A8396] bg-white/5 px-3 py-1 rounded-full">
               Today
@@ -4735,7 +4869,7 @@ export default function Home() {
                             ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white border border-amber-400/40 shadow-amber-500/20 rounded-tr-sm'
                             : 'bg-[#18131B] text-[#F3E8FF] border border-amber-500/40 shadow-amber-500/10 rounded-tl-sm'
                           : isMe
-                          ? 'bg-gradient-to-r from-[#6366F1] to-[#4F46E5] text-white rounded-tr-sm'
+                          ? `${getBubbleClass(bubbleTheme)} rounded-tr-sm transition-colors`
                           : 'bg-[#141824] text-[#E9ECF4] border border-[#232B3E] rounded-tl-sm'
                       }`}
                     >
@@ -5810,6 +5944,29 @@ export default function Home() {
         currentUser={user}
         onSendStoryReply={handleSendStoryReply}
         onMarkViewed={handleMarkStoryViewed}
+      />
+
+      {/* PWA INSTALL MODAL */}
+      <PWAInstallModal
+        isOpen={showPWAInstallModal}
+        onClose={() => setShowPWAInstallModal(false)}
+        deferredPrompt={deferredPrompt}
+        isIOS={isIOSDevice}
+        isInstalled={isAppInstalled}
+        onInstallSuccess={() => {
+          setIsAppInstalled(true);
+          triggerToast('🎉 LMC Chats App installed successfully!');
+        }}
+      />
+
+      {/* CHAT THEME & WALLPAPER MODAL */}
+      <ChatThemeModal
+        isOpen={showChatThemeModal}
+        onClose={() => setShowChatThemeModal(false)}
+        currentWallpaper={wallpaperPreset}
+        currentCustomImage={customWallpaperImage}
+        currentBubbleTheme={bubbleTheme}
+        onSaveTheme={handleSaveTheme}
       />
     </div>
   );
