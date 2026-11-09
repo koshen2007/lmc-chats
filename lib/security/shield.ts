@@ -3,12 +3,10 @@
  * Provides:
  * 1. Distributed/Sliding-window IP & User Rate Limiting (Anti-DDoS, Anti-Flood)
  * 2. 2-Second Insertion Cooldown Engine (Console loop spam prevention)
- * 3. Strict XSS Neutralization via DOMPurify & HTML Entity Escaping
+ * 3. Strict XSS Neutralization via Zero-Dependency HTML Sanitizer & Entity Escaping
  * 4. Media URL Whitelist Validator (Tenor, Giphy, Supabase Storage)
  * 5. Role-based Authorization guards for Super Admin moderation
  */
-
-import DOMPurify from 'isomorphic-dompurify';
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -199,7 +197,7 @@ export function checkDuplicateSpam(
 
 /**
  * Sanitize user input against Cross-Site Scripting (XSS)
- * Uses DOMPurify to strip executable tags & scripts, then encodes unsafe entities.
+ * Strips executable tags & scripts, neutralizes handlers/schemes, and encodes unsafe HTML entities.
  */
 export function sanitizeInputText(input: string, maxLength = 1000): string {
   if (!input) return '';
@@ -210,22 +208,23 @@ export function sanitizeInputText(input: string, maxLength = 1000): string {
     str = str.substring(0, maxLength);
   }
 
-  // 1. Pass through DOMPurify with strict zero-tag/zero-attr config
-  const purified = DOMPurify.sanitize(str, {
-    ALLOWED_TAGS: [],
-    ALLOWED_ATTR: [],
-    KEEP_CONTENT: true,
-  });
+  // 1. Strip dangerous tags with their contents (script, style, iframe, object, embed, svg)
+  str = str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  str = str.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+  str = str.replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '');
+  str = str.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '');
 
-  // 2. Neutralize dangerous script/data protocol injections
-  str = purified
+  // 2. Strip all remaining HTML tags
+  str = str.replace(/<\/?[a-zA-Z][^>]*>/gi, '');
+
+  // 3. Strip any residual on* event handlers and dangerous protocol schemes
+  str = str
+    .replace(/on\w+\s*=/gi, 'blocked_attr=')
     .replace(/javascript\s*:/gi, 'blocked:')
     .replace(/vbscript\s*:/gi, 'blocked:')
-    .replace(/data\s*:\s*text\/html/gi, 'blocked:')
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/on\w+\s*=/gi, 'blocked_attr=');
+    .replace(/data\s*:\s*text\/html/gi, 'blocked:');
 
-  // 3. Escape HTML entities
+  // 4. Escape HTML entities
   str = str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

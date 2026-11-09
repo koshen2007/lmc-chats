@@ -57,3 +57,4 @@ export function addBannedUser(username: string, userId?: string, reason?: string
     } catch {}
   }
 }
+
