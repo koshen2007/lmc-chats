@@ -208,6 +208,7 @@ export default function Home() {
 
   // Emoji, Sticker & GIF
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [pickerTab, setPickerTab] = useState<'emojis' | 'gifs' | 'stickers'>('emojis');
   const [emojiSearch, setEmojiSearch] = useState('');
   const [activeEmojiCat, setActiveEmojiCat] = useState(0);
   const [showTray, setShowTray] = useState(false);
@@ -3407,55 +3408,26 @@ export default function Home() {
         </div>
 
         {/* Navigation & Channel List */}
-        <div className="flex-1 overflow-y-auto scroll px-2 py-2.5 space-y-4">
+        <div className="flex-1 overflow-y-auto scroll px-2 py-2 space-y-3">
           {!railCollapsed && (
-            <div className="space-y-2 mb-1">
-              {/* Instagram Search Entry Button */}
+            <div className="mb-1">
+              {/* Sleek Search Entry Button */}
               <button
                 type="button"
                 onClick={() => {
                   setShowInstagramSearch(true);
                   setMobileRailOpen(false);
                 }}
-                className="w-full bg-[#141826] hover:bg-[#1A2135] border border-white/10 text-left px-3 py-2 rounded-xl text-xs text-[#A8B2C7] hover:text-white flex items-center justify-between transition-all shadow-sm group"
+                className="w-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-left px-3 py-2 rounded-xl text-xs text-[#A8B2C7] hover:text-white flex items-center justify-between transition-all group"
               >
                 <span className="flex items-center gap-2">
                   <Search className="w-3.5 h-3.5 text-pink-400 group-hover:scale-110 transition-transform" />
-                  <span className="truncate">Search User IDs & Handles</span>
+                  <span className="truncate">Search users or channels...</span>
                 </span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 font-mono text-[#7A8396]">
-                  Search
+                  /
                 </span>
               </button>
-
-              {/* Action Buttons: Create Group & Discover Channels */}
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewGroupIsPrivate(false);
-                    setShowNewGroupModal(true);
-                    setMobileRailOpen(false);
-                  }}
-                  className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-2 px-2 rounded-xl text-[11px] flex items-center justify-center gap-1 shadow-md active:scale-95 transition-all truncate"
-                  title="Create New Channel"
-                >
-                  <Plus className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">+ New Group</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowDiscoverChannels(true);
-                    setMobileRailOpen(false);
-                  }}
-                  className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold py-2 px-2 rounded-xl text-[11px] flex items-center justify-center gap-1 active:scale-95 transition-all truncate"
-                  title="Discover Public Channels"
-                >
-                  <Compass className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                  <span className="truncate">Discover</span>
-                </button>
-              </div>
             </div>
           )}
 
@@ -3464,16 +3436,31 @@ export default function Home() {
             {!railCollapsed ? (
               <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase text-[#7A8396]">
                 <span className="flex items-center gap-1.5">Channels</span>
-                <button
-                  onClick={() => {
-                    setNewGroupIsPrivate(false);
-                    setShowNewGroupModal(true);
-                  }}
-                  className="w-5 h-5 rounded hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white transition-colors"
-                  title="Create Public Channel"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDiscoverChannels(true);
+                      setMobileRailOpen(false);
+                    }}
+                    className="w-5 h-5 rounded hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-purple-300 transition-colors"
+                    title="Discover Public Channels"
+                  >
+                    <Compass className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewGroupIsPrivate(false);
+                      setShowNewGroupModal(true);
+                      setMobileRailOpen(false);
+                    }}
+                    className="w-5 h-5 rounded hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white transition-colors"
+                    title="Create New Channel"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="w-full h-px bg-white/10 my-1" />
@@ -3537,16 +3524,6 @@ export default function Home() {
             {!railCollapsed ? (
               <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase text-[#7A8396]">
                 <span className="flex items-center gap-1.5">Private Rooms</span>
-                <button
-                  onClick={() => {
-                    setNewGroupIsPrivate(true);
-                    setShowNewGroupModal(true);
-                  }}
-                  className="w-5 h-5 rounded hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white transition-colors"
-                  title="Create Private Room"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
               </div>
             ) : (
               <div className="w-full h-px bg-white/10 my-1" />
@@ -4094,119 +4071,44 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Right Header Actions */}
+              {/* Right Header Actions - Sleek & Lightweight */}
               <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 relative">
-                {/* Notification Bell Button */}
-                <button
-                  type="button"
-                  onClick={requestNotificationPermission}
-                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center transition-all shrink-0 ${
-                    notificationPermission === 'granted'
-                      ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                      : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
-                  }`}
-                  title={
-                    notificationPermission === 'granted'
-                      ? 'Sound & Browser Push Alerts Active'
-                      : 'Enable Browser Push Notifications & Sound'
-                  }
-                >
-                  {notificationPermission === 'granted' ? (
-                    <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
-                  ) : (
-                    <BellOff className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#7A8396]" />
-                  )}
-                </button>
-
-                {/* Instagram Search Button */}
+                {/* Search Button */}
                 <button
                   type="button"
                   onClick={() => setShowInstagramSearch(true)}
                   className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-pink-400 hover:text-pink-300 hover:bg-pink-500/10 active:scale-90 transition-all shrink-0"
-                  title="Instagram Search (IDs, @usernames, Channels)"
+                  title="Search Users & Channels"
                 >
                   <Search className="w-4 h-4" />
                 </button>
 
-                {/* Voice Call Button (Always visible on mobile & desktop) */}
+                {/* Voice Call Button */}
                 <button
                   onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 active:scale-90 transition-all shrink-0"
                   title="Start Voice Call"
                 >
                   <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#22C55E]" />
                 </button>
 
-                {/* Desktop-only: Video Call Button */}
+                {/* Channel Info Button */}
                 <button
-                  onClick={() => startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png')}
-                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                  title="Start Video Call"
+                  onClick={() => setInfoOpen(!infoOpen)}
+                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center transition-all shrink-0 ${
+                    infoOpen ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Chat Details & Members"
                 >
-                  <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#818CF8]" />
+                  <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
 
-                {/* Desktop-only: Telegram Music Bot */}
-                <button
-                  onClick={() => setShowMusicBotModal(true)}
-                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all relative shrink-0"
-                  title="LMC Music Bot & Channel Player"
-                >
-                  <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
-                  {roomPlayback?.isPlaying && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  )}
-                </button>
-
-                {/* Desktop-only: Add Member Button */}
-                <button
-                  onClick={() => setShowAddMemberModal(true)}
-                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                  title={`Add Members to #${activeGroup.name}`}
-                >
-                  <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
-                </button>
-
-                {/* Desktop-only: Create Channel Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewGroupIsPrivate(false);
-                    setShowNewGroupModal(true);
-                  }}
-                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/30 text-indigo-300 active:scale-90 transition-all shrink-0"
-                  title="Create New Channel (+)"
-                >
-                  <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
-                </button>
-
-                {/* Desktop-only: Discover Channels Button */}
-                <button
-                  type="button"
-                  onClick={() => setShowDiscoverChannels(true)}
-                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                  title="Discover Public Channels"
-                >
-                  <Compass className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
-                </button>
-
-                {/* Desktop-only: Admin Moderation Button */}
-                {isAdminOfActiveGroup && (
-                  <button
-                    onClick={() => setShowAdminModal(true)}
-                    className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 active:scale-90 transition-all shadow-sm shrink-0"
-                    title="Admin Moderation & Ban Panel"
-                  >
-                    <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
-                  </button>
-                )}
-
-                {/* Mobile-only: 3-Dots More Menu Toggle */}
-                <div className="relative sm:hidden">
+                {/* Unified 3-Dots More Menu (Desktop & Mobile) */}
+                <div className="relative">
                   <button
                     type="button"
                     onClick={() => setMobileHeaderMenuOpen(!mobileHeaderMenuOpen)}
-                    className={`w-8 h-8 rounded-lg grid place-items-center transition-all ${
+                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center transition-all shrink-0 ${
                       mobileHeaderMenuOpen ? 'bg-white/10 text-white' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
                     }`}
                     title="More actions"
@@ -4214,14 +4116,14 @@ export default function Home() {
                     <MoreVertical className="w-4 h-4" />
                   </button>
 
-                  {/* Mobile 3-Dots Dropdown */}
+                  {/* 3-Dots Dropdown */}
                   {mobileHeaderMenuOpen && (
                     <>
                       <div
                         className="fixed inset-0 z-40 bg-black/30"
                         onClick={() => setMobileHeaderMenuOpen(false)}
                       />
-                      <div className="absolute right-0 top-full mt-2 w-52 bg-[#141826] border border-white/10 rounded-2xl shadow-2xl p-2 z-50 animate-msg-in flex flex-col gap-1">
+                      <div className="absolute right-0 top-full mt-2 w-56 bg-[#131722]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-1.5 z-50 animate-msg-in flex flex-col gap-0.5">
                         <button
                           type="button"
                           onClick={() => {
@@ -4240,48 +4142,79 @@ export default function Home() {
                             setMobileHeaderMenuOpen(false);
                             setShowMusicBotModal(true);
                           }}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                          className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
                         >
-                          <Bot className="w-4 h-4 text-purple-400" />
-                          <span>Music Bot & Player</span>
+                          <span className="flex items-center gap-2.5">
+                            <Bot className="w-4 h-4 text-purple-400" />
+                            <span>Music Bot & Player</span>
+                          </span>
+                          {roomPlayback?.isPlaying && (
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                          )}
                         </button>
 
+                        {/* Push Notification Toggle */}
                         <button
                           type="button"
                           onClick={() => {
                             setMobileHeaderMenuOpen(false);
-                            setShowAddMemberModal(true);
+                            requestNotificationPermission();
                           }}
                           className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
                         >
-                          <UserPlus className="w-4 h-4 text-emerald-400" />
-                          <span>Add Members</span>
+                          {notificationPermission === 'granted' ? (
+                            <>
+                              <Bell className="w-4 h-4 text-emerald-400" />
+                              <span>Sound Alerts: On</span>
+                            </>
+                          ) : (
+                            <>
+                              <BellOff className="w-4 h-4 text-[#7A8396]" />
+                              <span>Enable Sound Alerts</span>
+                            </>
+                          )}
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMobileHeaderMenuOpen(false);
-                            setNewGroupIsPrivate(false);
-                            setShowNewGroupModal(true);
-                          }}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                        >
-                          <Plus className="w-4 h-4 text-indigo-400" />
-                          <span>Create New Channel</span>
-                        </button>
+                        {!isDmMode && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                setShowAddMemberModal(true);
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <UserPlus className="w-4 h-4 text-emerald-400" />
+                              <span>Add Members</span>
+                            </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMobileHeaderMenuOpen(false);
-                            setShowDiscoverChannels(true);
-                          }}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                        >
-                          <Compass className="w-4 h-4 text-amber-400" />
-                          <span>Discover Channels</span>
-                        </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                setNewGroupIsPrivate(false);
+                                setShowNewGroupModal(true);
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <Plus className="w-4 h-4 text-indigo-400" />
+                              <span>Create New Channel</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                setShowDiscoverChannels(true);
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <Compass className="w-4 h-4 text-purple-400" />
+                              <span>Discover Channels</span>
+                            </button>
+                          </>
+                        )}
 
                         {isAdminOfActiveGroup && (
                           <button
@@ -4316,17 +4249,6 @@ export default function Home() {
                     </>
                   )}
                 </div>
-
-                {/* Channel Info Button */}
-                <button
-                  onClick={() => setInfoOpen(!infoOpen)}
-                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center transition-all shrink-0 ${
-                    infoOpen ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
-                  }`}
-                  title="Channel Details"
-                >
-                  <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
               </div>
             </>
           )}
@@ -4804,61 +4726,113 @@ export default function Home() {
         {/* COMPOSER DOCK */}
         <div className="p-2 sm:p-4 bg-[#0B0E17] border-t border-[#1B212E] relative pb-[max(0.625rem,env(safe-area-inset-bottom))]">
           {/* Mobile Backdrop for Trays */}
-          {(showTray || showEmojiPicker) && (
+          {showEmojiPicker && (
             <div
               className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px] md:hidden"
               onClick={() => {
-                setShowTray(false);
                 setShowEmojiPicker(false);
               }}
               onTouchStart={() => {
-                setShowTray(false);
                 setShowEmojiPicker(false);
               }}
             />
           )}
 
-          {/* Sticker & GIF Drawer (with WhatsApp Custom Stickers) */}
-          {showTray && (
-            <div className="absolute bottom-full mb-3 right-2.5 sm:right-6 left-2.5 sm:left-auto w-[calc(100vw-20px)] sm:w-[420px] max-h-[60vh] bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3.5 shadow-2xl z-50 animate-msg-in flex flex-col">
+          {/* UNIFIED EMOJI, GIF & STICKER DRAWER */}
+          {showEmojiPicker && (
+            <div className="absolute bottom-full mb-3 right-2.5 sm:right-16 left-2.5 sm:left-auto w-[calc(100vw-20px)] sm:w-[380px] max-h-[60vh] bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3.5 shadow-2xl z-50 animate-msg-in flex flex-col">
+              {/* Top Navigation Tabs */}
               <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/10">
                 <div className="flex gap-1 bg-black/40 p-1 rounded-xl">
                   <button
-                    onClick={() => setTrayTab('gifs')}
+                    type="button"
+                    onClick={() => setPickerTab('emojis')}
                     className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                      trayTab === 'gifs' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
+                      pickerTab === 'emojis' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
+                    }`}
+                  >
+                    Emojis
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPickerTab('gifs')}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      pickerTab === 'gifs' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
                     }`}
                   >
                     GIFs
                   </button>
                   <button
-                    onClick={() => setTrayTab('stickers')}
+                    type="button"
+                    onClick={() => setPickerTab('stickers')}
                     className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                      trayTab === 'stickers' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
+                      pickerTab === 'stickers' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
                     }`}
                   >
                     Stickers
                   </button>
-                  <button
-                    onClick={() => setTrayTab('custom')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                      trayTab === 'custom' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
-                    }`}
-                  >
-                    My Stickers
-                  </button>
                 </div>
                 <button
-                  onClick={() => setShowTray(false)}
+                  type="button"
+                  onClick={() => setShowEmojiPicker(false)}
                   className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* GIFs Tab */}
-              {trayTab === 'gifs' && (
-                <div className="space-y-2">
+              {/* 1. EMOJIS TAB */}
+              {pickerTab === 'emojis' && (
+                <div className="flex flex-col flex-1 min-h-0">
+                  <div className="relative mb-2">
+                    <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={emojiSearch}
+                      onChange={(e) => setEmojiSearch(e.target.value)}
+                      placeholder="Search emojis..."
+                      className="w-full bg-[#0D1017] border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#5A6376] outline-none focus:border-[#6366F1]"
+                    />
+                  </div>
+
+                  {!emojiSearch && (
+                    <div className="flex gap-1 pb-2 border-b border-white/10 mb-2 overflow-x-auto scroll">
+                      {EMOJI_CATEGORIES.map((cat, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setActiveEmojiCat(idx)}
+                          className={`px-2.5 py-1 rounded-xl text-sm transition-all ${
+                            activeEmojiCat === idx ? 'bg-[#6366F1]/30 text-white' : 'hover:bg-white/5 opacity-70'
+                          }`}
+                        >
+                          {cat.icon}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-7 gap-1 max-h-52 overflow-y-auto scroll pr-1">
+                    {displayedEmojis.map((em, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          setInputText((prev) => prev + em);
+                          textareaRef.current?.focus();
+                        }}
+                        className="w-8 h-8 rounded-lg hover:bg-white/10 grid place-items-center text-lg transition-transform hover:scale-125"
+                      >
+                        {em}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 2. GIFS TAB */}
+              {pickerTab === 'gifs' && (
+                <div className="space-y-2 flex flex-col flex-1 min-h-0">
                   <div className="relative">
                     <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-2.5 top-1/2 -translate-y-1/2" />
                     <input
@@ -4873,9 +4847,10 @@ export default function Home() {
                     {gifResults.map((gif) => (
                       <button
                         key={gif.id}
+                        type="button"
                         onClick={() => {
                           handleSendMessage('', 'gif', gif.url);
-                          setShowTray(false);
+                          setShowEmojiPicker(false);
                         }}
                         className="relative rounded-xl overflow-hidden aspect-video bg-[#0D1017] border border-white/5 hover:border-[#6366F1] hover:scale-[1.02] transition-all"
                       >
@@ -4886,30 +4861,9 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Pre-made Stickers Tab */}
-              {trayTab === 'stickers' && (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-4 gap-2 max-h-56 overflow-y-auto scroll pr-1">
-                    {STICKERS.map((st) => (
-                      <button
-                        key={st.id}
-                        onClick={() => {
-                          handleSendMessage('', 'sticker', st.url);
-                          setShowTray(false);
-                        }}
-                        className="p-1.5 rounded-2xl bg-black/20 hover:bg-[#6366F1]/20 border border-transparent hover:border-[#6366F1] flex items-center justify-center transition-all hover:scale-110"
-                        title={st.name}
-                      >
-                        <img src={st.url} alt={st.name} className="w-14 h-14 object-contain" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Custom WhatsApp-style Sticker Maker */}
-              {trayTab === 'custom' && (
-                <div className="space-y-3">
+              {/* 3. STICKERS TAB */}
+              {pickerTab === 'stickers' && (
+                <div className="space-y-3 flex flex-col flex-1 min-h-0">
                   <div className="flex gap-2">
                     <label className="flex-1 bg-[#6366F1]/15 hover:bg-[#6366F1]/25 border border-[#6366F1]/30 rounded-2xl p-2.5 text-center cursor-pointer transition-all">
                       <span className="text-xs font-bold text-white flex items-center justify-center gap-1.5">
@@ -4927,77 +4881,37 @@ export default function Home() {
                     </label>
                   </div>
 
-                  {userStickers.length > 0 ? (
-                    <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto scroll pr-1">
-                      {userStickers.map((stUrl, i) => (
-                        <button
-                          key={i}
-                          onClick={() => {
-                            handleSendMessage('', 'sticker', stUrl);
-                            setShowTray(false);
-                          }}
-                          className="p-1.5 rounded-2xl bg-black/30 hover:bg-[#6366F1]/20 border border-white/5 hover:border-[#6366F1] flex items-center justify-center transition-all hover:scale-110"
-                        >
-                          <img src={stUrl} alt="Custom Sticker" className="w-14 h-14 object-contain" />
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-[#7A8396] text-center py-4">
-                      Upload any image above to create your personal WhatsApp-style sticker!
-                    </p>
-                  )}
+                  <div className="grid grid-cols-4 gap-2 max-h-52 overflow-y-auto scroll pr-1">
+                    {STICKERS.map((st) => (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => {
+                          handleSendMessage('', 'sticker', st.url);
+                          setShowEmojiPicker(false);
+                        }}
+                        className="p-1.5 rounded-2xl bg-black/20 hover:bg-[#6366F1]/20 border border-transparent hover:border-[#6366F1] flex items-center justify-center transition-all hover:scale-110"
+                        title={st.name}
+                      >
+                        <img src={st.url} alt={st.name} className="w-14 h-14 object-contain" />
+                      </button>
+                    ))}
+                    {userStickers.map((stUrl, i) => (
+                      <button
+                        key={`custom-${i}`}
+                        type="button"
+                        onClick={() => {
+                          handleSendMessage('', 'sticker', stUrl);
+                          setShowEmojiPicker(false);
+                        }}
+                        className="p-1.5 rounded-2xl bg-black/30 hover:bg-[#6366F1]/20 border border-white/5 hover:border-[#6366F1] flex items-center justify-center transition-all hover:scale-110"
+                      >
+                        <img src={stUrl} alt="Custom Sticker" className="w-14 h-14 object-contain" />
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* INSTAGRAM EMOJI PICKER WITH INSTANT SEARCH */}
-          {showEmojiPicker && (
-            <div className="absolute bottom-full mb-3 right-2.5 sm:right-28 left-2.5 sm:left-auto w-[calc(100vw-20px)] sm:w-[340px] max-h-[60vh] bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3 shadow-2xl z-50 animate-msg-in flex flex-col">
-              {/* Emoji Search */}
-              <div className="relative mb-2">
-                <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={emojiSearch}
-                  onChange={(e) => setEmojiSearch(e.target.value)}
-                  placeholder="Search emojis..."
-                  className="w-full bg-[#0D1017] border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#5A6376] outline-none focus:border-[#6366F1]"
-                />
-              </div>
-
-              {/* Category tabs */}
-              {!emojiSearch && (
-                <div className="flex gap-1 pb-2 border-b border-white/10 mb-2 overflow-x-auto scroll">
-                  {EMOJI_CATEGORIES.map((cat, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setActiveEmojiCat(idx)}
-                      className={`px-2.5 py-1 rounded-xl text-sm transition-all ${
-                        activeEmojiCat === idx ? 'bg-[#6366F1]/30 text-white' : 'hover:bg-white/5 opacity-70'
-                      }`}
-                    >
-                      {cat.icon}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="grid grid-cols-7 gap-1 max-h-52 overflow-y-auto scroll pr-1">
-                {displayedEmojis.map((em, i) => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      setInputText((prev) => prev + em);
-                      textareaRef.current?.focus();
-                    }}
-                    className="w-8 h-8 rounded-lg hover:bg-white/10 grid place-items-center text-lg transition-transform hover:scale-125"
-                  >
-                    {em}
-                  </button>
-                ))}
-              </div>
             </div>
           )}
 
@@ -5100,7 +5014,7 @@ export default function Home() {
                 if (!inputText.trim()) return;
                 handleSendMessage(inputText, 'text');
               }}
-              className="max-w-4xl mx-auto flex items-end gap-1.5 sm:gap-2 bg-[#131722] border border-[#232B3E] focus-within:border-[#6366F1] rounded-2xl p-1.5 sm:p-2 transition-all shadow-xl"
+              className="max-w-4xl mx-auto flex items-end gap-1.5 sm:gap-2 bg-[#121622]/90 backdrop-blur-md border border-white/10 focus-within:border-[#6366F1]/50 rounded-2xl p-1.5 sm:p-2 transition-all shadow-lg"
             >
               {isVoiceRecording ? (
                 /* LIVE VOICE RECORDING STUDIO */
@@ -5225,34 +5139,18 @@ export default function Home() {
                       <Flame className={`w-4 h-4 ${ghostModeActive ? 'text-amber-400' : ''}`} />
                     </button>
 
-                    {/* Emoji Picker toggle */}
+                    {/* Emoji, GIF & Sticker Picker toggle */}
                     <button
                       type="button"
                       onClick={() => {
                         setShowEmojiPicker(!showEmojiPicker);
-                        setShowTray(false);
                       }}
                       className={`p-1.5 sm:p-2 rounded-xl transition-all ${
                         showEmojiPicker ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
                       }`}
-                      title="Instagram Emojis"
+                      title="Emojis, GIFs & Stickers"
                     >
                       <Smile className="w-4 h-4" />
-                    </button>
-
-                    {/* Stickers & GIFs toggle */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowTray(!showTray);
-                        setShowEmojiPicker(false);
-                      }}
-                      className={`p-1.5 sm:p-2 rounded-xl transition-all ${
-                        showTray ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
-                      }`}
-                      title="Stickers & GIFs"
-                    >
-                      <Layers className="w-4 h-4" />
                     </button>
 
                     {/* Send Button or Mic Button (WhatsApp style: Mic when empty, Send when text typed) */}
