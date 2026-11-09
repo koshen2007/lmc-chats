@@ -1,0 +1,184 @@
+import { NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
+
+export interface ApiMessage {
+  id: string;
+  group_id: string;
+  sender_name: string;
+  sender_username?: string;
+  sender_avatar: string;
+  sender_bio?: string;
+  content: string;
+  msg_type: 'text' | 'sticker' | 'gif' | 'image' | 'audio' | 'music_bot';
+  media_url?: string;
+  reactions: Record<string, number>;
+  created_at: string;
+  burn_after_read?: boolean;
+  burn_seconds?: number;
+}
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __LMC_MESSAGES_CACHE__: ApiMessage[] | undefined;
+}
+
+function getStoragePath(): string {
+  try {
+    const isVercel = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME;
+    if (isVercel) {
+      return path.join('/tmp', 'lmc_messages.json');
+    }
+    const dataDir = path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    return path.join(dataDir, 'messages.json');
+  } catch {
+    return path.join(process.cwd(), 'messages.json');
+  }
+}
+
+function getMessages(): ApiMessage[] {
+  if (globalThis.__LMC_MESSAGES_CACHE__) {
+    return globalThis.__LMC_MESSAGES_CACHE__;
+  }
+
+  const filePath = getStoragePath();
+  let msgs: ApiMessage[] = [];
+
+  if (fs.existsSync(filePath)) {
+    try {
+      const data = fs.readFileSync(filePath, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        msgs = parsed;
+      }
+    } catch (e) {
+      console.error('Error loading messages file:', e);
+    }
+  }
+
+  globalThis.__LMC_MESSAGES_CACHE__ = msgs;
+  return msgs;
+}
+
+function saveMessages(msgs: ApiMessage[]): void {
+  globalThis.__LMC_MESSAGES_CACHE__ = msgs;
+  try {
+    const filePath = getStoragePath();
+    fs.writeFileSync(filePath, JSON.stringify(msgs, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('Error saving messages:', e);
+  }
+}
+
+// GET /api/messages?group_id=<id>&after=<timestamp>
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const groupId = searchParams.get('group_id');
+    const after = searchParams.get('after');
+
+    const all = getMessages();
+
+    let filtered = all;
+    if (groupId) {
+      filtered = filtered.filter((m) => m.group_id === groupId);
+    }
+    if (after) {
+      const afterTime = new Date(after).getTime();
+      if (!isNaN(afterTime)) {
+        filtered = filtered.filter((m) => new Date(m.created_at).getTime() > afterTime);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      messages: filtered,
+      count: filtered.length,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { success: false, error: (err as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+// POST /api/messages
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+
+    if (!body || !body.content?.trim() || !body.group_id) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid message payload' },
+        { status: 400 }
+      );
+    }
+
+    const newMessage: ApiMessage = {
+      id: body.id || `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      group_id: body.group_id,
+      sender_name: body.sender_name || 'Anonymous',
+      sender_username: body.sender_username,
+      sender_avatar: body.sender_avatar || '',
+      sender_bio: body.sender_bio,
+      content: body.content.trim(),
+      msg_type: body.msg_type || 'text',
+      media_url: body.media_url,
+      reactions: body.reactions || {},
+      created_at: body.created_at || new Date().toISOString(),
+      burn_after_read: Boolean(body.burn_after_read),
+      burn_seconds: body.burn_seconds || 10,
+    };
+
+    const current = getMessages();
+    // Prevent duplicate IDs
+    const exists = current.some((m) => m.id === newMessage.id);
+    const updated = exists ? current : [...current, newMessage];
+
+    saveMessages(updated);
+
+    return NextResponse.json({
+      success: true,
+      message: newMessage,
+    });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { success: false, error: (err as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/messages?id=<id>
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const messageId = searchParams.get('id');
+
+    if (!messageId) {
+      return NextResponse.json(
+        { success: false, error: 'Message ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const current = getMessages();
+    const updated = current.filter((m) => m.id !== messageId);
+    saveMessages(updated);
+
+    return NextResponse.json({
+      success: true,
+      deletedId: messageId,
+    });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { success: false, error: (err as Error).message },
+      { status: 500 }
+    );
+  }
+}

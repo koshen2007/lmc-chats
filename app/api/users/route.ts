@@ -16,19 +16,10 @@ export interface ApiUserProfile {
   created_at?: string;
 }
 
-// Initial seed directory with Harshita
-const INITIAL_USERS: ApiUserProfile[] = [
-  {
-    id: 'usr_harshita',
-    username: 'harshita',
-    name: 'Harshita',
-    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=harshita&backgroundColor=ffd5dc,c0aede,d1d4f9',
-    bio: 'Living life • Squad member',
-    status: 'online',
-    role: 'user',
-    created_at: new Date().toISOString(),
-  },
-];
+// Initial empty directory (only real registered users exist)
+const INITIAL_USERS: ApiUserProfile[] = [];
+
+const LEGACY_FAKE_USERNAMES = ['harshita', 'koshen', 'kai', 'aria', 'zayn', 'rin', 'marcus', 'elena'];
 
 // In-memory cache across server requests
 declare global {
@@ -61,13 +52,9 @@ function loadUsers(): ApiUserProfile[] {
       const data = fs.readFileSync(filePath, 'utf-8');
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Merge with initial users to guarantee Harshita is always present
         const map = new Map<string, ApiUserProfile>();
-        for (const u of INITIAL_USERS) {
-          map.set(u.username.toLowerCase(), u);
-        }
         for (const u of parsed) {
-          if (u && u.username) {
+          if (u && u.username && !LEGACY_FAKE_USERNAMES.includes(u.username.toLowerCase())) {
             map.set(u.username.toLowerCase(), u);
           }
         }
@@ -174,7 +161,7 @@ export async function POST(request: Request) {
       avatar:
         body.avatar ||
         `https://api.dicebear.com/7.x/notionists/svg?seed=${rawUsername}&backgroundColor=b6e3f4,c0aede,d1d4f9`,
-      bio: body.bio || 'Living life • LMC Squad member ⚡',
+      bio: body.bio || '',
       status: body.status || 'online',
       role: body.role || 'user',
       provider: body.provider || 'custom',

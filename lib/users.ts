@@ -1,9 +1,9 @@
 import { PRESET_AVATARS, renderAvatarSvgString, svgToDataUrl } from './avatarStudio';
 
 export interface UserProfile {
-  id: string; // unique ID e.g. "usr_koshen"
-  username: string; // unique lowercase username e.g. "koshen"
-  name: string; // Display Name e.g. "Koshen Siwanchi" (can be shared)
+  id: string; // unique ID
+  username: string; // unique lowercase username
+  name: string; // Display Name (can be shared)
   avatar: string; // Avatar Data URL or URL
   bio?: string;
   status?: 'online' | 'idle' | 'dnd';
@@ -13,18 +13,8 @@ export interface UserProfile {
   created_at?: string;
 }
 
-// Global registered users directory with verified squad members
-export const SEED_USERS: UserProfile[] = [
-  {
-    id: 'usr_harshita',
-    username: 'harshita',
-    name: 'Harshita',
-    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=harshita&backgroundColor=ffd5dc,c0aede,d1d4f9',
-    bio: 'Living life • Squad member',
-    status: 'online',
-    role: 'user',
-  },
-];
+// Global registered users directory (starts empty; only real registered users exist)
+export const SEED_USERS: UserProfile[] = [];
 
 /**
  * Validate username format:
@@ -100,7 +90,7 @@ export function searchUsersInstagramStyle(
       namePrefix.push(u);
       seenIds.add(u.id);
     } else if (uId.startsWith(q) || uId.startsWith(`usr_${q}`)) {
-      idPrefixUsers: idPrefix.push(u);
+      idPrefix.push(u);
       seenIds.add(u.id);
     } else if (uName.includes(q) || dName.includes(q) || uId.includes(q) || uBio.includes(q)) {
       otherMatches.push(u);

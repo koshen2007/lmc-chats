@@ -70,6 +70,7 @@ import GoogleAuthModal from '@/components/GoogleAuthModal';
 import InstagramSearchModal from '@/components/InstagramSearchModal';
 import AuthLoginScreen from '@/components/AuthLoginScreen';
 import DiscoverChannelsModal from '@/components/DiscoverChannelsModal';
+import UserWelcomeModal from '@/components/UserWelcomeModal';
 import {
   UserProfile,
   SEED_USERS,
@@ -110,7 +111,7 @@ export default function Home() {
     username: '',
     name: '',
     avatar: DEFAULT_AVATAR_DATA_URL,
-    bio: 'Living life • LMC Squad member ⚡',
+    bio: '',
     status: 'online',
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -159,6 +160,8 @@ export default function Home() {
   // Admin Moderation Panel & Google Auth
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showGoogleAuthModal, setShowGoogleAuthModal] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [activeDmUsernames, setActiveDmUsernames] = useState<string[]>([]);
   const [bannedUsers, setBannedUsers] = useState<BannedUser[]>([]);
 
   // App Layout
@@ -249,9 +252,9 @@ export default function Home() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Load Registered Users Directory (Always include SEED_USERS with Harshita & Koshen)
-    const FAKE_USER_IDS = ['usr_kai', 'usr_aria', 'usr_zayn', 'usr_rin', 'usr_marcus', 'usr_elena'];
-    const FAKE_USERNAMES = ['kai', 'aria', 'zayn', 'rin', 'marcus', 'elena'];
+    // Load Registered Users Directory (Only real registered users)
+    const FAKE_USER_IDS = ['usr_harshita', 'usr_koshen', 'usr_kai', 'usr_aria', 'usr_zayn', 'usr_rin', 'usr_marcus', 'usr_elena'];
+    const FAKE_USERNAMES = ['harshita', 'koshen', 'kai', 'aria', 'zayn', 'rin', 'marcus', 'elena'];
     let allUsers: UserProfile[] = [];
     const storedUsers = localStorage.getItem('lmc_registered_users');
     if (storedUsers) {
@@ -314,7 +317,7 @@ export default function Home() {
             username: rawUsername,
             name: parsed.name || rawUsername,
             avatar: parsed.avatar || DEFAULT_AVATAR_DATA_URL,
-            bio: parsed.bio || 'Living life • LMC Squad member ⚡',
+            bio: parsed.bio || '',
             status: parsed.status || 'online',
             provider: parsed.provider || 'custom',
             email: parsed.email,
@@ -439,6 +442,104 @@ export default function Home() {
         }
       } catch {}
     }
+
+    // 6. Load Active DMs
+    const storedDms = localStorage.getItem('lmc_active_dms');
+    if (storedDms) {
+      try {
+        const parsedDms = JSON.parse(storedDms);
+        if (Array.isArray(parsedDms)) {
+          setActiveDmUsernames(parsedDms);
+        }
+      } catch {}
+    }
+  }, []);
+
+  // Real-Time Cross-Device Sync Poller (Phone 1 <-> Phone 2 live updates)
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    let isMounted = true;
+    const pollServerUpdates = async () => {
+      try {
+        // 1. Sync Groups from server API
+        const grpRes = await fetch('/api/groups');
+        if (grpRes.ok && isMounted) {
+          const grpData = await grpRes.json();
+          if (grpData.groups && Array.isArray(grpData.groups)) {
+            setGroups((prev) => {
+              const map = new Map<string, Group>();
+              for (const g of grpData.groups) map.set(g.id, g);
+              for (const g of prev) if (!map.has(g.id)) map.set(g.id, g);
+              return Array.from(map.values());
+            });
+          }
+        }
+
+        // 2. Sync Messages for current channel or DM room
+        if (activeGroupId && isMounted) {
+          const msgRes = await fetch(`/api/messages?group_id=${encodeURIComponent(activeGroupId)}`);
+          if (msgRes.ok && isMounted) {
+            const msgData = await msgRes.json();
+            if (msgData.messages && Array.isArray(msgData.messages)) {
+              setMessages((prev) => {
+                const map = new Map<string, Message>();
+                for (const m of prev) map.set(m.id, m);
+                for (const m of msgData.messages) map.set(m.id, m);
+                return Array.from(map.values());
+              });
+            }
+          }
+        }
+
+        // 3. Sync Registered Users
+        const usrRes = await fetch('/api/users');
+        if (usrRes.ok && isMounted) {
+          const usrData = await usrRes.json();
+          if (usrData.users && Array.isArray(usrData.users)) {
+            setRegisteredUsers(usrData.users);
+          }
+        }
+      } catch {
+        // Polling errors ignored
+      }
+    };
+
+    pollServerUpdates();
+    const interval = setInterval(pollServerUpdates, 2500);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [isLoggedIn, activeGroupId]);
+
+  // Deep Linking for ?join=<groupId> and ?user=<username>
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const joinGroupId = params.get('join');
+    const profileUsername = params.get('user');
+
+    if (joinGroupId) {
+      setActiveGroupId(joinGroupId);
+      handleJoinGroup(joinGroupId);
+    }
+
+    if (profileUsername) {
+      fetch('/api/users')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && Array.isArray(data.users)) {
+            const matched = data.users.find(
+              (u: UserProfile) => u.username.toLowerCase() === profileUsername.toLowerCase()
+            );
+            if (matched) {
+              setViewingProfile(matched);
+            }
+          }
+        })
+        .catch(() => {});
+    }
   }, []);
 
   // Permanent Storage Sync Handlers
@@ -463,7 +564,7 @@ export default function Home() {
       username: userData.username,
       name: userData.name,
       avatar: userData.avatar,
-      bio: userData.bio || 'Living life • LMC Squad member ⚡',
+      bio: userData.bio || '',
       status: 'online',
       provider: userData.provider || 'custom',
       email: userData.email,
@@ -494,12 +595,28 @@ export default function Home() {
         body: JSON.stringify(fullUser),
       }).catch(() => {});
     } catch {}
+
+    // Check if user has seen professional welcome onboarding screen
+    const welcomedKey = `lmc_welcomed_${fullUser.id}`;
+    if (typeof window !== 'undefined' && !localStorage.getItem(welcomedKey)) {
+      setShowWelcomeModal(true);
+      localStorage.setItem(welcomedKey, 'true');
+    }
   };
 
   const handleLogout = () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('lmc_session');
     }
+    setUser({
+      id: '',
+      username: '',
+      name: '',
+      avatar: DEFAULT_AVATAR_DATA_URL,
+      bio: '',
+      status: 'online',
+    });
+    setActiveGroupId('');
     setIsLoggedIn(false);
     setShowStatusMenu(false);
     triggerToast('Logged out of LMC Chats. See you soon! 👋');
@@ -739,10 +856,37 @@ export default function Home() {
     streamEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, activeGroupId]);
 
-  // Active Group Resolution
+  // Direct Message (DM) mode detection
+  const isDmMode = Boolean(activeGroupId && activeGroupId.startsWith('dm_'));
+
+  // Target user in 1-on-1 Direct Message
+  const activeDmOtherUser = useMemo(() => {
+    if (!isDmMode) return null;
+    const parts = activeGroupId.replace(/^dm_/, '').split('_');
+    const myHandle = (user.username || user.name || '').toLowerCase();
+    const otherHandle = parts.find((p) => p.toLowerCase() !== myHandle) || parts[0];
+    const found = registeredUsers.find(
+      (u) =>
+        u.username.toLowerCase() === otherHandle.toLowerCase() ||
+        u.name.toLowerCase() === otherHandle.toLowerCase()
+    );
+    return (
+      found || {
+        id: `usr_${otherHandle}`,
+        username: otherHandle,
+        name: otherHandle,
+        avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${otherHandle}&backgroundColor=b6e3f4,d1d4f9`,
+        bio: '',
+        status: 'online' as const,
+      }
+    );
+  }, [isDmMode, activeGroupId, user.username, user.name, registeredUsers]);
+
+  // Active Group Resolution (only when not in DM mode)
   const activeGroup = useMemo(() => {
-    return groups.find((g) => g.id === activeGroupId) || groups[0] || null;
-  }, [groups, activeGroupId]);
+    if (isDmMode) return null;
+    return groups.find((g) => g.id === activeGroupId) || null;
+  }, [groups, activeGroupId, isDmMode]);
 
   // Group Visibility Rules
   const visibleGroups = useMemo(() => {
@@ -755,18 +899,48 @@ export default function Home() {
     });
   }, [groups, user.name]);
 
-  // In Public groups, everyone can chat! In Private, only creator or member.
+  // In Public groups & DMs, everyone can chat! In Private, only creator or member.
   const isMemberOfActiveGroup = useMemo(() => {
+    if (isDmMode) return true;
     if (!activeGroup) return false;
     if (!activeGroup.is_private) return true;
     if (!user.name) return false;
     const isCreator = activeGroup.created_by?.toLowerCase() === user.name.toLowerCase();
     const isMember = (activeGroup.members || []).some((m) => m.toLowerCase() === user.name.toLowerCase());
     return isCreator || isMember;
-  }, [activeGroup, user.name]);
+  }, [isDmMode, activeGroup, user.name]);
+
+  // Direct Message (DM) Launch Handler
+  const handleStartDm = useCallback(
+    (targetUser: { username?: string; name: string }) => {
+      const myHandle = (user.username || user.name || 'user').toLowerCase().replace(/[^a-z0-9_]/g, '');
+      const theirHandle = (targetUser.username || targetUser.name).toLowerCase().replace(/[^a-z0-9_]/g, '');
+      if (!myHandle || !theirHandle) return;
+
+      const sorted = [myHandle, theirHandle].sort();
+      const dmRoomId = `dm_${sorted[0]}_${sorted[1]}`;
+
+      setActiveDmUsernames((prev) => {
+        if (!prev.includes(theirHandle)) {
+          const next = [theirHandle, ...prev];
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('lmc_active_dms', JSON.stringify(next));
+          }
+          return next;
+        }
+        return prev;
+      });
+
+      setActiveGroupId(dmRoomId);
+      setMobileRailOpen(false);
+      triggerToast(`Opened chat with @${theirHandle} 💬`);
+    },
+    [user.username, user.name]
+  );
 
   // Check if user is an official joined member in active channel's member list
   const isJoinedToActiveGroup = useMemo(() => {
+    if (isDmMode) return true;
     if (!activeGroup) return false;
     const members = activeGroup.members || [];
     const handle = (user.username || '').toLowerCase();
@@ -775,7 +949,7 @@ export default function Home() {
       const clean = m.toLowerCase().replace(/^@/, '');
       return clean === handle || clean === uName;
     });
-  }, [activeGroup?.members, user.username, user.name]);
+  }, [isDmMode, activeGroup?.members, user.username, user.name]);
 
   const handleJoinGroup = (groupId: string) => {
     const targetGroup = groups.find((g) => g.id === groupId);
@@ -791,6 +965,13 @@ export default function Home() {
       const updatedMembers = [...members, `@${handle}`];
       const updatedGroups = groups.map((g) => (g.id === groupId ? { ...g, members: updatedMembers } : g));
       savePersistedGroups(updatedGroups);
+      try {
+        fetch('/api/groups', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'join', groupId, memberName: `@${handle}` }),
+        }).catch(() => {});
+      } catch {}
       triggerToast(`Joined #${targetGroup.name}! 🎉`);
     } else {
       triggerToast(`Switched to #${targetGroup.name}`);
@@ -897,7 +1078,7 @@ export default function Home() {
       username: rawUsername,
       name: trimmedName,
       avatar: profileAvatarSelected,
-      bio: profileBioInput.trim() || 'LMC Squad member ⚡',
+      bio: profileBioInput.trim(),
       status: user.status || 'online',
     };
 
@@ -991,6 +1172,24 @@ export default function Home() {
         }
         return list;
       });
+
+      // Server API sync for cross-device support
+      try {
+        fetch('/api/groups', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'add_member',
+            groupId: activeGroup.id,
+            memberName: memberTag,
+          }),
+        }).catch(() => {});
+        fetch('/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(announcementMsg),
+        }).catch(() => {});
+      } catch {}
 
       if (isSupabaseConfigured && supabase) {
         Promise.resolve(supabase.from('groups').update({ members: updatedMembers }).eq('id', activeGroup.id)).catch(() => {});
@@ -1270,7 +1469,7 @@ export default function Home() {
         triggerToast('🚫 You are banned from sending messages in this channel');
         return;
       }
-      if (activeGroup.is_read_only && !isAdminOfActiveGroup) {
+      if (activeGroup?.is_read_only && !isAdminOfActiveGroup) {
         triggerToast('🔒 Channel is in Admin Read-Only mode');
         return;
       }
@@ -1393,6 +1592,15 @@ export default function Home() {
         channel.close();
       }
 
+      // Central Server API sync for cross-device support (Phone 1 <-> Phone 2)
+      try {
+        fetch('/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newMsg),
+        }).catch(() => {});
+      } catch {}
+
       // Remote Supabase sync if connected
       if (isSupabaseConfigured && supabase) {
         try {
@@ -1496,6 +1704,15 @@ export default function Home() {
     setNewGroupInviteMember('');
     triggerToast(newGroup.is_private ? `Private Channel "${newGroup.name}" created` : `Channel "${newGroup.name}" created`);
 
+    // Sync to shared server API so other devices receive this new channel!
+    try {
+      fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', ...newGroup }),
+      }).catch(() => {});
+    } catch {}
+
     if (typeof window !== 'undefined') {
       const channel = new BroadcastChannel('lmc_chat_sync');
       channel.postMessage({ type: 'NEW_GROUP', payload: newGroup });
@@ -1578,6 +1795,7 @@ export default function Home() {
   // ADMIN: KICK MEMBER
   const handleKickMember = useCallback(
     (target: string) => {
+      if (!activeGroup) return;
       const cleanTarget = target.replace(/^@/, '').toLowerCase();
       const updatedMembers = (activeGroup.members || []).filter(
         (m) => m.toLowerCase() !== cleanTarget && m.toLowerCase() !== `@${cleanTarget}`
@@ -1601,6 +1819,7 @@ export default function Home() {
   // ADMIN: BAN USER
   const handleBanUser = useCallback(
     (target: string, reason: string = 'Rule violation') => {
+      if (!activeGroup) return;
       const cleanTarget = target.replace(/^@/, '').toLowerCase();
       const newBan: BannedUser = {
         id: `ban_${Date.now()}`,
@@ -1653,6 +1872,7 @@ export default function Home() {
   // ADMIN: PROMOTE TO ADMIN
   const handlePromoteAdmin = useCallback(
     (target: string) => {
+      if (!activeGroup) return;
       const cleanTarget = target.replace(/^@/, '');
       const admins = [...(activeGroup.admins || [])];
       if (!admins.some((a) => a.toLowerCase() === cleanTarget.toLowerCase())) {
@@ -1668,6 +1888,7 @@ export default function Home() {
   // ADMIN: DEMOTE ADMIN
   const handleDemoteAdmin = useCallback(
     (target: string) => {
+      if (!activeGroup) return;
       const cleanTarget = target.replace(/^@/, '').toLowerCase();
       const admins = (activeGroup.admins || []).filter((a) => a.toLowerCase() !== cleanTarget);
       const updatedGroup = { ...activeGroup, admins };
@@ -1679,6 +1900,7 @@ export default function Home() {
 
   // ADMIN: CLEAR ALL CHANNEL MESSAGES
   const handleClearChannelMessages = useCallback(() => {
+    if (!activeGroup) return;
     setMessages((prev) => {
       const remaining = prev.filter((m) => m.group_id !== activeGroupId);
       if (typeof window !== 'undefined') {
@@ -1702,6 +1924,7 @@ export default function Home() {
   // ADMIN: TOGGLE READ ONLY
   const handleToggleReadOnly = useCallback(
     (enabled: boolean) => {
+      if (!activeGroup) return;
       const updatedGroup = { ...activeGroup, is_read_only: enabled };
       savePersistedGroups(groups.map((g) => (g.id === activeGroup.id ? updatedGroup : g)));
       triggerToast(enabled ? 'Channel locked (Read-Only)' : 'Channel unlocked');
@@ -1712,6 +1935,7 @@ export default function Home() {
   // ADMIN: TOGGLE SLOW MODE
   const handleToggleSlowMode = useCallback(
     (enabled: boolean) => {
+      if (!activeGroup) return;
       const updatedGroup = { ...activeGroup, slow_mode: enabled };
       savePersistedGroups(groups.map((g) => (g.id === activeGroup.id ? updatedGroup : g)));
       triggerToast(enabled ? 'Slow mode enabled (10s)' : 'Slow mode disabled');
@@ -1740,7 +1964,7 @@ export default function Home() {
       username: googleUser.username,
       name: googleUser.name,
       avatar: googleUser.avatar,
-      bio: 'Verified Google Squad Member ⚡',
+      bio: '',
       status: 'online',
       provider: 'google',
       email: googleUser.email,
@@ -2078,7 +2302,7 @@ export default function Home() {
             <div className="bg-[#0D1017] border border-[#232B3E] rounded-2xl p-3 w-full mb-4 text-left">
               <p className="text-[10px] font-bold uppercase tracking-wider text-[#7A8396] mb-1">About & Bio</p>
               <p className="text-xs text-[#A8B2C7] leading-relaxed">
-                {viewingProfile.bio || 'Living life • LMC Squad member ⚡'}
+                {viewingProfile.bio || 'No bio added yet'}
               </p>
             </div>
 
@@ -2126,6 +2350,44 @@ export default function Home() {
                   <span>Add @{viewingProfile.username || viewingProfile.name} to #{activeGroup.name}</span>
                 </button>
               )}
+            </div>
+
+            {/* Profile Action Buttons: DM & Share Link */}
+            <div className="w-full space-y-2 mt-3 pt-3 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  const targetUser: UserProfile = {
+                    id: viewingProfile.id || `usr_${(viewingProfile.username || viewingProfile.name).toLowerCase()}`,
+                    username: viewingProfile.username || viewingProfile.name.toLowerCase().replace(/\s+/g, ''),
+                    name: viewingProfile.name,
+                    avatar: viewingProfile.avatar,
+                    bio: viewingProfile.bio,
+                  };
+                  handleStartDm(targetUser);
+                  setViewingProfile(null);
+                }}
+                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 active:scale-95 transition-all"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Direct Message (DM)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const handle = viewingProfile.username || viewingProfile.name.toLowerCase().replace(/\s+/g, '');
+                  if (typeof window !== 'undefined') {
+                    const link = `${window.location.origin}/?user=${encodeURIComponent(handle)}`;
+                    navigator.clipboard.writeText(link);
+                    triggerToast(`Copied @${handle}'s profile link! 📋`);
+                  }
+                }}
+                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+              >
+                <LinkIcon className="w-3.5 h-3.5 text-pink-400" />
+                <span>Share Profile Link</span>
+              </button>
             </div>
           </div>
         </div>
@@ -2459,6 +2721,7 @@ export default function Home() {
           onAddMemberToChannel={handleAddMemberToChannel}
           onJoinGroup={handleJoinGroup}
           onStartCall={startCall}
+          onStartDm={handleStartDm}
           triggerToast={triggerToast}
           onSyncUsers={(serverList) => {
             setRegisteredUsers((prev) => {
@@ -2471,6 +2734,28 @@ export default function Home() {
               }
               return merged;
             });
+          }}
+        />
+      )}
+
+      {/* USER ONBOARDING WELCOME MODAL */}
+      {showWelcomeModal && user.name && (
+        <UserWelcomeModal
+          onClose={() => setShowWelcomeModal(false)}
+          user={{
+            id: user.id || `usr_${user.username || 'user'}`,
+            username: user.username || user.name.toLowerCase().replace(/[^a-z0-9_]/g, ''),
+            name: user.name,
+            avatar: user.avatar || '/logo.png',
+          }}
+          onCreateGroup={() => {
+            setShowWelcomeModal(false);
+            setNewGroupIsPrivate(false);
+            setShowNewGroupModal(true);
+          }}
+          onSearchUsers={() => {
+            setShowWelcomeModal(false);
+            setShowInstagramSearch(true);
           }}
         />
       )}
@@ -2812,6 +3097,76 @@ export default function Home() {
                 })}
             </div>
           </div>
+
+          {/* Direct Messages (DMs) Section */}
+          <div className="mt-3">
+            {!railCollapsed ? (
+              <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase text-[#7A8396]">
+                <span className="flex items-center gap-1.5">Direct Messages</span>
+                <button
+                  type="button"
+                  onClick={() => setShowInstagramSearch(true)}
+                  className="w-5 h-5 rounded hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white transition-colors"
+                  title="Search user to start Direct Message"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="w-full h-px bg-white/10 my-1" />
+            )}
+
+            <div className="space-y-0.5 mt-1">
+              {activeDmUsernames.length === 0 && !railCollapsed && (
+                <div className="px-3 py-2 text-center">
+                  <p className="text-[11px] text-[#5A6376] italic">No direct chats yet</p>
+                </div>
+              )}
+              {activeDmUsernames.map((targetHandle) => {
+                const myHandle = (user.username || user.name || 'user').toLowerCase().replace(/[^a-z0-9_]/g, '');
+                const sorted = [myHandle, targetHandle.toLowerCase()].sort();
+                const dmRoomId = `dm_${sorted[0]}_${sorted[1]}`;
+                const isActive = activeGroupId === dmRoomId;
+                const targetProfile = registeredUsers.find(
+                  (u) => u.username.toLowerCase() === targetHandle.toLowerCase()
+                );
+
+                return (
+                  <button
+                    key={dmRoomId}
+                    type="button"
+                    onClick={() => {
+                      setActiveGroupId(dmRoomId);
+                      setMobileRailOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-left relative group ${
+                      isActive
+                        ? 'bg-indigo-600/20 text-white font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:bg-indigo-500 before:rounded-r'
+                        : 'text-[#9DA6B8] hover:bg-white/[0.05] hover:text-white font-medium'
+                    }`}
+                    title={`Chat with @${targetHandle}`}
+                  >
+                    <div className="relative shrink-0">
+                      <div className="w-5 h-5 rounded-full overflow-hidden bg-[#141824] border border-white/10">
+                        <img
+                          src={targetProfile?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${targetHandle}&backgroundColor=b6e3f4,d1d4f9`}
+                          alt={targetHandle}
+                          className="w-full h-full object-cover rounded-full"
+                        />
+                      </div>
+                      <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 border border-[#0A0D14]" />
+                    </div>
+                    {!railCollapsed && (
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] truncate">{targetProfile?.name || `@${targetHandle}`}</p>
+                        <p className="text-[10px] text-[#7A8396] truncate">@{targetHandle}</p>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* User Profile Footer (Discord / Slack style) */}
@@ -2877,7 +3232,7 @@ export default function Home() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-white truncate">{user.name || 'User'}</p>
-                  <p className="text-[10px] text-[#7A8396] truncate">{user.bio || 'LMC squad member'}</p>
+                  <p className="text-[10px] text-[#7A8396] truncate">{user.bio || (user.username ? `@${user.username}` : '')}</p>
                 </div>
               </div>
 
@@ -3009,7 +3364,7 @@ export default function Home() {
 
       {/* MAIN CHAT COLUMN */}
       <main className="flex-1 flex flex-col min-w-0 h-full relative bg-[#0B0E17]">
-        {!activeGroup ? (
+        {!activeGroup && !isDmMode ? (
           <div className="flex-1 flex flex-col min-w-0 h-full">
             {/* Minimal Header */}
             <header className="h-16 px-3 sm:px-5 flex items-center justify-between border-b border-[#1B212E] bg-[#0B0E17]/95 backdrop-blur-md z-10 shrink-0">
@@ -3141,46 +3496,78 @@ export default function Home() {
                   <Menu className="w-5 h-5" />
                 </button>
 
-                {/* Clickable Channel Header to view Group Details */}
-                <div
-                  onClick={() => setInfoOpen(!infoOpen)}
-                  className="flex items-center gap-2 sm:gap-2.5 cursor-pointer hover:opacity-85 transition-opacity min-w-0"
-                  title="View Channel Details & Members"
-                >
-                  <div className="relative shrink-0">
-                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden bg-transparent border border-white/10 shadow-sm">
-                      <img src={activeGroup.avatar || '/logo.png'} alt={activeGroup.name} className="w-full h-full object-cover rounded-full" />
+                {/* Clickable Header: User Details (DM) or Group Details (Channel) */}
+                {isDmMode && activeDmOtherUser ? (
+                  <div
+                    onClick={() => setViewingProfile(activeDmOtherUser)}
+                    className="flex items-center gap-2 sm:gap-2.5 cursor-pointer hover:opacity-85 transition-opacity min-w-0"
+                    title="View User Profile & ID"
+                  >
+                    <div className="relative shrink-0">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden bg-transparent border border-white/10 shadow-sm">
+                        <img
+                          src={activeDmOtherUser.avatar || '/logo.png'}
+                          alt={activeDmOtherUser.name}
+                          className="w-full h-full object-cover rounded-full"
+                        />
+                      </div>
+                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[#0B0E17]" />
                     </div>
-                    {activeGroup.is_private && (
-                      <span className="absolute -bottom-0.5 -right-0.5 bg-black/90 p-0.5 rounded-full text-[#F59E0B]">
-                        <Lock className="w-2.5 h-2.5" />
-                      </span>
-                    )}
+                    <div className="min-w-0">
+                      <h1 className="text-xs sm:text-base font-bold text-white flex items-center gap-1.5 truncate">
+                        <span>{activeDmOtherUser.name}</span>
+                      </h1>
+                      <p className="text-[10px] sm:text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
+                        <span className="text-indigo-400 font-semibold">@{activeDmOtherUser.username}</span>
+                        <span className="hidden xs:inline">• Direct Message</span>
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <h1 className="text-xs sm:text-base font-bold text-white flex items-center gap-1.5 truncate">
-                      <span>{activeGroup.name}</span>
-                      {!isJoinedToActiveGroup && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleJoinGroup(activeGroup.id);
-                          }}
-                          className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-[10px] shadow-sm flex items-center gap-1 active:scale-95 transition-all shrink-0"
-                          title="Join this channel"
-                        >
-                          <Plus className="w-2.5 h-2.5" />
-                          <span>Join</span>
-                        </button>
+                ) : activeGroup ? (
+                  <div
+                    onClick={() => setInfoOpen(!infoOpen)}
+                    className="flex items-center gap-2 sm:gap-2.5 cursor-pointer hover:opacity-85 transition-opacity min-w-0"
+                    title="View Channel Details & Members"
+                  >
+                    <div className="relative shrink-0">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden bg-transparent border border-white/10 shadow-sm">
+                        <img
+                          src={activeGroup.avatar || '/logo.png'}
+                          alt={activeGroup.name}
+                          className="w-full h-full object-cover rounded-full"
+                        />
+                      </div>
+                      {activeGroup.is_private && (
+                        <span className="absolute -bottom-0.5 -right-0.5 bg-black/90 p-0.5 rounded-full text-[#F59E0B]">
+                          <Lock className="w-2.5 h-2.5" />
+                        </span>
                       )}
-                    </h1>
-                    <p className="text-[10px] sm:text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
-                      <span>{(activeGroup.members || []).length} members</span>
-                      <span className="hidden xs:inline">• Info</span>
-                    </p>
+                    </div>
+                    <div className="min-w-0">
+                      <h1 className="text-xs sm:text-base font-bold text-white flex items-center gap-1.5 truncate">
+                        <span>{activeGroup.name}</span>
+                        {!isJoinedToActiveGroup && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleJoinGroup(activeGroup.id);
+                            }}
+                            className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-[10px] shadow-sm flex items-center gap-1 active:scale-95 transition-all shrink-0"
+                            title="Join this channel"
+                          >
+                            <Plus className="w-2.5 h-2.5" />
+                            <span>Join</span>
+                          </button>
+                        )}
+                      </h1>
+                      <p className="text-[10px] sm:text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
+                        <span>{(activeGroup.members || []).length} members</span>
+                        <span className="hidden xs:inline">• Info</span>
+                      </p>
+                    </div>
                   </div>
-                </div>
+                ) : null}
               </div>
 
               {/* Right Header Actions */}
@@ -3195,78 +3582,134 @@ export default function Home() {
                   <Search className="w-4 h-4" />
                 </button>
 
-                {/* Voice Call Button (Always visible on mobile & desktop) */}
-                <button
-                  onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                  title="Start Voice Call"
-                >
-                  <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#22C55E]" />
-                </button>
+                {isDmMode && activeDmOtherUser ? (
+                  <>
+                    {/* Share Profile Link */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (typeof window !== 'undefined') {
+                          const url = `${window.location.origin}/?user=${encodeURIComponent(activeDmOtherUser.username)}`;
+                          navigator.clipboard.writeText(url);
+                          triggerToast(`Copied @${activeDmOtherUser.username}'s profile link! 📋`);
+                        }
+                      }}
+                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                      title="Copy Profile Link"
+                    >
+                      <LinkIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-pink-400" />
+                    </button>
 
-                {/* Desktop-only: Video Call Button */}
-                <button
-                  onClick={() => startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png')}
-                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                  title="Start Video Call"
-                >
-                  <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#818CF8]" />
-                </button>
+                    {/* Voice Call Button */}
+                    <button
+                      onClick={() => startCall('audio', activeDmOtherUser.name, activeDmOtherUser.avatar)}
+                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                      title={`Call ${activeDmOtherUser.name}`}
+                    >
+                      <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#22C55E]" />
+                    </button>
 
-                {/* Desktop-only: Telegram Music Bot */}
-                <button
-                  onClick={() => setShowMusicBotModal(true)}
-                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all relative shrink-0"
-                  title="LMC Music Bot & Channel Player"
-                >
-                  <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
-                  {roomPlayback?.isPlaying && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  )}
-                </button>
+                    {/* Video Call Button */}
+                    <button
+                      onClick={() => startCall('video', activeDmOtherUser.name, activeDmOtherUser.avatar)}
+                      className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                      title={`Video Call ${activeDmOtherUser.name}`}
+                    >
+                      <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#818CF8]" />
+                    </button>
+                  </>
+                ) : activeGroup ? (
+                  <>
+                    {/* Share Channel Link Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (typeof window !== 'undefined') {
+                          const url = `${window.location.origin}/?join=${encodeURIComponent(activeGroup.id)}`;
+                          navigator.clipboard.writeText(url);
+                          triggerToast(`Copied channel invite link: #${activeGroup.name} 🔗`);
+                        }
+                      }}
+                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                      title="Copy Channel Invite Link"
+                    >
+                      <LinkIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
+                    </button>
 
-                {/* Desktop-only: Add Member Button */}
-                <button
-                  onClick={() => setShowAddMemberModal(true)}
-                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                  title={`Add Members to #${activeGroup.name}`}
-                >
-                  <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
-                </button>
+                    {/* Voice Call Button */}
+                    <button
+                      onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
+                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                      title="Start Voice Call"
+                    >
+                      <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#22C55E]" />
+                    </button>
 
-                {/* Desktop-only: Create Channel Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewGroupIsPrivate(false);
-                    setShowNewGroupModal(true);
-                  }}
-                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/30 text-indigo-300 active:scale-90 transition-all shrink-0"
-                  title="Create New Channel (+)"
-                >
-                  <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
-                </button>
+                    {/* Desktop-only: Video Call Button */}
+                    <button
+                      onClick={() => startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png')}
+                      className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                      title="Start Video Call"
+                    >
+                      <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#818CF8]" />
+                    </button>
 
-                {/* Desktop-only: Discover Channels Button */}
-                <button
-                  type="button"
-                  onClick={() => setShowDiscoverChannels(true)}
-                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                  title="Discover Public Channels"
-                >
-                  <Compass className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
-                </button>
+                    {/* Desktop-only: Telegram Music Bot */}
+                    <button
+                      onClick={() => setShowMusicBotModal(true)}
+                      className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all relative shrink-0"
+                      title="LMC Music Bot & Channel Player"
+                    >
+                      <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
+                      {roomPlayback?.isPlaying && (
+                        <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      )}
+                    </button>
 
-                {/* Desktop-only: Admin Moderation Button */}
-                {isAdminOfActiveGroup && (
-                  <button
-                    onClick={() => setShowAdminModal(true)}
-                    className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 active:scale-90 transition-all shadow-sm shrink-0"
-                    title="Admin Moderation & Ban Panel"
-                  >
-                    <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
-                  </button>
-                )}
+                    {/* Desktop-only: Add Member Button */}
+                    <button
+                      onClick={() => setShowAddMemberModal(true)}
+                      className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                      title={`Add Members to #${activeGroup.name}`}
+                    >
+                      <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
+                    </button>
+
+                    {/* Desktop-only: Create Channel Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewGroupIsPrivate(false);
+                        setShowNewGroupModal(true);
+                      }}
+                      className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/30 text-indigo-300 active:scale-90 transition-all shrink-0"
+                      title="Create New Channel (+)"
+                    >
+                      <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
+                    </button>
+
+                    {/* Desktop-only: Discover Channels Button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowDiscoverChannels(true)}
+                      className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                      title="Discover Public Channels"
+                    >
+                      <Compass className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
+                    </button>
+
+                    {/* Desktop-only: Admin Moderation Button */}
+                    {isAdminOfActiveGroup && (
+                      <button
+                        onClick={() => setShowAdminModal(true)}
+                        className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 active:scale-90 transition-all shadow-sm shrink-0"
+                        title="Admin Moderation & Ban Panel"
+                      >
+                        <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+                      </button>
+                    )}
+                  </>
+                ) : null}
 
                 {/* Mobile-only: 3-Dots More Menu Toggle */}
                 <div className="relative sm:hidden">
@@ -3289,80 +3732,140 @@ export default function Home() {
                         onClick={() => setMobileHeaderMenuOpen(false)}
                       />
                       <div className="absolute right-0 top-full mt-2 w-52 bg-[#141826] border border-white/10 rounded-2xl shadow-2xl p-2 z-50 animate-msg-in flex flex-col gap-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMobileHeaderMenuOpen(false);
-                            startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png');
-                          }}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                        >
-                          <Video className="w-4 h-4 text-indigo-400" />
-                          <span>Start Video Call</span>
-                        </button>
+                        {isDmMode && activeDmOtherUser ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                startCall('video', activeDmOtherUser.name, activeDmOtherUser.avatar);
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <Video className="w-4 h-4 text-indigo-400" />
+                              <span>Start Video Call</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                setViewingProfile(activeDmOtherUser);
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <User className="w-4 h-4 text-pink-400" />
+                              <span>View Profile & ID</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                if (typeof window !== 'undefined') {
+                                  const url = `${window.location.origin}/?user=${encodeURIComponent(activeDmOtherUser.username)}`;
+                                  navigator.clipboard.writeText(url);
+                                  triggerToast(`Copied @${activeDmOtherUser.username}'s profile link! 📋`);
+                                }
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <LinkIcon className="w-4 h-4 text-indigo-400" />
+                              <span>Copy Profile Link</span>
+                            </button>
+                          </>
+                        ) : activeGroup ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png');
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <Video className="w-4 h-4 text-indigo-400" />
+                              <span>Start Video Call</span>
+                            </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMobileHeaderMenuOpen(false);
-                            setShowMusicBotModal(true);
-                          }}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                        >
-                          <Bot className="w-4 h-4 text-purple-400" />
-                          <span>Music Bot & Player</span>
-                        </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                setShowMusicBotModal(true);
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <Bot className="w-4 h-4 text-purple-400" />
+                              <span>Music Bot & Player</span>
+                            </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMobileHeaderMenuOpen(false);
-                            setShowAddMemberModal(true);
-                          }}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                        >
-                          <UserPlus className="w-4 h-4 text-emerald-400" />
-                          <span>Add Members</span>
-                        </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                setShowAddMemberModal(true);
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <UserPlus className="w-4 h-4 text-emerald-400" />
+                              <span>Add Members</span>
+                            </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMobileHeaderMenuOpen(false);
-                            setNewGroupIsPrivate(false);
-                            setShowNewGroupModal(true);
-                          }}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                        >
-                          <Plus className="w-4 h-4 text-indigo-400" />
-                          <span>Create New Channel</span>
-                        </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                if (typeof window !== 'undefined') {
+                                  const url = `${window.location.origin}/?join=${encodeURIComponent(activeGroup.id)}`;
+                                  navigator.clipboard.writeText(url);
+                                  triggerToast(`Copied channel invite link: #${activeGroup.name} 🔗`);
+                                }
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <LinkIcon className="w-4 h-4 text-emerald-400" />
+                              <span>Copy Invite Link</span>
+                            </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMobileHeaderMenuOpen(false);
-                            setShowDiscoverChannels(true);
-                          }}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                        >
-                          <Compass className="w-4 h-4 text-amber-400" />
-                          <span>Discover Channels</span>
-                        </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                setNewGroupIsPrivate(false);
+                                setShowNewGroupModal(true);
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <Plus className="w-4 h-4 text-indigo-400" />
+                              <span>Create New Channel</span>
+                            </button>
 
-                        {isAdminOfActiveGroup && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMobileHeaderMenuOpen(false);
-                              setShowAdminModal(true);
-                            }}
-                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:bg-amber-500/10 transition-all text-left border-t border-white/5 mt-1 pt-2"
-                          >
-                            <Crown className="w-4 h-4 text-amber-400" />
-                            <span>Admin Ban & Delete</span>
-                          </button>
-                        )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                setShowDiscoverChannels(true);
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <Compass className="w-4 h-4 text-amber-400" />
+                              <span>Discover Channels</span>
+                            </button>
+
+                            {isAdminOfActiveGroup && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMobileHeaderMenuOpen(false);
+                                  setShowAdminModal(true);
+                                }}
+                                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:bg-amber-500/10 transition-all text-left border-t border-white/5 mt-1 pt-2"
+                              >
+                                <Crown className="w-4 h-4 text-amber-400" />
+                                <span>Admin Ban & Delete</span>
+                              </button>
+                            )}
+                          </>
+                        ) : null}
                       </div>
                     </>
                   )}
@@ -3434,7 +3937,7 @@ export default function Home() {
                           setMobileSearchOpen(false);
                         }}
                         className="text-[10px] font-semibold text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-600 px-2 py-1 rounded-lg transition-colors ml-2 shrink-0 flex items-center gap-1"
-                        title={`Add @${u.username} to #${activeGroup.name}`}
+                        title={activeGroup ? `Add @${u.username} to #${activeGroup.name}` : `Add @${u.username}`}
                       >
                         <UserPlus className="w-3 h-3" />
                         <span>Add</span>
@@ -3466,7 +3969,7 @@ export default function Home() {
         )}
 
         {/* Join Channel Banner if user is viewing as guest */}
-        {!isJoinedToActiveGroup && (
+        {!isDmMode && activeGroup && !isJoinedToActiveGroup && (
           <div className="bg-gradient-to-r from-indigo-950/90 via-purple-950/70 to-indigo-950/90 border-b border-indigo-500/30 px-3.5 py-2.5 flex items-center justify-between gap-2 shrink-0 animate-msg-in">
             <div className="flex items-center gap-2 min-w-0">
               <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping shrink-0" />
@@ -3953,7 +4456,7 @@ export default function Home() {
           )}
 
           {/* Read Only Channel Banner */}
-          {activeGroup.is_read_only && !isAdminOfActiveGroup && (
+          {activeGroup && activeGroup.is_read_only && !isAdminOfActiveGroup && (
             <div className="max-w-4xl mx-auto mb-2 px-3.5 py-2.5 bg-indigo-950/80 border border-indigo-500/40 rounded-2xl flex items-center gap-2.5 text-xs text-indigo-300 font-semibold animate-msg-in">
               <Lock className="w-4 h-4 text-indigo-400 shrink-0" />
               <span>This channel is in Admin Read-Only mode. Only channel admins can post.</span>
@@ -3978,7 +4481,7 @@ export default function Home() {
           )}
 
           {/* Composer Input Bar or Join Channel CTA */}
-          {!isJoinedToActiveGroup ? (
+          {!isDmMode && activeGroup && !isJoinedToActiveGroup ? (
             <div className="max-w-4xl mx-auto flex items-center justify-between p-3.5 rounded-2xl bg-[#131722] border border-[#232B3E] shadow-xl animate-msg-in">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 grid place-items-center text-indigo-400 shrink-0">
@@ -4010,7 +4513,7 @@ export default function Home() {
                   triggerToast('🚫 You are banned from sending messages in this channel');
                   return;
                 }
-                if (activeGroup.is_read_only && !isAdminOfActiveGroup) {
+                if (activeGroup?.is_read_only && !isAdminOfActiveGroup) {
                   triggerToast('🔒 Channel is in Admin Read-Only mode');
                   return;
                 }
@@ -4071,7 +4574,11 @@ export default function Home() {
               placeholder={
                 ghostModeActive
                   ? 'Ghost Mode: Burns in 10s...'
-                  : `Message #${activeGroup.name}... (try /play lofi)`
+                  : isDmMode && activeDmOtherUser
+                  ? `Message @${activeDmOtherUser.username}...`
+                  : activeGroup
+                  ? `Message #${activeGroup.name}... (try /play lofi)`
+                  : 'Type a message...'
               }
               className="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 text-base sm:text-sm text-[#E9ECF4] placeholder-[#5A6376] max-h-32 leading-relaxed no-scrollbar"
             />
@@ -4293,7 +4800,7 @@ export default function Home() {
                     ? user.avatar
                     : matchedUser?.avatar ||
                       svgToDataUrl(renderAvatarSvgString(PRESET_AVATARS[idx % PRESET_AVATARS.length].config));
-                const memberBio = matchedUser?.bio || (isCreator ? 'Squad Admin & Creator' : 'Squad Member');
+                const memberBio = matchedUser?.bio || '';
                 const memberId =
                   matchedUser?.id ||
                   (isCurrent ? user.id : `usr_${mName.toLowerCase().replace(/[^a-z0-9]/g, '')}`);

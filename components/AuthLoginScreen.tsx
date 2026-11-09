@@ -49,7 +49,7 @@ export default function AuthLoginScreen({
   // Username form states
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
-  const [bio, setBio] = useState('Living life • LMC Squad member ⚡');
+  const [bio, setBio] = useState('');
   const [avatarDataUrl, setAvatarDataUrl] = useState<string>(DEFAULT_AVATAR_DATA_URL);
   const [avatarStudioConfig, setAvatarStudioConfig] = useState<AvatarConfig>(DEFAULT_AVATAR);
   const [showAvatarStudio, setShowAvatarStudio] = useState(false);
@@ -168,7 +168,7 @@ export default function AuthLoginScreen({
         name: cleanName,
         email: email,
         avatar: avatar,
-        bio: 'Google verified member ⚡',
+        bio: '',
         provider: 'google' as const,
       };
 

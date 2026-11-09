@@ -12,6 +12,8 @@ import {
   Video,
   Check,
   ExternalLink,
+  MessageSquare,
+  Link as LinkIcon,
   Users,
   Compass,
   ArrowRight,
@@ -25,7 +27,7 @@ interface InstagramSearchModalProps {
   onClose: () => void;
   registeredUsers: UserProfile[];
   groups: Group[];
-  activeGroup: Group;
+  activeGroup?: Group | null;
   currentUserId: string;
   onSelectUser: (user: UserProfile) => void;
   onAddMemberToChannel: (user: UserProfile) => void;
@@ -33,6 +35,7 @@ interface InstagramSearchModalProps {
   onStartCall: (type: 'audio' | 'video', name: string, avatar: string) => void;
   triggerToast: (msg: string) => void;
   onSyncUsers?: (users: UserProfile[]) => void;
+  onStartDm?: (user: UserProfile) => void;
 }
 
 type SearchTab = 'all' | 'accounts' | 'channels';
@@ -50,6 +53,7 @@ export default function InstagramSearchModal({
   onStartCall,
   triggerToast,
   onSyncUsers,
+  onStartDm,
 }: InstagramSearchModalProps) {
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<SearchTab>('all');
@@ -324,6 +328,38 @@ export default function InstagramSearchModal({
                           className="flex items-center gap-1.5 self-end sm:self-center shrink-0"
                           onClick={(e) => e.stopPropagation()}
                         >
+                          {/* Direct Message (DM) */}
+                          {!isSelf && onStartDm && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onStartDm(u);
+                                onClose();
+                              }}
+                              className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 active:scale-95 transition-all"
+                              title={`Direct Message @${u.username}`}
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              <span>Message</span>
+                            </button>
+                          )}
+
+                          {/* Share Profile Link */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (typeof window !== 'undefined') {
+                                const link = `${window.location.origin}/?user=${encodeURIComponent(u.username)}`;
+                                navigator.clipboard.writeText(link);
+                                triggerToast(`Copied @${u.username}'s profile link! 📋`);
+                              }
+                            }}
+                            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-pink-400 grid place-items-center transition-all active:scale-90"
+                            title="Copy Profile Link"
+                          >
+                            <LinkIcon className="w-3.5 h-3.5" />
+                          </button>
+
                           {/* Add to Active Group */}
                           {!isSelf && activeGroup && (
                             <button
@@ -418,7 +454,7 @@ export default function InstagramSearchModal({
                     const isMember = (g.members || []).some(
                       (m) => m === currentUserId || m === `@${currentUserId}`
                     );
-                    const isCurrentActive = g.id === activeGroup.id;
+                    const isCurrentActive = Boolean(activeGroup && g.id === activeGroup.id);
 
                     return (
                       <div
