@@ -54,6 +54,8 @@ import {
   Copy,
   Trash2,
   ArrowLeft,
+  Compass,
+  Users,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured, Group, Message, BannedUser } from '@/lib/supabase';
 import { STICKERS, AVATAR_OPTIONS, FALLBACK_GIFS, EMOJI_CATEGORIES } from '@/lib/data';
@@ -64,6 +66,9 @@ import GhostBurnTimer from '@/components/GhostBurnTimer';
 import AddMemberModal from '@/components/AddMemberModal';
 import AdminModerationModal from '@/components/AdminModerationModal';
 import GoogleAuthModal from '@/components/GoogleAuthModal';
+import InstagramSearchModal from '@/components/InstagramSearchModal';
+import AuthLoginScreen from '@/components/AuthLoginScreen';
+import DiscoverChannelsModal from '@/components/DiscoverChannelsModal';
 import {
   UserProfile,
   SEED_USERS,
@@ -127,6 +132,10 @@ export default function Home() {
   const [profileBioInput, setProfileBioInput] = useState('');
   const [profileAvatarSelected, setProfileAvatarSelected] = useState(DEFAULT_AVATAR_DATA_URL);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [showInstagramSearch, setShowInstagramSearch] = useState(false);
+  const [showDiscoverChannels, setShowDiscoverChannels] = useState(false);
 
   // Global Registered Users Directory & Search
   const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>(SEED_USERS);
@@ -278,8 +287,7 @@ export default function Home() {
         if (parsed && (parsed.name || parsed.username)) {
           const rawUsername =
             parsed.username ||
-            parsed.name.toLowerCase().replace(/[^a-z0-9_]/g, '') ||
-            `user_${Math.floor(Math.random() * 1000)}`;
+            parsed.name.toLowerCase().replace(/[^a-z0-9_]/g, '');
           const normalizedUser: CurrentUser = {
             id: parsed.id || `usr_${rawUsername}`,
             username: rawUsername,
@@ -287,8 +295,11 @@ export default function Home() {
             avatar: parsed.avatar || DEFAULT_AVATAR_DATA_URL,
             bio: parsed.bio || 'Living life • LMC Squad member ⚡',
             status: parsed.status || 'online',
+            provider: parsed.provider || 'custom',
+            email: parsed.email,
           };
           setUser(normalizedUser);
+          setIsLoggedIn(true);
           setProfileNameInput(normalizedUser.name);
           setProfileUsernameInput(normalizedUser.username);
           setProfileAvatarSelected(normalizedUser.avatar);
@@ -300,14 +311,15 @@ export default function Home() {
             localStorage.setItem('lmc_registered_users', JSON.stringify(updated));
           }
         } else {
-          setShowProfileModal(true);
+          setIsLoggedIn(false);
         }
       } catch {
-        setShowProfileModal(true);
+        setIsLoggedIn(false);
       }
     } else {
-      setShowProfileModal(true);
+      setIsLoggedIn(false);
     }
+    setIsAuthChecking(false);
 
     // Load persisted Avatar Studio config
     const storedAvatarConfig = localStorage.getItem('lmc_avatar_config');
@@ -408,6 +420,53 @@ export default function Home() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('lmc_session', JSON.stringify(updated));
     }
+  };
+
+  const handleLoginSuccess = (userData: {
+    id: string;
+    username: string;
+    name: string;
+    avatar: string;
+    bio?: string;
+    provider?: 'google' | 'custom';
+    email?: string;
+  }) => {
+    const fullUser: CurrentUser = {
+      id: userData.id,
+      username: userData.username,
+      name: userData.name,
+      avatar: userData.avatar,
+      bio: userData.bio || 'Living life • LMC Squad member ⚡',
+      status: 'online',
+      provider: userData.provider || 'custom',
+      email: userData.email,
+    };
+    saveUserSession(fullUser);
+    setIsLoggedIn(true);
+    setShowProfileModal(false);
+    setProfileNameInput(fullUser.name);
+    setProfileUsernameInput(fullUser.username);
+    setProfileAvatarSelected(fullUser.avatar);
+    setProfileBioInput(fullUser.bio || '');
+
+    // Add to global registered users
+    const existing = [...registeredUsers];
+    if (!existing.some((u) => u.username.toLowerCase() === fullUser.username.toLowerCase())) {
+      existing.push(fullUser);
+      setRegisteredUsers(existing);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('lmc_registered_users', JSON.stringify(existing));
+      }
+    }
+  };
+
+  const handleLogout = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('lmc_session');
+    }
+    setIsLoggedIn(false);
+    setShowStatusMenu(false);
+    triggerToast('Logged out of LMC Chats. See you soon! 👋');
   };
 
   const savePersistedMessages = (newMessages: Message[]) => {
@@ -669,6 +728,39 @@ export default function Home() {
     const isMember = (activeGroup.members || []).some((m) => m.toLowerCase() === user.name.toLowerCase());
     return isCreator || isMember;
   }, [activeGroup, user.name]);
+
+  // Check if user is an official joined member in active channel's member list
+  const isJoinedToActiveGroup = useMemo(() => {
+    if (!activeGroup) return false;
+    const members = activeGroup.members || [];
+    const handle = (user.username || '').toLowerCase();
+    const uName = (user.name || '').toLowerCase();
+    return members.some((m) => {
+      const clean = m.toLowerCase().replace(/^@/, '');
+      return clean === handle || clean === uName;
+    });
+  }, [activeGroup?.members, user.username, user.name]);
+
+  const handleJoinGroup = (groupId: string) => {
+    const targetGroup = groups.find((g) => g.id === groupId);
+    if (!targetGroup) return;
+    const handle = user.username || user.name;
+    if (!handle) return;
+    const members = targetGroup.members || [];
+    const alreadyIn = members.some((m) => {
+      const clean = m.toLowerCase().replace(/^@/, '');
+      return clean === handle.toLowerCase() || clean === user.name.toLowerCase();
+    });
+    if (!alreadyIn) {
+      const updatedMembers = [...members, `@${handle}`];
+      const updatedGroups = groups.map((g) => (g.id === groupId ? { ...g, members: updatedMembers } : g));
+      savePersistedGroups(updatedGroups);
+      triggerToast(`Joined #${targetGroup.name}! 🎉`);
+    } else {
+      triggerToast(`Switched to #${targetGroup.name}`);
+    }
+    setActiveGroupId(groupId);
+  };
 
   const isAdminOfActiveGroup = useMemo(() => {
     if (!activeGroup || !user.name) return false;
@@ -1293,15 +1385,15 @@ export default function Home() {
     e.preventDefault();
     if (!newGroupName.trim()) return;
 
-    const creatorName = user.name || 'Anonymous';
-    const initialMembers = [creatorName];
+    const creatorHandle = user.username || user.name || 'Anonymous';
+    const initialMembers = [`@${creatorHandle}`, creatorHandle];
     if (newGroupInviteMember.trim()) {
       newGroupInviteMember
         .split(',')
-        .map((m) => m.trim())
+        .map((m) => m.trim().replace(/^@/, ''))
         .filter(Boolean)
         .forEach((m) => {
-          if (!initialMembers.includes(m)) initialMembers.push(m);
+          if (!initialMembers.includes(`@${m}`)) initialMembers.push(`@${m}`);
         });
     }
 
@@ -1310,10 +1402,11 @@ export default function Home() {
         typeof crypto !== 'undefined' && crypto.randomUUID
           ? crypto.randomUUID()
           : `group-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      name: newGroupName.trim(),
+      name: newGroupName.trim().replace(/^#/, ''),
       description: newGroupDesc.trim() || (newGroupIsPrivate ? 'Private squad room' : 'Public channel'),
       avatar: '/logo.png',
-      created_by: creatorName,
+      created_by: creatorHandle,
+      admins: [creatorHandle],
       is_private: newGroupIsPrivate,
       members: initialMembers,
       join_requests: [],
@@ -1737,6 +1830,27 @@ export default function Home() {
     const all = EMOJI_CATEGORIES.flatMap((c) => c.items);
     return all.filter((em) => em.includes(q) || true).slice(0, 70);
   }, [emojiSearch, activeEmojiCat]);
+
+  if (isAuthChecking) {
+    return (
+      <div className="flex h-screen h-[100dvh] w-full items-center justify-center bg-[#080B11]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+          <p className="text-xs text-[#7A8396]">Loading LMC Chats...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <AuthLoginScreen
+        registeredUsers={registeredUsers}
+        onLoginSuccess={handleLoginSuccess}
+        triggerToast={triggerToast}
+      />
+    );
+  }
 
   return (
     <div className="flex h-screen h-[100dvh] w-full overflow-hidden bg-[#0B0E17] text-[#E9ECF4] relative font-sans select-text">
@@ -2255,6 +2369,49 @@ export default function Home() {
         />
       )}
 
+      {/* INSTAGRAM SEARCH MODAL */}
+      {showInstagramSearch && (
+        <InstagramSearchModal
+          isOpen={showInstagramSearch}
+          onClose={() => setShowInstagramSearch(false)}
+          registeredUsers={registeredUsers}
+          groups={groups}
+          activeGroup={activeGroup}
+          currentUserId={user.username || user.id}
+          onSelectUser={(u) => {
+            setViewingProfile({
+              id: u.id,
+              username: u.username,
+              name: u.name,
+              avatar: u.avatar,
+              bio: u.bio,
+              status: u.status,
+            });
+          }}
+          onAddMemberToChannel={handleAddMemberToChannel}
+          onJoinGroup={handleJoinGroup}
+          onStartCall={startCall}
+          triggerToast={triggerToast}
+        />
+      )}
+
+      {/* DISCOVER CHANNELS MODAL */}
+      {showDiscoverChannels && (
+        <DiscoverChannelsModal
+          isOpen={showDiscoverChannels}
+          onClose={() => setShowDiscoverChannels(false)}
+          groups={groups}
+          activeGroupId={activeGroupId}
+          currentUserId={user.username || user.name}
+          onSelectGroup={(id) => setActiveGroupId(id)}
+          onJoinGroup={handleJoinGroup}
+          onOpenCreateChannel={() => {
+            setNewGroupIsPrivate(false);
+            setShowNewGroupModal(true);
+          }}
+        />
+      )}
+
       {/* CREATE NEW CHANNEL MODAL */}
       {showNewGroupModal && (
         <div className="fixed inset-0 z-[190] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
@@ -2389,6 +2546,57 @@ export default function Home() {
 
         {/* Navigation & Channel List */}
         <div className="flex-1 overflow-y-auto scroll px-2 py-2.5 space-y-4">
+          {!railCollapsed && (
+            <div className="space-y-2 mb-1">
+              {/* Instagram Search Entry Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowInstagramSearch(true);
+                  setMobileRailOpen(false);
+                }}
+                className="w-full bg-[#141826] hover:bg-[#1A2135] border border-white/10 text-left px-3 py-2 rounded-xl text-xs text-[#A8B2C7] hover:text-white flex items-center justify-between transition-all shadow-sm group"
+              >
+                <span className="flex items-center gap-2">
+                  <Search className="w-3.5 h-3.5 text-pink-400 group-hover:scale-110 transition-transform" />
+                  <span className="truncate">Search User IDs & Handles</span>
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 font-mono text-[#7A8396]">
+                  Search
+                </span>
+              </button>
+
+              {/* Action Buttons: Create Group & Discover Channels */}
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewGroupIsPrivate(false);
+                    setShowNewGroupModal(true);
+                    setMobileRailOpen(false);
+                  }}
+                  className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-2 px-2 rounded-xl text-[11px] flex items-center justify-center gap-1 shadow-md active:scale-95 transition-all truncate"
+                  title="Create New Channel"
+                >
+                  <Plus className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">+ New Group</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDiscoverChannels(true);
+                    setMobileRailOpen(false);
+                  }}
+                  className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold py-2 px-2 rounded-xl text-[11px] flex items-center justify-center gap-1 active:scale-95 transition-all truncate"
+                  title="Discover Public Channels"
+                >
+                  <Compass className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                  <span className="truncate">Discover</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Public Channels Section */}
           <div>
             {!railCollapsed ? (
@@ -2686,6 +2894,16 @@ export default function Home() {
                   <span>Admin & Ban Panel</span>
                 </button>
               )}
+
+              <div className="border-t border-white/10 my-1.5" />
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-rose-500/15 text-rose-400 font-medium transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Log Out / Switch Account</span>
+              </button>
             </div>
           )}
         </div>
@@ -2773,7 +2991,21 @@ export default function Home() {
                   </div>
                   <div className="min-w-0">
                     <h1 className="text-xs sm:text-base font-bold text-white flex items-center gap-1.5 truncate">
-                      {activeGroup.name}
+                      <span>{activeGroup.name}</span>
+                      {!isJoinedToActiveGroup && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleJoinGroup(activeGroup.id);
+                          }}
+                          className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-[10px] shadow-sm flex items-center gap-1 active:scale-95 transition-all shrink-0"
+                          title="Join this channel"
+                        >
+                          <Plus className="w-2.5 h-2.5" />
+                          <span>Join</span>
+                        </button>
+                      )}
                     </h1>
                     <p className="text-[10px] sm:text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
                       <span>{(activeGroup.members || []).length} members</span>
@@ -2785,42 +3017,38 @@ export default function Home() {
 
               {/* Right Header Actions */}
               <div className="flex items-center gap-0.5 sm:gap-1.5 shrink-0">
-                {/* Search icon button for mobile */}
+                {/* Instagram Search Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowInstagramSearch(true)}
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-pink-400 hover:text-pink-300 hover:bg-pink-500/10 active:scale-90 transition-all shrink-0"
+                  title="Instagram Search (IDs, @usernames, Channels)"
+                >
+                  <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
+
+                {/* Create Channel Button */}
                 <button
                   type="button"
                   onClick={() => {
-                    setMobileSearchOpen(true);
-                    setShowUserSearchDropdown(true);
+                    setNewGroupIsPrivate(false);
+                    setShowNewGroupModal(true);
                   }}
-                  className="sm:hidden w-8 h-8 rounded-lg grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all"
-                  title="Search"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/30 text-indigo-300 active:scale-90 transition-all shrink-0"
+                  title="Create New Channel (+)"
                 >
-                  <Search className="w-4 h-4" />
+                  <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
                 </button>
 
-                {/* Desktop Search Input with User @username & Message Search */}
-                <div className="relative hidden sm:block">
-                  <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onFocus={() => setShowUserSearchDropdown(true)}
-                    placeholder="Search @username, ID, messages..."
-                    className="bg-[#131722] border border-[#232B3E] rounded-xl pl-8 pr-7 py-1.5 text-xs text-[#E9ECF4] placeholder-[#5A6376] focus:outline-none focus:border-[#6366F1] w-44 lg:w-60 transition-all"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => {
-                        setSearchQuery('');
-                        setShowUserSearchDropdown(false);
-                      }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#7A8396] hover:text-white"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
+                {/* Discover Channels Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowDiscoverChannels(true)}
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                  title="Discover Public Channels"
+                >
+                  <Compass className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
+                </button>
 
                 {/* Admin Moderation & Ban Panel Button */}
                 {isAdminOfActiveGroup && (
@@ -2967,6 +3195,26 @@ export default function Home() {
             onOpenLounge={() => setShowMusicBotModal(true)}
             onClosePlayer={handleClosePlayer}
           />
+        )}
+
+        {/* Join Channel Banner if user is viewing as guest */}
+        {!isJoinedToActiveGroup && (
+          <div className="bg-gradient-to-r from-indigo-950/90 via-purple-950/70 to-indigo-950/90 border-b border-indigo-500/30 px-3.5 py-2.5 flex items-center justify-between gap-2 shrink-0 animate-msg-in">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping shrink-0" />
+              <p className="text-xs text-indigo-200 truncate">
+                Viewing <span className="font-bold text-white">#{activeGroup.name}</span>. Join to chat & react!
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleJoinGroup(activeGroup.id)}
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 active:scale-95 transition-all shrink-0 flex items-center gap-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Join Channel</span>
+            </button>
+          </div>
         )}
 
         {/* Message Stream */}
@@ -3461,23 +3709,48 @@ export default function Home() {
             </div>
           )}
 
-          {/* Composer Input Bar */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (isCurrentUserBanned) {
-                triggerToast('🚫 You are banned from sending messages in this channel');
-                return;
-              }
-              if (activeGroup.is_read_only && !isAdminOfActiveGroup) {
-                triggerToast('🔒 Channel is in Admin Read-Only mode');
-                return;
-              }
-              if (!inputText.trim()) return;
-              handleSendMessage(inputText, 'text');
-            }}
-            className="max-w-4xl mx-auto flex items-end gap-1.5 sm:gap-2 bg-[#131722] border border-[#232B3E] focus-within:border-[#6366F1] rounded-2xl p-1.5 sm:p-2 transition-all shadow-xl"
-          >
+          {/* Composer Input Bar or Join Channel CTA */}
+          {!isJoinedToActiveGroup ? (
+            <div className="max-w-4xl mx-auto flex items-center justify-between p-3.5 rounded-2xl bg-[#131722] border border-[#232B3E] shadow-xl animate-msg-in">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 grid place-items-center text-indigo-400 shrink-0">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm font-bold text-white truncate">
+                    Join #{activeGroup.name} to send messages
+                  </p>
+                  <p className="text-[10px] sm:text-xs text-[#7A8396] truncate">
+                    Tap join to chat with members, share photos, and send voice notes
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleJoinGroup(activeGroup.id)}
+                className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 text-white font-bold text-xs sm:text-sm shadow-md active:scale-95 transition-all shrink-0 flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Join Channel</span>
+              </button>
+            </div>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (isCurrentUserBanned) {
+                  triggerToast('🚫 You are banned from sending messages in this channel');
+                  return;
+                }
+                if (activeGroup.is_read_only && !isAdminOfActiveGroup) {
+                  triggerToast('🔒 Channel is in Admin Read-Only mode');
+                  return;
+                }
+                if (!inputText.trim()) return;
+                handleSendMessage(inputText, 'text');
+              }}
+              className="max-w-4xl mx-auto flex items-end gap-1.5 sm:gap-2 bg-[#131722] border border-[#232B3E] focus-within:border-[#6366F1] rounded-2xl p-1.5 sm:p-2 transition-all shadow-xl"
+            >
             {/* Upload Image button */}
             <label
               className="p-1.5 sm:p-2 rounded-xl text-[#A8B2C7] hover:text-white hover:bg-white/5 cursor-pointer shrink-0 active:scale-95 transition-all"
@@ -3597,6 +3870,7 @@ export default function Home() {
               </button>
             </div>
           </form>
+          )}
         </div>
       </main>
 
@@ -3645,6 +3919,17 @@ export default function Home() {
               )}
             </div>
           </div>
+
+          {/* Join Group Button if not a member yet */}
+          {!isJoinedToActiveGroup && (
+            <button
+              onClick={() => handleJoinGroup(activeGroup.id)}
+              className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 text-white font-bold text-xs py-2.5 rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Join #{activeGroup.name}</span>
+            </button>
+          )}
 
           {/* Quick Call Actions in Group */}
           <div className="flex gap-2">
