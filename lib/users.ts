@@ -90,7 +90,7 @@ export function searchUsersInstagramStyle(
       namePrefix.push(u);
       seenIds.add(u.id);
     } else if (uId.startsWith(q) || uId.startsWith(`usr_${q}`)) {
-      idPrefix.push(u);
+      idPrefixUsers: idPrefix.push(u);
       seenIds.add(u.id);
     } else if (uName.includes(q) || dName.includes(q) || uId.includes(q) || uBio.includes(q)) {
       otherMatches.push(u);

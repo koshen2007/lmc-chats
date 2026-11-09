@@ -483,10 +483,25 @@ export default function Home() {
             const msgData = await msgRes.json();
             if (msgData.messages && Array.isArray(msgData.messages)) {
               setMessages((prev) => {
+                const otherGroupMessages = prev.filter((m) => m.group_id !== activeGroupId);
+                const now = Date.now();
+                // Keep local messages for activeGroupId only if they were sent within the last 4 seconds (optimistic buffer)
+                const recentOptimistic = prev.filter(
+                  (m) =>
+                    m.group_id === activeGroupId &&
+                    now - new Date(m.created_at).getTime() < 4000
+                );
                 const map = new Map<string, Message>();
-                for (const m of prev) map.set(m.id, m);
                 for (const m of msgData.messages) map.set(m.id, m);
-                return Array.from(map.values());
+                for (const m of recentOptimistic) {
+                  if (!map.has(m.id)) map.set(m.id, m);
+                }
+                const currentGroupMerged = Array.from(map.values());
+                const all = [...otherGroupMessages, ...currentGroupMerged];
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('lmc_saved_messages', JSON.stringify(all));
+                }
+                return all;
               });
             }
           }
@@ -940,7 +955,6 @@ export default function Home() {
 
   // Check if user is an official joined member in active channel's member list
   const isJoinedToActiveGroup = useMemo(() => {
-    if (isDmMode) return true;
     if (!activeGroup) return false;
     const members = activeGroup.members || [];
     const handle = (user.username || '').toLowerCase();
@@ -949,7 +963,7 @@ export default function Home() {
       const clean = m.toLowerCase().replace(/^@/, '');
       return clean === handle || clean === uName;
     });
-  }, [isDmMode, activeGroup?.members, user.username, user.name]);
+  }, [activeGroup?.members, user.username, user.name]);
 
   const handleJoinGroup = (groupId: string) => {
     const targetGroup = groups.find((g) => g.id === groupId);
@@ -1271,7 +1285,14 @@ export default function Home() {
         } catch {}
       }
 
-      // 3. Permanently Delete from Supabase Database
+      // 3. Delete from central server API for cross-device burn sync
+      try {
+        fetch(`/api/messages?id=${encodeURIComponent(msgId)}`, {
+          method: 'DELETE',
+        }).catch(() => {});
+      } catch {}
+
+      // 4. Permanently Delete from Supabase Database
       if (isSupabaseConfigured && supabase) {
         try {
           await supabase.from('messages').delete().eq('id', msgId);
@@ -1651,6 +1672,15 @@ export default function Home() {
       channel.close();
     }
 
+    // Sync reaction update to central server API
+    try {
+      fetch('/api/messages', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: msgId, reactions: newReactions }),
+      }).catch(() => {});
+    } catch {}
+
     if (isSupabaseConfigured && supabase) {
       try {
         await supabase.from('messages').update({ reactions: newReactions }).eq('id', msgId);
@@ -1780,6 +1810,13 @@ export default function Home() {
         channel.postMessage({ type: 'DELETE_MESSAGE', payload: { id: messageId } });
         channel.close();
       }
+
+      // Delete from central server API for cross-device sync
+      try {
+        fetch(`/api/messages?id=${encodeURIComponent(messageId)}`, {
+          method: 'DELETE',
+        }).catch(() => {});
+      } catch {}
 
       if (isSupabaseConfigured && supabase) {
         try {
@@ -2302,7 +2339,7 @@ export default function Home() {
             <div className="bg-[#0D1017] border border-[#232B3E] rounded-2xl p-3 w-full mb-4 text-left">
               <p className="text-[10px] font-bold uppercase tracking-wider text-[#7A8396] mb-1">About & Bio</p>
               <p className="text-xs text-[#A8B2C7] leading-relaxed">
-                {viewingProfile.bio || 'No bio added yet'}
+                {viewingProfile.bio || 'Living life • LMC Squad member ⚡'}
               </p>
             </div>
 
@@ -2721,7 +2758,6 @@ export default function Home() {
           onAddMemberToChannel={handleAddMemberToChannel}
           onJoinGroup={handleJoinGroup}
           onStartCall={startCall}
-          onStartDm={handleStartDm}
           triggerToast={triggerToast}
           onSyncUsers={(serverList) => {
             setRegisteredUsers((prev) => {
@@ -2734,28 +2770,6 @@ export default function Home() {
               }
               return merged;
             });
-          }}
-        />
-      )}
-
-      {/* USER ONBOARDING WELCOME MODAL */}
-      {showWelcomeModal && user.name && (
-        <UserWelcomeModal
-          onClose={() => setShowWelcomeModal(false)}
-          user={{
-            id: user.id || `usr_${user.username || 'user'}`,
-            username: user.username || user.name.toLowerCase().replace(/[^a-z0-9_]/g, ''),
-            name: user.name,
-            avatar: user.avatar || '/logo.png',
-          }}
-          onCreateGroup={() => {
-            setShowWelcomeModal(false);
-            setNewGroupIsPrivate(false);
-            setShowNewGroupModal(true);
-          }}
-          onSearchUsers={() => {
-            setShowWelcomeModal(false);
-            setShowInstagramSearch(true);
           }}
         />
       )}
@@ -3232,7 +3246,7 @@ export default function Home() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-white truncate">{user.name || 'User'}</p>
-                  <p className="text-[10px] text-[#7A8396] truncate">{user.bio || (user.username ? `@${user.username}` : '')}</p>
+                  <p className="text-[10px] text-[#7A8396] truncate">{user.bio || 'LMC squad member'}</p>
                 </div>
               </div>
 
@@ -3364,7 +3378,7 @@ export default function Home() {
 
       {/* MAIN CHAT COLUMN */}
       <main className="flex-1 flex flex-col min-w-0 h-full relative bg-[#0B0E17]">
-        {!activeGroup && !isDmMode ? (
+        {!activeGroup ? (
           <div className="flex-1 flex flex-col min-w-0 h-full">
             {/* Minimal Header */}
             <header className="h-16 px-3 sm:px-5 flex items-center justify-between border-b border-[#1B212E] bg-[#0B0E17]/95 backdrop-blur-md z-10 shrink-0">
@@ -3496,78 +3510,46 @@ export default function Home() {
                   <Menu className="w-5 h-5" />
                 </button>
 
-                {/* Clickable Header: User Details (DM) or Group Details (Channel) */}
-                {isDmMode && activeDmOtherUser ? (
-                  <div
-                    onClick={() => setViewingProfile(activeDmOtherUser)}
-                    className="flex items-center gap-2 sm:gap-2.5 cursor-pointer hover:opacity-85 transition-opacity min-w-0"
-                    title="View User Profile & ID"
-                  >
-                    <div className="relative shrink-0">
-                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden bg-transparent border border-white/10 shadow-sm">
-                        <img
-                          src={activeDmOtherUser.avatar || '/logo.png'}
-                          alt={activeDmOtherUser.name}
-                          className="w-full h-full object-cover rounded-full"
-                        />
-                      </div>
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-[#0B0E17]" />
+                {/* Clickable Channel Header to view Group Details */}
+                <div
+                  onClick={() => setInfoOpen(!infoOpen)}
+                  className="flex items-center gap-2 sm:gap-2.5 cursor-pointer hover:opacity-85 transition-opacity min-w-0"
+                  title="View Channel Details & Members"
+                >
+                  <div className="relative shrink-0">
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden bg-transparent border border-white/10 shadow-sm">
+                      <img src={activeGroup.avatar || '/logo.png'} alt={activeGroup.name} className="w-full h-full object-cover rounded-full" />
                     </div>
-                    <div className="min-w-0">
-                      <h1 className="text-xs sm:text-base font-bold text-white flex items-center gap-1.5 truncate">
-                        <span>{activeDmOtherUser.name}</span>
-                      </h1>
-                      <p className="text-[10px] sm:text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
-                        <span className="text-indigo-400 font-semibold">@{activeDmOtherUser.username}</span>
-                        <span className="hidden xs:inline">• Direct Message</span>
-                      </p>
-                    </div>
+                    {activeGroup.is_private && (
+                      <span className="absolute -bottom-0.5 -right-0.5 bg-black/90 p-0.5 rounded-full text-[#F59E0B]">
+                        <Lock className="w-2.5 h-2.5" />
+                      </span>
+                    )}
                   </div>
-                ) : activeGroup ? (
-                  <div
-                    onClick={() => setInfoOpen(!infoOpen)}
-                    className="flex items-center gap-2 sm:gap-2.5 cursor-pointer hover:opacity-85 transition-opacity min-w-0"
-                    title="View Channel Details & Members"
-                  >
-                    <div className="relative shrink-0">
-                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden bg-transparent border border-white/10 shadow-sm">
-                        <img
-                          src={activeGroup.avatar || '/logo.png'}
-                          alt={activeGroup.name}
-                          className="w-full h-full object-cover rounded-full"
-                        />
-                      </div>
-                      {activeGroup.is_private && (
-                        <span className="absolute -bottom-0.5 -right-0.5 bg-black/90 p-0.5 rounded-full text-[#F59E0B]">
-                          <Lock className="w-2.5 h-2.5" />
-                        </span>
+                  <div className="min-w-0">
+                    <h1 className="text-xs sm:text-base font-bold text-white flex items-center gap-1.5 truncate">
+                      <span>{activeGroup.name}</span>
+                      {!isJoinedToActiveGroup && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleJoinGroup(activeGroup.id);
+                          }}
+                          className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-[10px] shadow-sm flex items-center gap-1 active:scale-95 transition-all shrink-0"
+                          title="Join this channel"
+                        >
+                          <Plus className="w-2.5 h-2.5" />
+                          <span>Join</span>
+                        </button>
                       )}
-                    </div>
-                    <div className="min-w-0">
-                      <h1 className="text-xs sm:text-base font-bold text-white flex items-center gap-1.5 truncate">
-                        <span>{activeGroup.name}</span>
-                        {!isJoinedToActiveGroup && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleJoinGroup(activeGroup.id);
-                            }}
-                            className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-[10px] shadow-sm flex items-center gap-1 active:scale-95 transition-all shrink-0"
-                            title="Join this channel"
-                          >
-                            <Plus className="w-2.5 h-2.5" />
-                            <span>Join</span>
-                          </button>
-                        )}
-                      </h1>
-                      <p className="text-[10px] sm:text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
-                        <span>{(activeGroup.members || []).length} members</span>
-                        <span className="hidden xs:inline">• Info</span>
-                      </p>
-                    </div>
+                    </h1>
+                    <p className="text-[10px] sm:text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
+                      <span>{(activeGroup.members || []).length} members</span>
+                      <span className="hidden xs:inline">• Info</span>
+                    </p>
                   </div>
-                ) : null}
+                </div>
               </div>
 
               {/* Right Header Actions */}
@@ -3582,134 +3564,78 @@ export default function Home() {
                   <Search className="w-4 h-4" />
                 </button>
 
-                {isDmMode && activeDmOtherUser ? (
-                  <>
-                    {/* Share Profile Link */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (typeof window !== 'undefined') {
-                          const url = `${window.location.origin}/?user=${encodeURIComponent(activeDmOtherUser.username)}`;
-                          navigator.clipboard.writeText(url);
-                          triggerToast(`Copied @${activeDmOtherUser.username}'s profile link! 📋`);
-                        }
-                      }}
-                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                      title="Copy Profile Link"
-                    >
-                      <LinkIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-pink-400" />
-                    </button>
+                {/* Voice Call Button (Always visible on mobile & desktop) */}
+                <button
+                  onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                  title="Start Voice Call"
+                >
+                  <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#22C55E]" />
+                </button>
 
-                    {/* Voice Call Button */}
-                    <button
-                      onClick={() => startCall('audio', activeDmOtherUser.name, activeDmOtherUser.avatar)}
-                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                      title={`Call ${activeDmOtherUser.name}`}
-                    >
-                      <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#22C55E]" />
-                    </button>
+                {/* Desktop-only: Video Call Button */}
+                <button
+                  onClick={() => startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png')}
+                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                  title="Start Video Call"
+                >
+                  <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#818CF8]" />
+                </button>
 
-                    {/* Video Call Button */}
-                    <button
-                      onClick={() => startCall('video', activeDmOtherUser.name, activeDmOtherUser.avatar)}
-                      className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                      title={`Video Call ${activeDmOtherUser.name}`}
-                    >
-                      <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#818CF8]" />
-                    </button>
-                  </>
-                ) : activeGroup ? (
-                  <>
-                    {/* Share Channel Link Button */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (typeof window !== 'undefined') {
-                          const url = `${window.location.origin}/?join=${encodeURIComponent(activeGroup.id)}`;
-                          navigator.clipboard.writeText(url);
-                          triggerToast(`Copied channel invite link: #${activeGroup.name} 🔗`);
-                        }
-                      }}
-                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                      title="Copy Channel Invite Link"
-                    >
-                      <LinkIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
-                    </button>
+                {/* Desktop-only: Telegram Music Bot */}
+                <button
+                  onClick={() => setShowMusicBotModal(true)}
+                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all relative shrink-0"
+                  title="LMC Music Bot & Channel Player"
+                >
+                  <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
+                  {roomPlayback?.isPlaying && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  )}
+                </button>
 
-                    {/* Voice Call Button */}
-                    <button
-                      onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
-                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                      title="Start Voice Call"
-                    >
-                      <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#22C55E]" />
-                    </button>
+                {/* Desktop-only: Add Member Button */}
+                <button
+                  onClick={() => setShowAddMemberModal(true)}
+                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                  title={`Add Members to #${activeGroup.name}`}
+                >
+                  <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
+                </button>
 
-                    {/* Desktop-only: Video Call Button */}
-                    <button
-                      onClick={() => startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png')}
-                      className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                      title="Start Video Call"
-                    >
-                      <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#818CF8]" />
-                    </button>
+                {/* Desktop-only: Create Channel Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewGroupIsPrivate(false);
+                    setShowNewGroupModal(true);
+                  }}
+                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/30 text-indigo-300 active:scale-90 transition-all shrink-0"
+                  title="Create New Channel (+)"
+                >
+                  <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
+                </button>
 
-                    {/* Desktop-only: Telegram Music Bot */}
-                    <button
-                      onClick={() => setShowMusicBotModal(true)}
-                      className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all relative shrink-0"
-                      title="LMC Music Bot & Channel Player"
-                    >
-                      <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
-                      {roomPlayback?.isPlaying && (
-                        <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                      )}
-                    </button>
+                {/* Desktop-only: Discover Channels Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowDiscoverChannels(true)}
+                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                  title="Discover Public Channels"
+                >
+                  <Compass className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
+                </button>
 
-                    {/* Desktop-only: Add Member Button */}
-                    <button
-                      onClick={() => setShowAddMemberModal(true)}
-                      className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                      title={`Add Members to #${activeGroup.name}`}
-                    >
-                      <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
-                    </button>
-
-                    {/* Desktop-only: Create Channel Button */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewGroupIsPrivate(false);
-                        setShowNewGroupModal(true);
-                      }}
-                      className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/30 text-indigo-300 active:scale-90 transition-all shrink-0"
-                      title="Create New Channel (+)"
-                    >
-                      <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
-                    </button>
-
-                    {/* Desktop-only: Discover Channels Button */}
-                    <button
-                      type="button"
-                      onClick={() => setShowDiscoverChannels(true)}
-                      className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                      title="Discover Public Channels"
-                    >
-                      <Compass className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
-                    </button>
-
-                    {/* Desktop-only: Admin Moderation Button */}
-                    {isAdminOfActiveGroup && (
-                      <button
-                        onClick={() => setShowAdminModal(true)}
-                        className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 active:scale-90 transition-all shadow-sm shrink-0"
-                        title="Admin Moderation & Ban Panel"
-                      >
-                        <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
-                      </button>
-                    )}
-                  </>
-                ) : null}
+                {/* Desktop-only: Admin Moderation Button */}
+                {isAdminOfActiveGroup && (
+                  <button
+                    onClick={() => setShowAdminModal(true)}
+                    className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 active:scale-90 transition-all shadow-sm shrink-0"
+                    title="Admin Moderation & Ban Panel"
+                  >
+                    <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+                  </button>
+                )}
 
                 {/* Mobile-only: 3-Dots More Menu Toggle */}
                 <div className="relative sm:hidden">
@@ -3732,140 +3658,80 @@ export default function Home() {
                         onClick={() => setMobileHeaderMenuOpen(false)}
                       />
                       <div className="absolute right-0 top-full mt-2 w-52 bg-[#141826] border border-white/10 rounded-2xl shadow-2xl p-2 z-50 animate-msg-in flex flex-col gap-1">
-                        {isDmMode && activeDmOtherUser ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileHeaderMenuOpen(false);
-                                startCall('video', activeDmOtherUser.name, activeDmOtherUser.avatar);
-                              }}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                            >
-                              <Video className="w-4 h-4 text-indigo-400" />
-                              <span>Start Video Call</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileHeaderMenuOpen(false);
-                                setViewingProfile(activeDmOtherUser);
-                              }}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                            >
-                              <User className="w-4 h-4 text-pink-400" />
-                              <span>View Profile & ID</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileHeaderMenuOpen(false);
-                                if (typeof window !== 'undefined') {
-                                  const url = `${window.location.origin}/?user=${encodeURIComponent(activeDmOtherUser.username)}`;
-                                  navigator.clipboard.writeText(url);
-                                  triggerToast(`Copied @${activeDmOtherUser.username}'s profile link! 📋`);
-                                }
-                              }}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                            >
-                              <LinkIcon className="w-4 h-4 text-indigo-400" />
-                              <span>Copy Profile Link</span>
-                            </button>
-                          </>
-                        ) : activeGroup ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileHeaderMenuOpen(false);
-                                startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png');
-                              }}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                            >
-                              <Video className="w-4 h-4 text-indigo-400" />
-                              <span>Start Video Call</span>
-                            </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMobileHeaderMenuOpen(false);
+                            startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png');
+                          }}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                        >
+                          <Video className="w-4 h-4 text-indigo-400" />
+                          <span>Start Video Call</span>
+                        </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileHeaderMenuOpen(false);
-                                setShowMusicBotModal(true);
-                              }}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                            >
-                              <Bot className="w-4 h-4 text-purple-400" />
-                              <span>Music Bot & Player</span>
-                            </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMobileHeaderMenuOpen(false);
+                            setShowMusicBotModal(true);
+                          }}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                        >
+                          <Bot className="w-4 h-4 text-purple-400" />
+                          <span>Music Bot & Player</span>
+                        </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileHeaderMenuOpen(false);
-                                setShowAddMemberModal(true);
-                              }}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                            >
-                              <UserPlus className="w-4 h-4 text-emerald-400" />
-                              <span>Add Members</span>
-                            </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMobileHeaderMenuOpen(false);
+                            setShowAddMemberModal(true);
+                          }}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                        >
+                          <UserPlus className="w-4 h-4 text-emerald-400" />
+                          <span>Add Members</span>
+                        </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileHeaderMenuOpen(false);
-                                if (typeof window !== 'undefined') {
-                                  const url = `${window.location.origin}/?join=${encodeURIComponent(activeGroup.id)}`;
-                                  navigator.clipboard.writeText(url);
-                                  triggerToast(`Copied channel invite link: #${activeGroup.name} 🔗`);
-                                }
-                              }}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                            >
-                              <LinkIcon className="w-4 h-4 text-emerald-400" />
-                              <span>Copy Invite Link</span>
-                            </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMobileHeaderMenuOpen(false);
+                            setNewGroupIsPrivate(false);
+                            setShowNewGroupModal(true);
+                          }}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                        >
+                          <Plus className="w-4 h-4 text-indigo-400" />
+                          <span>Create New Channel</span>
+                        </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileHeaderMenuOpen(false);
-                                setNewGroupIsPrivate(false);
-                                setShowNewGroupModal(true);
-                              }}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                            >
-                              <Plus className="w-4 h-4 text-indigo-400" />
-                              <span>Create New Channel</span>
-                            </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMobileHeaderMenuOpen(false);
+                            setShowDiscoverChannels(true);
+                          }}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                        >
+                          <Compass className="w-4 h-4 text-amber-400" />
+                          <span>Discover Channels</span>
+                        </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileHeaderMenuOpen(false);
-                                setShowDiscoverChannels(true);
-                              }}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                            >
-                              <Compass className="w-4 h-4 text-amber-400" />
-                              <span>Discover Channels</span>
-                            </button>
-
-                            {isAdminOfActiveGroup && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setMobileHeaderMenuOpen(false);
-                                  setShowAdminModal(true);
-                                }}
-                                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:bg-amber-500/10 transition-all text-left border-t border-white/5 mt-1 pt-2"
-                              >
-                                <Crown className="w-4 h-4 text-amber-400" />
-                                <span>Admin Ban & Delete</span>
-                              </button>
-                            )}
-                          </>
-                        ) : null}
+                        {isAdminOfActiveGroup && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMobileHeaderMenuOpen(false);
+                              setShowAdminModal(true);
+                            }}
+                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:bg-amber-500/10 transition-all text-left border-t border-white/5 mt-1 pt-2"
+                          >
+                            <Crown className="w-4 h-4 text-amber-400" />
+                            <span>Admin Ban & Delete</span>
+                          </button>
+                        )}
                       </div>
                     </>
                   )}
@@ -3937,7 +3803,7 @@ export default function Home() {
                           setMobileSearchOpen(false);
                         }}
                         className="text-[10px] font-semibold text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-600 px-2 py-1 rounded-lg transition-colors ml-2 shrink-0 flex items-center gap-1"
-                        title={activeGroup ? `Add @${u.username} to #${activeGroup.name}` : `Add @${u.username}`}
+                        title={`Add @${u.username} to #${activeGroup.name}`}
                       >
                         <UserPlus className="w-3 h-3" />
                         <span>Add</span>
@@ -3969,7 +3835,7 @@ export default function Home() {
         )}
 
         {/* Join Channel Banner if user is viewing as guest */}
-        {!isDmMode && activeGroup && !isJoinedToActiveGroup && (
+        {!isJoinedToActiveGroup && (
           <div className="bg-gradient-to-r from-indigo-950/90 via-purple-950/70 to-indigo-950/90 border-b border-indigo-500/30 px-3.5 py-2.5 flex items-center justify-between gap-2 shrink-0 animate-msg-in">
             <div className="flex items-center gap-2 min-w-0">
               <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping shrink-0" />
@@ -4173,7 +4039,8 @@ export default function Home() {
                         e.stopPropagation();
                         const rect = e.currentTarget.getBoundingClientRect();
                         const screenW = typeof window !== 'undefined' ? window.innerWidth : 360;
-                        const popWidth = 288;
+                        const screenH = typeof window !== 'undefined' ? window.innerHeight : 640;
+                        const popWidth = Math.min(screenW - 16, 296);
                         const pad = 8;
                         // On mobile: center horizontally relative to clicked button, clamped within viewport
                         let left = rect.left - 100;
@@ -4186,6 +4053,9 @@ export default function Home() {
                         let top = rect.top - 46;
                         if (top < 65) {
                           top = rect.bottom + 8;
+                        }
+                        if (top > screenH - 60) {
+                          top = Math.max(70, screenH - 70);
                         }
                         setReactionPopCoords({ x: left, y: top });
                         setReactionPopForMsg(reactionPopForMsg === msg.id ? null : msg.id);
@@ -4228,7 +4098,7 @@ export default function Home() {
                 left: `${reactionPopCoords.x}px`,
                 maxWidth: 'calc(100vw - 16px)',
               }}
-              className="fixed z-50 flex items-center gap-1 sm:gap-1.5 bg-[#141824]/95 backdrop-blur-xl border border-white/15 p-1.5 rounded-2xl shadow-2xl animate-pop-in touch-manipulation select-none"
+              className="fixed z-50 flex items-center gap-1 sm:gap-1.5 bg-[#141824]/95 backdrop-blur-xl border border-white/15 p-1.5 rounded-2xl shadow-2xl animate-pop-in touch-manipulation select-none overflow-x-auto no-scrollbar"
               onClick={(e) => e.stopPropagation()}
             >
               {['🔥', '😂', '❤️', '👍', '🎉', '👀', '💯', '🚀'].map((em) => (
@@ -4238,7 +4108,7 @@ export default function Home() {
                     handleToggleReaction(reactionPopForMsg, em);
                     setReactionPopForMsg(null);
                   }}
-                  className="w-8 h-8 rounded-xl hover:bg-white/10 active:bg-white/25 active:scale-125 grid place-items-center text-lg sm:text-base transition-transform select-none touch-manipulation"
+                  className="w-8 h-8 shrink-0 rounded-xl hover:bg-white/10 active:bg-white/25 active:scale-125 grid place-items-center text-lg sm:text-base transition-transform select-none touch-manipulation"
                 >
                   {em}
                 </button>
@@ -4456,7 +4326,7 @@ export default function Home() {
           )}
 
           {/* Read Only Channel Banner */}
-          {activeGroup && activeGroup.is_read_only && !isAdminOfActiveGroup && (
+          {activeGroup.is_read_only && !isAdminOfActiveGroup && (
             <div className="max-w-4xl mx-auto mb-2 px-3.5 py-2.5 bg-indigo-950/80 border border-indigo-500/40 rounded-2xl flex items-center gap-2.5 text-xs text-indigo-300 font-semibold animate-msg-in">
               <Lock className="w-4 h-4 text-indigo-400 shrink-0" />
               <span>This channel is in Admin Read-Only mode. Only channel admins can post.</span>
@@ -4481,7 +4351,7 @@ export default function Home() {
           )}
 
           {/* Composer Input Bar or Join Channel CTA */}
-          {!isDmMode && activeGroup && !isJoinedToActiveGroup ? (
+          {!isJoinedToActiveGroup ? (
             <div className="max-w-4xl mx-auto flex items-center justify-between p-3.5 rounded-2xl bg-[#131722] border border-[#232B3E] shadow-xl animate-msg-in">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 grid place-items-center text-indigo-400 shrink-0">
@@ -4574,11 +4444,7 @@ export default function Home() {
               placeholder={
                 ghostModeActive
                   ? 'Ghost Mode: Burns in 10s...'
-                  : isDmMode && activeDmOtherUser
-                  ? `Message @${activeDmOtherUser.username}...`
-                  : activeGroup
-                  ? `Message #${activeGroup.name}... (try /play lofi)`
-                  : 'Type a message...'
+                  : `Message #${activeGroup.name}... (try /play lofi)`
               }
               className="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 text-base sm:text-sm text-[#E9ECF4] placeholder-[#5A6376] max-h-32 leading-relaxed no-scrollbar"
             />
@@ -4800,7 +4666,7 @@ export default function Home() {
                     ? user.avatar
                     : matchedUser?.avatar ||
                       svgToDataUrl(renderAvatarSvgString(PRESET_AVATARS[idx % PRESET_AVATARS.length].config));
-                const memberBio = matchedUser?.bio || '';
+                const memberBio = matchedUser?.bio || (isCreator ? 'Squad Admin & Creator' : 'Squad Member');
                 const memberId =
                   matchedUser?.id ||
                   (isCurrent ? user.id : `usr_${mName.toLowerCase().replace(/[^a-z0-9]/g, '')}`);

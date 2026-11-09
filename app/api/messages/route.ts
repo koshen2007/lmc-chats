@@ -112,7 +112,8 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    if (!body || !body.content?.trim() || !body.group_id) {
+    const hasContent = Boolean(body.content?.trim() || body.media_url || (body.msg_type && body.msg_type !== 'text'));
+    if (!body || !body.group_id || !hasContent) {
       return NextResponse.json(
         { success: false, error: 'Invalid message payload' },
         { status: 400 }
@@ -126,7 +127,7 @@ export async function POST(request: Request) {
       sender_username: body.sender_username,
       sender_avatar: body.sender_avatar || '',
       sender_bio: body.sender_bio,
-      content: body.content.trim(),
+      content: (body.content || '').trim(),
       msg_type: body.msg_type || 'text',
       media_url: body.media_url,
       reactions: body.reactions || {},
@@ -182,3 +183,47 @@ export async function DELETE(request: Request) {
     );
   }
 }
+
+// PATCH /api/messages (update reactions, content, etc.)
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    if (!body || !body.id) {
+      return NextResponse.json(
+        { success: false, error: 'Message ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const current = getMessages();
+    let targetMessage: ApiMessage | null = null;
+    const updated = current.map((m) => {
+      if (m.id === body.id) {
+        let newReactions = { ...(m.reactions || {}) };
+        if (body.reactions !== undefined) {
+          newReactions = body.reactions;
+        } else if (body.emoji) {
+          const curCount = typeof newReactions[body.emoji] === 'number' ? newReactions[body.emoji] : 0;
+          newReactions[body.emoji] = curCount + 1;
+        }
+        const updatedMsg = {
+          ...m,
+          reactions: newReactions,
+          content: body.content !== undefined ? body.content : m.content,
+        };
+        targetMessage = updatedMsg;
+        return updatedMsg;
+      }
+      return m;
+    });
+
+    saveMessages(updated);
+    return NextResponse.json({ success: true, id: body.id, message: targetMessage });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { success: false, error: (err as Error).message },
+      { status: 500 }
+    );
+  }
+}
+

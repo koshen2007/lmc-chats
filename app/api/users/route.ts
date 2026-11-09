@@ -161,7 +161,7 @@ export async function POST(request: Request) {
       avatar:
         body.avatar ||
         `https://api.dicebear.com/7.x/notionists/svg?seed=${rawUsername}&backgroundColor=b6e3f4,c0aede,d1d4f9`,
-      bio: body.bio || '',
+      bio: body.bio || 'Living life • LMC Squad member ⚡',
       status: body.status || 'online',
       role: body.role || 'user',
       provider: body.provider || 'custom',

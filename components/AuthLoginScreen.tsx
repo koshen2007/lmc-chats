@@ -358,18 +358,54 @@ export default function AuthLoginScreen({
                 />
               </div>
               {username && (
-                <p
-                  className={`text-[11px] font-semibold flex items-center gap-1 mt-1 px-1 ${
-                    usernameCheck.available ? 'text-emerald-400' : 'text-rose-400'
-                  }`}
-                >
-                  {usernameCheck.available ? (
-                    <Check className="w-3 h-3 text-emerald-400" />
-                  ) : (
-                    <X className="w-3 h-3 text-rose-400" />
-                  )}
-                  <span>{usernameCheck.message}</span>
-                </p>
+                <div className="space-y-2 mt-1.5">
+                  <p
+                    className={`text-[11px] font-semibold flex items-center gap-1 px-1 ${
+                      usernameCheck.available ? 'text-emerald-400' : 'text-rose-400'
+                    }`}
+                  >
+                    {usernameCheck.available ? (
+                      <Check className="w-3 h-3 text-emerald-400" />
+                    ) : (
+                      <X className="w-3 h-3 text-rose-400" />
+                    )}
+                    <span>{usernameCheck.message}</span>
+                  </p>
+
+                  {/* If user already registered, allow instant 1-click Sign In */}
+                  {!usernameCheck.available && (() => {
+                    const clean = username.trim().toLowerCase().replace(/^@/, '');
+                    const existing = registeredUsers.find(
+                      (u) => u.username.toLowerCase() === clean
+                    );
+                    if (!existing) return null;
+                    return (
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-indigo-950/50 border border-indigo-500/40 text-xs">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <img
+                            src={existing.avatar}
+                            alt={existing.name}
+                            className="w-7 h-7 rounded-full bg-black/40 border border-white/20 shrink-0 object-cover"
+                          />
+                          <div className="min-w-0">
+                            <p className="text-white font-bold text-xs truncate">{existing.name}</p>
+                            <p className="text-[10px] text-indigo-300">Account already registered</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onLoginSuccess(existing);
+                            triggerToast(`Welcome back, @${existing.username}! 🚀`);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition-all shrink-0"
+                        >
+                          Sign In
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </div>
               )}
             </div>
 
