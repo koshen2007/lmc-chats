@@ -43,6 +43,18 @@ async function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function safeFetch(url, options = {}, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await globalThis.fetch(url, options);
+      return res;
+    } catch (e) {
+      if (i === retries - 1) throw e;
+      await sleep(600);
+    }
+  }
+}
+
 async function runAutonomousTests() {
   console.log(`\n============================================================`);
   console.log(`🤖 AUTONOMOUS MULTI-USER VERIFICATION (ALPHA <-> BETA)`);
@@ -59,7 +71,7 @@ async function runAutonomousTests() {
     // TEST 1: Register User Alpha & User Beta
     // ----------------------------------------------------
     console.log(`[TEST 1] 📝 Registering User Alpha & User Beta...`);
-    const regAlphaRes = await fetch(`${BASE_URL}/api/users`, {
+    const regAlphaRes = await safeFetch(`${BASE_URL}/api/users`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(USER_ALPHA),
@@ -67,7 +79,7 @@ async function runAutonomousTests() {
     const regAlphaData = await regAlphaRes.json();
     console.log(`  Alpha Registration: HTTP ${regAlphaRes.status} -> success:`, regAlphaData.success);
 
-    const regBetaRes = await fetch(`${BASE_URL}/api/users`, {
+    const regBetaRes = await safeFetch(`${BASE_URL}/api/users`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(USER_BETA),
@@ -85,7 +97,7 @@ async function runAutonomousTests() {
     // ----------------------------------------------------
     console.log(`[TEST 2] 🟢 Heartbeat & Presence Detection...`);
     // Alpha heartbeat
-    const alphaHeartbeat = await fetch(`${BASE_URL}/api/presence`, {
+    const alphaHeartbeat = await safeFetch(`${BASE_URL}/api/presence`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -98,7 +110,7 @@ async function runAutonomousTests() {
     console.log(`  Alpha Heartbeat: HTTP ${alphaHeartbeat.status} -> is_online:`, alphaHData.is_online);
 
     // Beta heartbeat
-    const betaHeartbeat = await fetch(`${BASE_URL}/api/presence`, {
+    const betaHeartbeat = await safeFetch(`${BASE_URL}/api/presence`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -111,7 +123,7 @@ async function runAutonomousTests() {
     console.log(`  Beta Heartbeat:  HTTP ${betaHeartbeat.status} -> is_online:`, betaHData.is_online);
 
     // Check directory presence query
-    const presenceCheck = await fetch(`${BASE_URL}/api/presence?users=${USER_ALPHA.username},${USER_BETA.username}`);
+    const presenceCheck = await safeFetch(`${BASE_URL}/api/presence?users=${USER_ALPHA.username},${USER_BETA.username}`);
     const presenceCheckData = await presenceCheck.json();
     console.log(`  Presence Query Result:`, presenceCheckData.presence);
 
@@ -142,7 +154,7 @@ async function runAutonomousTests() {
       read_by: [USER_ALPHA.username],
     };
 
-    const sendMsg1 = await fetch(`${BASE_URL}/api/messages`, {
+    const sendMsg1 = await safeFetch(`${BASE_URL}/api/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(msgAlphaToBeta),
@@ -172,7 +184,7 @@ async function runAutonomousTests() {
       },
     };
 
-    const sendMsg2 = await fetch(`${BASE_URL}/api/messages`, {
+    const sendMsg2 = await safeFetch(`${BASE_URL}/api/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(msgBetaReply),
@@ -182,7 +194,7 @@ async function runAutonomousTests() {
     console.log(`  Beta sent Quoted Reply: HTTP ${sendMsg2.status} -> ID: ${msgBetaReply.id}`);
 
     // 3c: Alpha marks Beta's message as read (Read receipts / Double Blue Ticks)
-    const markReadRes = await fetch(`${BASE_URL}/api/messages`, {
+    const markReadRes = await safeFetch(`${BASE_URL}/api/messages`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -209,7 +221,7 @@ async function runAutonomousTests() {
       read_by: [USER_BETA.username],
     };
 
-    const sendVoiceRes = await fetch(`${BASE_URL}/api/messages`, {
+    const sendVoiceRes = await safeFetch(`${BASE_URL}/api/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(voiceNoteMsg),
@@ -219,7 +231,7 @@ async function runAutonomousTests() {
     console.log(`  Beta sent Voice Note: HTTP ${sendVoiceRes.status} -> ID: ${voiceNoteMsg.id}`);
 
     // Fetch conversation messages
-    const fetchDmMessagesRes = await fetch(`${BASE_URL}/api/messages?group_id=${encodeURIComponent(DM_ROOM_ID)}`);
+    const fetchDmMessagesRes = await safeFetch(`${BASE_URL}/api/messages?group_id=${encodeURIComponent(DM_ROOM_ID)}`);
     const fetchDmMessagesData = await fetchDmMessagesRes.json();
     const roomMsgs = fetchDmMessagesData.messages || [];
     console.log(`  Total Messages in DM Room: ${roomMsgs.length}`);
@@ -246,7 +258,7 @@ async function runAutonomousTests() {
       views: [],
     };
 
-    const postStoryRes = await fetch(`${BASE_URL}/api/stories`, {
+    const postStoryRes = await safeFetch(`${BASE_URL}/api/stories`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ story: testStory }),
@@ -256,13 +268,13 @@ async function runAutonomousTests() {
     console.log(`  Alpha posted Status: HTTP ${postStoryRes.status} -> ID: ${testStory.id}`);
 
     // Beta fetches stories
-    const getStoriesRes = await fetch(`${BASE_URL}/api/stories`);
+    const getStoriesRes = await safeFetch(`${BASE_URL}/api/stories`);
     const getStoriesData = await getStoriesRes.json();
     const hasAlphaStory = (getStoriesData.stories || []).some((s) => s.id === testStory.id);
     console.log(`  Beta fetched Stories: Found Alpha story ->`, hasAlphaStory);
 
     // Beta marks story as viewed
-    const markViewRes = await fetch(`${BASE_URL}/api/stories`, {
+    const markViewRes = await safeFetch(`${BASE_URL}/api/stories`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ storyId: testStory.id, viewerUsername: USER_BETA.username }),
@@ -277,7 +289,7 @@ async function runAutonomousTests() {
     // ----------------------------------------------------
     console.log(`[TEST 5] 📞 WebRTC Voice Call (Alpha calling Beta)...`);
     // 5a: Alpha initiates call
-    const initiateCallRes = await fetch(`${BASE_URL}/api/calls`, {
+    const initiateCallRes = await safeFetch(`${BASE_URL}/api/calls`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -296,7 +308,7 @@ async function runAutonomousTests() {
     console.log(`  Alpha initiated Voice Call: HTTP ${initiateCallRes.status} -> Call ID: ${call?.id}, status: ${call?.status}`);
 
     // 5b: Beta polls incoming calls for their username
-    const betaIncomingCallRes = await fetch(`${BASE_URL}/api/calls?user=${USER_BETA.username}`);
+    const betaIncomingCallRes = await safeFetch(`${BASE_URL}/api/calls?user=${USER_BETA.username}`);
     const betaIncomingCallData = await betaIncomingCallRes.json();
     const incoming = betaIncomingCallData.incomingCall;
     console.log(`  Beta detected incoming call:`, incoming?.id === call?.id ? 'RINGING 🔔' : 'NOT FOUND');
@@ -306,7 +318,7 @@ async function runAutonomousTests() {
     }
 
     // 5c: Beta accepts the call with SDP Answer
-    const acceptCallRes = await fetch(`${BASE_URL}/api/calls`, {
+    const acceptCallRes = await safeFetch(`${BASE_URL}/api/calls`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -319,7 +331,7 @@ async function runAutonomousTests() {
     console.log(`  Beta accepted Call: HTTP ${acceptCallRes.status} -> status: ${acceptCallData.call?.status}`);
 
     // 5d: ICE Candidates Exchange (Simulating Audio P2P WebRTC Handshake)
-    const iceAlphaRes = await fetch(`${BASE_URL}/api/calls`, {
+    const iceAlphaRes = await safeFetch(`${BASE_URL}/api/calls`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -330,7 +342,7 @@ async function runAutonomousTests() {
     });
     console.log(`  Alpha ICE Candidate exchanged: HTTP ${iceAlphaRes.status}`);
 
-    const iceBetaRes = await fetch(`${BASE_URL}/api/calls`, {
+    const iceBetaRes = await safeFetch(`${BASE_URL}/api/calls`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -346,7 +358,7 @@ async function runAutonomousTests() {
     await sleep(2000);
 
     // 5e: End Call
-    const endCallRes = await fetch(`${BASE_URL}/api/calls`, {
+    const endCallRes = await safeFetch(`${BASE_URL}/api/calls`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -373,7 +385,7 @@ async function runAutonomousTests() {
     // Clean test messages
     for (const msgId of createdMsgIds) {
       try {
-        await fetch(`${BASE_URL}/api/messages?id=${msgId}`, { method: 'DELETE' });
+        await safeFetch(`${BASE_URL}/api/messages?id=${msgId}`, { method: 'DELETE' });
       } catch {}
     }
     console.log(`  Deleted ${createdMsgIds.length} test messages.`);
@@ -381,7 +393,7 @@ async function runAutonomousTests() {
     // Clean test story
     if (createdStoryId) {
       try {
-        await fetch(`${BASE_URL}/api/stories?id=${createdStoryId}&username=${USER_ALPHA.username}`, {
+        await safeFetch(`${BASE_URL}/api/stories?id=${createdStoryId}&username=${USER_ALPHA.username}`, {
           method: 'DELETE',
         });
         console.log(`  Deleted test story: ${createdStoryId}`);
@@ -390,9 +402,9 @@ async function runAutonomousTests() {
 
     // Clean test users
     try {
-      await fetch(`${BASE_URL}/api/users?username=${USER_ALPHA.username}`, { method: 'DELETE' });
+      await safeFetch(`${BASE_URL}/api/users?username=${USER_ALPHA.username}`, { method: 'DELETE' });
       console.log(`  Deleted test user: @${USER_ALPHA.username}`);
-      await fetch(`${BASE_URL}/api/users?username=${USER_BETA.username}`, { method: 'DELETE' });
+      await safeFetch(`${BASE_URL}/api/users?username=${USER_BETA.username}`, { method: 'DELETE' });
       console.log(`  Deleted test user: @${USER_BETA.username}`);
     } catch {}
 

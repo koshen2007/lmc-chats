@@ -151,7 +151,7 @@ export async function POST(request: Request) {
     }
 
     // 2. ANSWER CALL (Receiver accepts call with answer SDP)
-    if (action === 'answer') {
+    if (action === 'answer' || action === 'accept') {
       const { call_id, answer } = body;
       const session = store.get(call_id);
       if (!session) {
@@ -235,7 +235,7 @@ export async function POST(request: Request) {
           ).catch(() => {});
         }
       }
-      return NextResponse.json({ success: true, duration });
+      return NextResponse.json({ success: true, duration, call: session });
     }
 
     return NextResponse.json({ success: false, error: 'Unknown action' }, { status: 400 });
