@@ -252,3 +252,38 @@ export async function POST(request: Request) {
   }
 }
 
+// DELETE /api/users?username=... or ?id=...
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const username = (searchParams.get('username') || '').trim().toLowerCase().replace(/^@/, '');
+    const id = (searchParams.get('id') || '').trim();
+
+    if (!username && !id) {
+      return NextResponse.json({ success: false, error: 'username or id required' }, { status: 400 });
+    }
+
+    const currentUsers = loadUsers();
+    const filtered = currentUsers.filter((u) => {
+      if (username && u.username.toLowerCase() === username) return false;
+      if (id && u.id === id) return false;
+      return true;
+    });
+
+    saveUsers(filtered);
+
+    const sb = getSupabaseServerClient();
+    if (sb) {
+      if (username) {
+        Promise.resolve(sb.from('users').delete().eq('username', username)).catch(() => {});
+      } else if (id) {
+        Promise.resolve(sb.from('users').delete().eq('id', id)).catch(() => {});
+      }
+    }
+
+    return NextResponse.json({ success: true, remaining: filtered.length });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err?.message }, { status: 500 });
+  }
+}
+

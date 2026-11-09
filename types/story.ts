@@ -20,3 +20,4 @@ export const STORY_GRADIENTS = [
   { name: 'Neon Flame', value: 'from-orange-600 via-red-600 to-pink-600' },
   { name: 'Electric Violet', value: 'from-purple-800 via-violet-600 to-indigo-900' },
 ];
+

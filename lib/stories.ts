@@ -97,3 +97,4 @@ export async function markStoryAsViewed(storyId: string, viewerUsername: string)
     saveLocalStories(stories);
   }
 }
+
