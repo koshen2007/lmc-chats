@@ -30,7 +30,19 @@ export interface ApiMessage {
   sender_avatar: string;
   sender_bio?: string;
   content: string;
-  msg_type: 'text' | 'sticker' | 'gif' | 'image' | 'audio' | 'music_bot';
+  msg_type:
+    | 'text'
+    | 'sticker'
+    | 'gif'
+    | 'image'
+    | 'audio'
+    | 'music_bot'
+    | 'poll'
+    | 'bunk_meter'
+    | 'confession'
+    | 'whisper'
+    | 'roast'
+    | 'decision';
   media_url?: string;
   reactions: Record<string, number>;
   created_at: string;
@@ -45,6 +57,8 @@ export interface ApiMessage {
     msg_type?: string;
     media_url?: string;
   } | null;
+  // Interactive Bot Metadata (Poll votes, bunk counters, whisper targets)
+  metadata?: Record<string, any>;
   // Zero-Trust Cryptographic & Integrity Fields
   nonce?: string;
   signature?: string;
@@ -367,6 +381,7 @@ export async function POST(request: Request) {
         ? body.read_by
         : [senderUsername || 'Anonymous'],
       reply_to: body.reply_to || null,
+      metadata: body.metadata || {},
 
       // Zero-Trust Cryptographic & Integrity Fields
       nonce: body.nonce || undefined,
@@ -404,6 +419,7 @@ export async function POST(request: Request) {
             burn_seconds: newMessage.burn_seconds,
             read_by: newMessage.read_by,
             reply_to: newMessage.reply_to,
+            metadata: newMessage.metadata || {},
             nonce: newMessage.nonce,
             signature: newMessage.signature,
             public_key: newMessage.public_key,
@@ -540,6 +556,10 @@ export async function PATCH(request: Request) {
           ...m,
           reactions: newReactions,
           content: body.content !== undefined ? body.content : m.content,
+          metadata:
+            body.metadata !== undefined
+              ? { ...(m.metadata || {}), ...body.metadata }
+              : m.metadata,
         };
         targetMessage = updatedMsg;
         return updatedMsg;
@@ -548,6 +568,21 @@ export async function PATCH(request: Request) {
     });
 
     saveMessages(updated);
+
+    if (targetMessage) {
+      const sb = getSupabaseServerClient();
+      if (sb) {
+        Promise.resolve(
+          sb
+            .from('messages')
+            .update({
+              reactions: (targetMessage as ApiMessage).reactions,
+              metadata: (targetMessage as ApiMessage).metadata || {},
+            })
+            .eq('id', body.id)
+        ).catch(() => {});
+      }
+    }
     return NextResponse.json({ success: true, id: body.id, message: targetMessage });
   } catch (err: unknown) {
     return NextResponse.json(

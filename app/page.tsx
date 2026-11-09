@@ -98,6 +98,21 @@ import {
 import { isSuperAdmin } from '@/lib/security/shield';
 import { initClientShield } from '@/lib/clientShield';
 import { signMessagePayload } from '@/lib/cryptoIdentity';
+import SlashCommandMenu from '@/components/SlashCommandMenu';
+import {
+  PollCard,
+  BunkMeterCard,
+  ConfessionCard,
+  WhisperCard,
+  RoastCard,
+  DecisionCard,
+} from '@/components/InteractiveBotCards';
+import {
+  SLASH_COMMANDS,
+  getMatchingCommands,
+  executeSlashCommand,
+  SlashCommandDefinition,
+} from '@/lib/slashBot';
 import { UserStory } from '@/types/story';
 import { fetchServerStories, postNewStory, markStoryAsViewed, getLocalStories } from '@/lib/stories';
 import {
@@ -293,6 +308,15 @@ export default function Home() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>('default');
   const [soundMuted, setSoundMutedState] = useState<boolean>(false);
   const lastKnownMessageIdsRef = useRef<Set<string>>(new Set());
+
+  // 5. Telegram-style Slash Autocomplete Menu ("LMC Bot 🤖")
+  const [isSlashMenuOpen, setIsSlashMenuOpen] = useState(false);
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+
+  const matchingSlashCommands = useMemo(() => {
+    if (!inputText.startsWith('/')) return [];
+    return getMatchingCommands(inputText);
+  }, [inputText]);
   const isInitialLoadDoneRef = useRef(false);
 
   // 5. PWA & Offline Service Worker State
@@ -1113,6 +1137,66 @@ export default function Home() {
     }
   };
 
+  const handleSelectSlashCommand = useCallback((cmd: SlashCommandDefinition) => {
+    setInputText(cmd.syntax);
+    setIsSlashMenuOpen(false);
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, []);
+
+  const handleUpdateMessageMetadata = useCallback(
+    async (messageId: string, updatedMetadata: Record<string, any>) => {
+      // 1. Optimistic Local State Update
+      setMessages((prev) => {
+        const updated = prev.map((m) =>
+          m.id === messageId ? { ...m, metadata: updatedMetadata } : m
+        );
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+        }
+        return updated;
+      });
+
+      // 2. Broadcast across browser tabs
+      if (typeof window !== 'undefined') {
+        try {
+          const bc = new BroadcastChannel('lmc_chat_sync');
+          bc.postMessage({
+            type: 'UPDATE_MESSAGE_METADATA',
+            payload: { id: messageId, metadata: updatedMetadata },
+          });
+          bc.close();
+        } catch {}
+      }
+
+      // 3. Central Server API sync
+      try {
+        fetch('/api/messages', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: messageId,
+            metadata: updatedMetadata,
+          }),
+        }).catch(() => {});
+      } catch {}
+
+      // 4. Supabase sync if connected
+      if (isSupabaseConfigured && supabase) {
+        try {
+          await supabase
+            .from('messages')
+            .update({ metadata: updatedMetadata })
+            .eq('id', messageId);
+        } catch (err) {
+          console.error('Error updating message metadata in Supabase:', err);
+        }
+      }
+    },
+    [isSupabaseConfigured]
+  );
+
   // Initialize Zero-Trust Client Security Shield & DevTools Honeypots
   useEffect(() => {
     initClientShield();
@@ -1168,6 +1252,16 @@ export default function Home() {
         setMessages((prev) => {
           const updated = prev.map((m) =>
             m.id === payload.id ? { ...m, reactions: payload.reactions } : m
+          );
+          localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+          return updated;
+        });
+      } else if (type === 'UPDATE_MESSAGE_METADATA') {
+        setMessages((prev) => {
+          const updated = prev.map((m) =>
+            m.id === payload.id
+              ? { ...m, metadata: { ...(m.metadata || {}), ...payload.metadata } }
+              : m
           );
           localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
           return updated;
@@ -2223,6 +2317,90 @@ export default function Home() {
         if (lower === '/music' || lower === '/bot') {
           setInputText('');
           setShowMusicBotModal(true);
+          return;
+        }
+
+        // LMC Bot Interactive Slash Command Interceptor
+        const slashBotResult = executeSlashCommand(trimmedContent, user);
+        if (slashBotResult.isCommand) {
+          setInputText('');
+          setIsSlashMenuOpen(false);
+          if (slashBotResult.feedbackToast) {
+            triggerToast(slashBotResult.feedbackToast);
+          }
+          if (slashBotResult.newMsg) {
+            const botMsgConfig = slashBotResult.newMsg;
+            const uniqueId =
+              typeof crypto !== 'undefined' && crypto.randomUUID
+                ? crypto.randomUUID()
+                : `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+            const nowIso = new Date().toISOString();
+
+            let signedNonce: string | undefined;
+            let signatureB64: string | undefined;
+            let publicKeyB64: string | undefined;
+            try {
+              const signResult = await signMessagePayload(
+                botMsgConfig.content,
+                activeGroupId,
+                nowIso,
+                botMsgConfig.sender_username || botMsgConfig.sender_name
+              );
+              signedNonce = signResult.nonce;
+              signatureB64 = signResult.signature;
+              publicKeyB64 = signResult.publicKey;
+            } catch {}
+
+            const botMsg: Message = {
+              id: uniqueId,
+              group_id: activeGroupId,
+              sender_name: botMsgConfig.sender_name,
+              sender_username: botMsgConfig.sender_username,
+              sender_avatar: botMsgConfig.sender_avatar || DEFAULT_AVATAR_DATA_URL,
+              sender_bio: botMsgConfig.sender_bio,
+              content: botMsgConfig.content,
+              msg_type: botMsgConfig.msg_type,
+              media_url: '',
+              metadata: botMsgConfig.metadata || {},
+              reactions: {},
+              created_at: nowIso,
+              nonce: signedNonce,
+              signature: signatureB64,
+              public_key: publicKeyB64,
+              burn_after_read: false,
+              read_by: [user.username || user.name],
+              reply_to: null,
+            };
+
+            // Optimistic update
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === botMsg.id)) return prev;
+              const updated = [...prev, botMsg];
+              localStorage.setItem('lmc_saved_messages', JSON.stringify(updated));
+              return updated;
+            });
+
+            // Broadcast to other tabs
+            try {
+              const bc = new BroadcastChannel('lmc_chat_sync');
+              bc.postMessage({ type: 'NEW_MESSAGE', payload: botMsg });
+              bc.close();
+            } catch {}
+
+            // Send to central server API
+            fetch('/api/messages', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(botMsg),
+            }).catch(() => {});
+
+            // Remote Supabase sync if connected
+            if (isSupabaseConfigured && supabase) {
+              supabase.from('messages').insert([botMsg]).then(() => {});
+            }
+
+            return;
+          }
           return;
         }
       }
@@ -5060,6 +5238,45 @@ export default function Home() {
                     </div>
                   )}
 
+                  {/* LMC Bot Interactive Cards (Polls, Bunks, Confessions, Whispers, Roasts, Decisions) */}
+                  {msg.msg_type === 'poll' && (
+                    <PollCard
+                      message={msg}
+                      currentUsername={user.username || user.name}
+                      onUpdateMetadata={handleUpdateMessageMetadata}
+                      triggerToast={triggerToast}
+                    />
+                  )}
+
+                  {msg.msg_type === 'bunk_meter' && (
+                    <BunkMeterCard
+                      message={msg}
+                      currentUsername={user.username || user.name}
+                      onUpdateMetadata={handleUpdateMessageMetadata}
+                      triggerToast={triggerToast}
+                    />
+                  )}
+
+                  {msg.msg_type === 'confession' && (
+                    <ConfessionCard message={msg} />
+                  )}
+
+                  {msg.msg_type === 'whisper' && (
+                    <WhisperCard
+                      message={msg}
+                      currentUsername={user.username || user.name}
+                      triggerToast={triggerToast}
+                    />
+                  )}
+
+                  {msg.msg_type === 'roast' && (
+                    <RoastCard message={msg} />
+                  )}
+
+                  {msg.msg_type === 'decision' && (
+                    <DecisionCard message={msg} />
+                  )}
+
                   {/* Reactions Bar */}
                   <div className="flex flex-wrap items-center gap-1 mt-1.5 px-0.5">
                     {Object.entries(msg.reactions || {}).map(([emoji, count]) => {
@@ -5480,8 +5697,17 @@ export default function Home() {
                 if (!inputText.trim()) return;
                 handleSendMessage(inputText, 'text');
               }}
-              className="max-w-4xl mx-auto flex items-end gap-1.5 sm:gap-2 bg-[#121622]/90 backdrop-blur-md border border-white/10 focus-within:border-[#6366F1]/50 rounded-2xl p-1.5 sm:p-2 transition-all shadow-lg"
+              className="relative max-w-4xl mx-auto flex items-end gap-1.5 sm:gap-2 bg-[#121622]/90 backdrop-blur-md border border-white/10 focus-within:border-[#6366F1]/50 rounded-2xl p-1.5 sm:p-2 transition-all shadow-lg"
             >
+              {/* Telegram-style Slash Autocomplete Menu ("LMC Bot 🤖") */}
+              <SlashCommandMenu
+                isOpen={isSlashMenuOpen}
+                commands={matchingSlashCommands}
+                selectedIndex={slashSelectedIndex}
+                onSelectCommand={handleSelectSlashCommand}
+                onClose={() => setIsSlashMenuOpen(false)}
+              />
+
               {isVoiceRecording ? (
                 /* LIVE VOICE RECORDING STUDIO */
                 <div className="flex-1 flex items-center justify-between gap-3 px-2 py-1.5 select-none animate-msg-in">
@@ -5555,29 +5781,67 @@ export default function Home() {
                     <Upload className="w-4 h-4" />
                   </label>
 
-                  {/* Input Textarea with Enter key & typing indicator */}
+                  {/* Input Textarea with Enter key, slash command autocomplete & typing indicator */}
                   <textarea
                     ref={textareaRef}
                     rows={1}
                     value={inputText}
                     onChange={(e) => {
-                      setInputText(e.target.value);
-                      notifyTyping(Boolean(e.target.value.trim()));
+                      const val = e.target.value;
+                      setInputText(val);
+                      notifyTyping(Boolean(val.trim()));
                       e.target.style.height = 'auto';
                       e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+
+                      if (val.startsWith('/')) {
+                        const matches = getMatchingCommands(val);
+                        setIsSlashMenuOpen(matches.length > 0);
+                        setSlashSelectedIndex(0);
+                      } else {
+                        setIsSlashMenuOpen(false);
+                      }
                     }}
                     onKeyDown={(e) => {
+                      if (isSlashMenuOpen && matchingSlashCommands.length > 0) {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setSlashSelectedIndex((prev) => (prev + 1) % matchingSlashCommands.length);
+                          return;
+                        }
+                        if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setSlashSelectedIndex(
+                            (prev) => (prev - 1 + matchingSlashCommands.length) % matchingSlashCommands.length
+                          );
+                          return;
+                        }
+                        if (
+                          e.key === 'Tab' ||
+                          (e.key === 'Enter' && !e.shiftKey && !inputText.includes(' '))
+                        ) {
+                          e.preventDefault();
+                          handleSelectSlashCommand(matchingSlashCommands[slashSelectedIndex]);
+                          return;
+                        }
+                        if (e.key === 'Escape') {
+                          e.preventDefault();
+                          setIsSlashMenuOpen(false);
+                          return;
+                        }
+                      }
+
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                         e.stopPropagation();
                         if (!inputText.trim()) return;
+                        setIsSlashMenuOpen(false);
                         handleSendMessage(inputText, 'text');
                       }
                     }}
                     placeholder={
                       ghostModeActive
                         ? 'Ghost Mode: Burns in 10s...'
-                        : `Message #${activeGroup.name}... (try /play lofi)`
+                        : `Message #${activeGroup.name}... (type / for bot commands)`
                     }
                     className="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 text-base sm:text-sm text-[#E9ECF4] placeholder-[#5A6376] max-h-32 leading-relaxed no-scrollbar"
                   />

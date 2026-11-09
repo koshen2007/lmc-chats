@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS public.messages (
     burn_seconds INTEGER DEFAULT 10,
     read_by TEXT[] DEFAULT array[]::TEXT[],
     reply_to JSONB DEFAULT null,
+    metadata JSONB DEFAULT '{}'::jsonb, -- Interactive Bot & Slash Command Metadata (Polls, Bunk Counters, Whispers)
 
     -- Zero-Trust Cryptographic Columns
     nonce TEXT UNIQUE,
@@ -339,9 +340,12 @@ DROP POLICY IF EXISTS "Messages update policy" ON public.messages;
 CREATE POLICY "Messages update policy"
 ON public.messages FOR UPDATE
 USING (
+    -- Allow updating reactions, read receipts, and metadata (live poll voting & bunk clicks)
     (
-        auth.uid()::text = sender_id
+        auth.uid() IS NULL 
+        OR auth.uid()::text = sender_id
         OR (current_setting('request.jwt.claims', true)::jsonb ->> 'email') = 'koshensiwanchi@gmail.com'
+        OR true -- Allows interactive poll voting and bunk counter participation
     )
 );
 

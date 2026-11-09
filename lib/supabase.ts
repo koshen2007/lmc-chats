@@ -21,7 +21,19 @@ export interface MessageReplyContext {
   sender_name: string;
   sender_username?: string;
   content: string;
-  msg_type?: 'text' | 'sticker' | 'gif' | 'image' | 'audio' | 'music_bot';
+  msg_type?:
+    | 'text'
+    | 'sticker'
+    | 'gif'
+    | 'image'
+    | 'audio'
+    | 'music_bot'
+    | 'poll'
+    | 'bunk_meter'
+    | 'confession'
+    | 'whisper'
+    | 'roast'
+    | 'decision';
   media_url?: string;
 }
 
@@ -33,7 +45,19 @@ export interface Message {
   sender_avatar: string;
   sender_bio?: string;
   content: string;
-  msg_type: 'text' | 'sticker' | 'gif' | 'image' | 'audio' | 'music_bot';
+  msg_type:
+    | 'text'
+    | 'sticker'
+    | 'gif'
+    | 'image'
+    | 'audio'
+    | 'music_bot'
+    | 'poll'
+    | 'bunk_meter'
+    | 'confession'
+    | 'whisper'
+    | 'roast'
+    | 'decision';
   media_url?: string;
   reactions: Record<string, number>;
   created_at: string;
@@ -41,6 +65,8 @@ export interface Message {
   burn_seconds?: number;
   read_by?: string[];
   reply_to?: MessageReplyContext | null;
+  // Interactive Bot & Slash Command Metadata
+  metadata?: Record<string, any>;
   // Zero-Trust Cryptographic & Integrity Fields
   nonce?: string;
   signature?: string;
