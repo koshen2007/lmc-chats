@@ -74,6 +74,26 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
   : null;
 
 /**
+ * Server-side Supabase Client for API routes
+ */
+export function getSupabaseServerClient(): SupabaseClient | null {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    '';
+
+  if (!url || !key || url.includes('your-project-id') || !url.startsWith('http')) {
+    return null;
+  }
+
+  return createClient(url, key, {
+    auth: { persistSession: false },
+  });
+}
+
+/**
  * Sign In with Google OAuth via Supabase
  */
 export async function signInWithGoogle() {

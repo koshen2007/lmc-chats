@@ -8,6 +8,7 @@ import {
   sanitizeInputText,
   validateMediaPayload,
 } from '@/lib/security/shield';
+import { getSupabaseServerClient } from '@/lib/supabase';
 
 export interface ApiMessage {
   id: string;
@@ -95,6 +96,31 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const groupId = searchParams.get('group_id');
     const after = searchParams.get('after');
+
+    // If Supabase is configured, fetch live from Supabase
+    const sb = getSupabaseServerClient();
+    if (sb) {
+      try {
+        let query = sb.from('messages').select('*').order('created_at', { ascending: true });
+        if (groupId) {
+          query = query.eq('group_id', groupId);
+        }
+        if (after) {
+          query = query.gt('created_at', after);
+        }
+        const { data, error } = await query;
+        if (!error && Array.isArray(data) && data.length > 0) {
+          return NextResponse.json({
+            success: true,
+            messages: data,
+            count: data.length,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } catch (e) {
+        console.error('Supabase fetch error, falling back to local store:', e);
+      }
+    }
 
     const all = getMessages();
 
@@ -216,6 +242,32 @@ export async function POST(request: Request) {
 
     saveMessages(updated);
 
+    // Sync to Supabase in background if configured
+    const sb = getSupabaseServerClient();
+    if (sb) {
+      Promise.resolve(
+        sb.from('messages').upsert([
+          {
+            id: newMessage.id,
+            group_id: newMessage.group_id,
+            sender_name: newMessage.sender_name,
+            sender_username: newMessage.sender_username || '',
+            sender_avatar: newMessage.sender_avatar || '',
+            sender_bio: newMessage.sender_bio || '',
+            content: newMessage.content,
+            msg_type: newMessage.msg_type,
+            media_url: newMessage.media_url || '',
+            reactions: newMessage.reactions,
+            created_at: newMessage.created_at,
+            burn_after_read: newMessage.burn_after_read,
+            burn_seconds: newMessage.burn_seconds,
+            read_by: newMessage.read_by,
+            reply_to: newMessage.reply_to,
+          },
+        ])
+      ).catch((err) => console.error('Supabase async upsert failed:', err));
+    }
+
     return NextResponse.json({
       success: true,
       message: newMessage,
@@ -260,6 +312,11 @@ export async function DELETE(request: Request) {
 
     const updated = current.filter((m) => m.id !== messageId);
     saveMessages(updated);
+
+    const sb = getSupabaseServerClient();
+    if (sb) {
+      Promise.resolve(sb.from('messages').delete().eq('id', messageId)).catch(() => {});
+    }
 
     return NextResponse.json({
       success: true,

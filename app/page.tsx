@@ -74,6 +74,7 @@ import AuthLoginScreen from '@/components/AuthLoginScreen';
 import DiscoverChannelsModal from '@/components/DiscoverChannelsModal';
 import UserWelcomeModal from '@/components/UserWelcomeModal';
 import VoiceNotePlayer from '@/components/VoiceNotePlayer';
+import IncomingCallModal from '@/components/IncomingCallModal';
 import {
   UserProfile,
   SEED_USERS,
@@ -199,19 +200,36 @@ export default function Home() {
   const [newGroupInviteMember, setNewGroupInviteMember] = useState('');
   const [adminAddMemberInput, setAdminAddMemberInput] = useState('');
 
-  // Call System (Audio & Video Calling)
+  // WebRTC Peer-to-Peer Call System (Audio & Video Calling)
   const [activeCall, setActiveCall] = useState<{
+    id?: string;
     type: 'audio' | 'video';
     targetName: string;
     targetAvatar: string;
+    targetUsername?: string;
     duration: number;
     isMuted: boolean;
     isVideoOff: boolean;
+    statusText?: string;
   } | null>(null);
+
+  const [incomingCall, setIncomingCall] = useState<{
+    id: string;
+    caller: string;
+    caller_name: string;
+    caller_avatar: string;
+    type: 'audio' | 'video';
+    offer: any;
+  } | null>(null);
+
   const audioContextRef = useRef<AudioContext | null>(null);
   const callIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const callPollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const videoStreamRef = useRef<MediaStream | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
 
   // Emoji, Sticker & GIF
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -720,7 +738,7 @@ export default function Home() {
     };
   }, [isLoggedIn, activeGroupId, notifyIncomingMessage]);
 
-  // Presence Heartbeat Effect: Pings /api/presence every 20s while active
+  // Presence Heartbeat Effect: Pings /api/presence every 15s while active, and on focus/visibility
   useEffect(() => {
     if (!isLoggedIn || !user.username) return;
 
@@ -737,10 +755,21 @@ export default function Home() {
     };
 
     sendHeartbeat();
-    const heartbeatInterval = setInterval(sendHeartbeat, 20000);
+    const heartbeatInterval = setInterval(sendHeartbeat, 15000);
+
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        sendHeartbeat();
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
 
     return () => {
       clearInterval(heartbeatInterval);
+      window.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
     };
   }, [isLoggedIn, user.username, user.name, user.avatar]);
 
@@ -756,6 +785,28 @@ export default function Home() {
       window.removeEventListener('focus', handleFocus);
     };
   }, []);
+
+  // WebRTC Incoming Call Listener: Checks for incoming call rings for current user
+  useEffect(() => {
+    if (!isLoggedIn || !user.username) return;
+
+    const checkIncomingCalls = async () => {
+      if (activeCall) return; // Do not interrupt active call
+      try {
+        const res = await fetch(`/api/calls?user=${encodeURIComponent(user.username)}`);
+        const data = await res.json();
+        if (data && data.incomingCall) {
+          setIncomingCall((prev) => {
+            if (prev?.id === data.incomingCall.id) return prev;
+            return data.incomingCall;
+          });
+        }
+      } catch {}
+    };
+
+    const callPoller = setInterval(checkIncomingCalls, 3000);
+    return () => clearInterval(callPoller);
+  }, [isLoggedIn, user.username, activeCall]);
 
   // Auto-mark messages as read in active channel for double blue ticks (read receipts)
   useEffect(() => {
@@ -2669,24 +2720,45 @@ export default function Home() {
     triggerToast(`Signed in as ${googleUser.name} with Google! 🎉`);
   };
 
-  // AUDIO & VIDEO CALLING ENGINE (Web Audio API Ringing + Camera stream)
-  const startCall = async (type: 'audio' | 'video', targetName: string, targetAvatar: string) => {
-    setActiveCall({
+  // WebRTC Peer-to-Peer Calling Engine
+  const startCall = async (
+    type: 'audio' | 'video',
+    targetName: string,
+    targetAvatar: string,
+    targetUsernameOverride?: string
+  ) => {
+    // Determine target handle
+    let targetUsername = targetUsernameOverride || '';
+    if (!targetUsername && activeGroupId.startsWith('dm_')) {
+      targetUsername =
+        activeGroupId
+          .replace('dm_', '')
+          .split('_')
+          .find((u) => u.toLowerCase() !== (user.username || user.name || '').toLowerCase()) || '';
+    }
+    if (!targetUsername && viewingProfile?.username) {
+      targetUsername = viewingProfile.username;
+    }
+
+    const initialCallState = {
       type,
       targetName,
       targetAvatar,
+      targetUsername,
       duration: 0,
       isMuted: false,
       isVideoOff: false,
-    });
+      statusText: 'Ringing receiver...',
+    };
+    setActiveCall(initialCallState);
 
-    // Start live duration counter
+    // Live duration counter
     if (callIntervalRef.current) clearInterval(callIntervalRef.current);
     callIntervalRef.current = setInterval(() => {
       setActiveCall((prev) => (prev ? { ...prev, duration: prev.duration + 1 } : null));
     }, 1000);
 
-    // Audio synthesizer for telephone ringtone
+    // Synthesize gentle telephone ringing
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioCtx) {
@@ -2707,7 +2779,6 @@ export default function Home() {
         osc1.start();
         osc2.start();
 
-        // Ring for 3.5 seconds then stop
         setTimeout(() => {
           try {
             gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
@@ -2715,28 +2786,232 @@ export default function Home() {
           } catch {}
         }, 3500);
       }
-    } catch {
-      // ignore audio restriction
-    }
+    } catch {}
 
-    // Video stream initialization
-    if (type === 'video' && typeof navigator !== 'undefined' && navigator.mediaDevices) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        videoStreamRef.current = stream;
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-        }
-      } catch (err) {
-        console.warn('Camera preview notice:', err);
+    // Initialize WebRTC
+    try {
+      const isVideo = type === 'video';
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: isVideo,
+        audio: true,
+      });
+      videoStreamRef.current = stream;
+
+      if (localVideoRef.current && isVideo) {
+        localVideoRef.current.srcObject = stream;
       }
+
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+        ],
+      });
+      peerConnectionRef.current = pc;
+
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+      pc.ontrack = (event) => {
+        if (event.streams && event.streams[0]) {
+          const remoteStream = event.streams[0];
+          if (isVideo && remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = remoteStream;
+          }
+          if (remoteAudioRef.current) {
+            remoteAudioRef.current.srcObject = remoteStream;
+          }
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      // Signal initiate call
+      const initRes = await fetch('/api/calls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'initiate',
+          caller: user.username,
+          caller_name: user.name,
+          caller_avatar: user.avatar,
+          receiver: targetUsername,
+          type,
+          offer,
+        }),
+      });
+
+      const initData = await initRes.json();
+      if (!initData.success || !initData.callId) {
+        triggerToast('Failed to initiate call');
+        return;
+      }
+
+      const callId = initData.callId;
+      setActiveCall((prev) => (prev ? { ...prev, id: callId } : null));
+
+      // Handle ICE candidates
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          fetch('/api/calls', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'ice_candidate',
+              call_id: callId,
+              candidate: event.candidate,
+              is_caller: true,
+            }),
+          }).catch(() => {});
+        }
+      };
+
+      // Poll call status until accepted or rejected
+      if (callPollIntervalRef.current) clearInterval(callPollIntervalRef.current);
+      callPollIntervalRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/calls?call_id=${callId}`);
+          const json = await res.json();
+          if (json && json.call) {
+            if (json.call.status === 'accepted' && json.call.answer) {
+              if (callPollIntervalRef.current) clearInterval(callPollIntervalRef.current);
+              if (pc.signalingState !== 'stable') {
+                await pc.setRemoteDescription(new RTCSessionDescription(json.call.answer));
+              }
+              setActiveCall((prev) => (prev ? { ...prev, statusText: 'Connected (Live)' } : null));
+              triggerToast('Call connected! 🎙️');
+            } else if (json.call.status === 'rejected') {
+              if (callPollIntervalRef.current) clearInterval(callPollIntervalRef.current);
+              endCall();
+              triggerToast('Call was declined');
+            } else if (json.call.status === 'ended') {
+              if (callPollIntervalRef.current) clearInterval(callPollIntervalRef.current);
+              endCall();
+            }
+          }
+        } catch {}
+      }, 1500);
+    } catch (err) {
+      console.warn('Call setup notice:', err);
+      triggerToast('Audio/Video permission required for calling');
     }
+  };
+
+  // Accept incoming call (Receiver side)
+  const handleAcceptIncomingCall = async () => {
+    if (!incomingCall) return;
+    const callToAccept = incomingCall;
+    setIncomingCall(null);
+
+    const isVideo = callToAccept.type === 'video';
+    setActiveCall({
+      id: callToAccept.id,
+      type: callToAccept.type,
+      targetName: callToAccept.caller_name,
+      targetAvatar: callToAccept.caller_avatar,
+      targetUsername: callToAccept.caller,
+      duration: 0,
+      isMuted: false,
+      isVideoOff: false,
+      statusText: 'Connecting...',
+    });
+
+    if (callIntervalRef.current) clearInterval(callIntervalRef.current);
+    callIntervalRef.current = setInterval(() => {
+      setActiveCall((prev) => (prev ? { ...prev, duration: prev.duration + 1 } : null));
+    }, 1000);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: isVideo,
+        audio: true,
+      });
+      videoStreamRef.current = stream;
+
+      if (localVideoRef.current && isVideo) {
+        localVideoRef.current.srcObject = stream;
+      }
+
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+        ],
+      });
+      peerConnectionRef.current = pc;
+
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+      pc.ontrack = (event) => {
+        if (event.streams && event.streams[0]) {
+          const remoteStream = event.streams[0];
+          if (isVideo && remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = remoteStream;
+          }
+          if (remoteAudioRef.current) {
+            remoteAudioRef.current.srcObject = remoteStream;
+          }
+        }
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          fetch('/api/calls', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'ice_candidate',
+              call_id: callToAccept.id,
+              candidate: event.candidate,
+              is_caller: false,
+            }),
+          }).catch(() => {});
+        }
+      };
+
+      await pc.setRemoteDescription(new RTCSessionDescription(callToAccept.offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      await fetch('/api/calls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'answer',
+          call_id: callToAccept.id,
+          answer,
+        }),
+      });
+
+      setActiveCall((prev) => (prev ? { ...prev, statusText: 'Connected (Live)' } : null));
+      triggerToast('Call connected! 🎙️');
+    } catch (err) {
+      console.warn('Accept call error:', err);
+      triggerToast('Microphone/Camera permission required');
+      endCall();
+    }
+  };
+
+  // Decline incoming call
+  const handleDeclineIncomingCall = () => {
+    if (!incomingCall) return;
+    fetch('/api/calls', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reject', call_id: incomingCall.id }),
+    }).catch(() => {});
+    setIncomingCall(null);
+    triggerToast('Call declined');
   };
 
   const endCall = () => {
     if (callIntervalRef.current) {
       clearInterval(callIntervalRef.current);
       callIntervalRef.current = null;
+    }
+    if (callPollIntervalRef.current) {
+      clearInterval(callPollIntervalRef.current);
+      callPollIntervalRef.current = null;
     }
     if (audioContextRef.current) {
       try {
@@ -2748,6 +3023,47 @@ export default function Home() {
       videoStreamRef.current.getTracks().forEach((t) => t.stop());
       videoStreamRef.current = null;
     }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+
+    if (activeCall?.id) {
+      fetch('/api/calls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'end', call_id: activeCall.id }),
+      }).catch(() => {});
+    }
+
+    // Log call duration in chat if active
+    if (activeCall && activeCall.duration > 0 && activeGroupId) {
+      const minutes = Math.floor(activeCall.duration / 60);
+      const seconds = activeCall.duration % 60;
+      const durationStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+      const callIcon = activeCall.type === 'video' ? '📹' : '📞';
+
+      const callLogMsg: Message = {
+        id: `msg_call_${Date.now()}`,
+        group_id: activeGroupId,
+        sender_name: user.name,
+        sender_username: user.username,
+        sender_avatar: user.avatar,
+        content: `${callIcon} ${activeCall.type === 'video' ? 'Video' : 'Audio'} Call ended • ${durationStr}`,
+        msg_type: 'text',
+        reactions: {},
+        created_at: new Date().toISOString(),
+        read_by: [user.username],
+      };
+
+      setMessages((prev) => [...prev, callLogMsg]);
+      fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(callLogMsg),
+      }).catch(() => {});
+    }
+
     setActiveCall(null);
     triggerToast('Call ended');
   };
@@ -2827,9 +3143,21 @@ export default function Home() {
         </div>
       )}
 
+      {/* INCOMING WEBRTC CALL MODAL (Ringing popup for receiver) */}
+      {incomingCall && (
+        <IncomingCallModal
+          call={incomingCall}
+          onAccept={handleAcceptIncomingCall}
+          onDecline={handleDeclineIncomingCall}
+        />
+      )}
+
       {/* CALL OVERLAY MODAL (Voice & Video Call) */}
       {activeCall && (
         <div className="fixed inset-0 z-[250] bg-[#0A0D14]/95 backdrop-blur-xl flex flex-col items-center justify-between p-6 animate-msg-in">
+          {/* Hidden Remote Audio Player */}
+          <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
+
           <div className="flex items-center justify-between w-full max-w-md pt-4">
             <span className="text-xs uppercase font-bold tracking-wider text-[#7A8396] flex items-center gap-1.5">
               {activeCall.type === 'video' ? <Video className="w-4 h-4 text-[#818CF8]" /> : <Phone className="w-4 h-4 text-[#22C55E]" />}
@@ -2844,28 +3172,31 @@ export default function Home() {
           </div>
 
           {/* Caller Center */}
-          <div className="flex flex-col items-center my-auto">
+          <div className="flex flex-col items-center my-auto w-full max-w-md">
             {activeCall.type === 'video' ? (
-              <div className="relative w-72 h-96 sm:w-80 sm:h-[420px] rounded-3xl overflow-hidden bg-black border-2 border-white/10 shadow-2xl flex items-center justify-center">
+              <div className="relative w-full aspect-[3/4] max-h-[60vh] rounded-3xl overflow-hidden bg-black border-2 border-white/10 shadow-2xl flex items-center justify-center">
+                {/* Remote Video Stream */}
+                <video
+                  ref={remoteVideoRef}
+                  autoPlay
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+
+                {/* Local Video Stream Picture-in-Picture (PiP) */}
                 <video
                   ref={localVideoRef}
                   autoPlay
                   playsInline
                   muted
-                  className={`w-full h-full object-cover ${activeCall.isVideoOff ? 'hidden' : 'block'}`}
+                  className={`absolute top-3 right-3 w-24 h-32 rounded-2xl object-cover border-2 border-white/30 shadow-2xl z-10 ${
+                    activeCall.isVideoOff ? 'hidden' : 'block'
+                  }`}
                 />
-                {activeCall.isVideoOff && (
-                  <div className="flex flex-col items-center">
-                    <img
-                      src={activeCall.targetAvatar}
-                      alt={activeCall.targetName}
-                      className="w-24 h-24 rounded-full object-contain bg-[#162044] p-1 border-2 border-white/10 mb-3"
-                    />
-                    <p className="text-sm font-semibold text-white">Camera Off</p>
-                  </div>
-                )}
-                <div className="absolute top-3 left-3 bg-black/60 px-2.5 py-1 rounded-full text-[10px] font-semibold text-white">
-                  Live HD
+
+                <div className="absolute top-3 left-3 bg-black/60 px-2.5 py-1 rounded-full text-[10px] font-semibold text-white z-10 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>{activeCall.statusText || 'Live WebRTC HD'}</span>
                 </div>
               </div>
             ) : (
@@ -2875,14 +3206,17 @@ export default function Home() {
                     <img
                       src={activeCall.targetAvatar}
                       alt={activeCall.targetName}
-                      className="w-full h-full object-contain"
+                      className="w-full h-full object-contain rounded-full"
                     />
                   </div>
                   <span className="absolute bottom-1 right-2 w-5 h-5 rounded-full bg-[#22C55E] border-2 border-[#0A0D14]" />
                 </div>
                 <h3 className="text-xl font-bold text-white mb-1">{activeCall.targetName}</h3>
-                <p className="text-xs text-[#818CF8]">
-                  {activeCall.duration > 3 ? 'Connected' : 'Calling squad...'}
+                <p className="text-xs text-[#818CF8] font-semibold flex items-center gap-1">
+                  {activeCall.statusText === 'Connected (Live)' && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  )}
+                  <span>{activeCall.statusText || (activeCall.duration > 0 ? 'Connected' : 'Connecting...')}</span>
                 </p>
               </div>
             )}

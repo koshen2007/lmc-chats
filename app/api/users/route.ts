@@ -7,6 +7,7 @@ import {
   checkRateLimit,
   sanitizeInputText,
 } from '@/lib/security/shield';
+import { getSupabaseServerClient } from '@/lib/supabase';
 
 export interface ApiUserProfile {
   id: string;
@@ -87,7 +88,23 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get('q') || '').trim().toLowerCase().replace(/^@/, '');
 
-  const allUsers = loadUsers();
+  // If Supabase is configured, fetch users from Supabase
+  const sb = getSupabaseServerClient();
+  let allUsers: ApiUserProfile[] = [];
+  if (sb) {
+    try {
+      const { data, error } = await sb.from('users').select('*').order('created_at', { ascending: false });
+      if (!error && Array.isArray(data) && data.length > 0) {
+        allUsers = data;
+      }
+    } catch (e) {
+      console.error('Supabase users fetch error:', e);
+    }
+  }
+
+  if (allUsers.length === 0) {
+    allUsers = loadUsers();
+  }
 
   if (!q) {
     return NextResponse.json({
@@ -214,6 +231,13 @@ export async function POST(request: Request) {
     }
 
     saveUsers(updatedUsers);
+
+    const sb = getSupabaseServerClient();
+    if (sb) {
+      Promise.resolve(sb.from('users').upsert([newUser])).catch((err) => {
+        console.error('Supabase user upsert error:', err);
+      });
+    }
 
     return NextResponse.json({
       success: true,

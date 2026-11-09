@@ -7,6 +7,7 @@ import {
   sanitizeInputText,
   canDeleteChannel,
 } from '@/lib/security/shield';
+import { getSupabaseServerClient } from '@/lib/supabase';
 
 export interface ApiGroup {
   id: string;
@@ -93,6 +94,30 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const q = (searchParams.get('q') || '').trim().toLowerCase();
 
+    // Check if Supabase has live groups
+    const sb = getSupabaseServerClient();
+    if (sb) {
+      try {
+        const { data, error } = await sb.from('groups').select('*').order('created_at', { ascending: false });
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const remoteAll = data.filter((g) => g && !g.id.startsWith('dm_'));
+          const filtered = q
+            ? remoteAll.filter((g) => {
+                const name = (g.name || '').toLowerCase();
+                const desc = (g.description || '').toLowerCase();
+                return name.includes(q) || desc.includes(q) || name.startsWith(q);
+              })
+            : remoteAll;
+          return NextResponse.json({
+            success: true,
+            groups: filtered,
+          });
+        }
+      } catch (e) {
+        console.error('Supabase groups fetch error, falling back:', e);
+      }
+    }
+
     const allGroups = getGroups().filter((g) => g && !g.id.startsWith('dm_'));
 
     if (!q) {
@@ -141,6 +166,12 @@ export async function POST(request: Request) {
       }
       const updated = Array.from(map.values());
       saveGroups(updated);
+
+      const sb = getSupabaseServerClient();
+      if (sb) {
+        Promise.resolve(sb.from('groups').upsert(updated)).catch(() => {});
+      }
+
       return NextResponse.json({
         success: true,
         groups: updated,
@@ -189,6 +220,12 @@ export async function POST(request: Request) {
       }
 
       saveGroups(updated);
+
+      const sb = getSupabaseServerClient();
+      if (sb) {
+        Promise.resolve(sb.from('groups').upsert([newGroup])).catch(() => {});
+      }
+
       return NextResponse.json({
         success: true,
         group: newGroup,
@@ -242,6 +279,12 @@ export async function POST(request: Request) {
 
       const updated = currentGroups.filter((g) => g.id !== groupId);
       saveGroups(updated);
+
+      const sb = getSupabaseServerClient();
+      if (sb) {
+        Promise.resolve(sb.from('groups').delete().eq('id', groupId)).catch(() => {});
+      }
+
       return NextResponse.json({
         success: true,
         deletedId: groupId,
@@ -290,6 +333,11 @@ export async function DELETE(request: Request) {
 
     const updated = currentGroups.filter((g) => g.id !== groupId);
     saveGroups(updated);
+
+    const sb = getSupabaseServerClient();
+    if (sb) {
+      Promise.resolve(sb.from('groups').delete().eq('id', groupId)).catch(() => {});
+    }
 
     return NextResponse.json({
       success: true,
