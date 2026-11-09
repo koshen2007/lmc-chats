@@ -13,8 +13,27 @@ export interface UserProfile {
   created_at?: string;
 }
 
-// Global registered users directory (starts empty; only real users who register will appear)
-export const SEED_USERS: UserProfile[] = [];
+// Global registered users directory with verified squad members
+export const SEED_USERS: UserProfile[] = [
+  {
+    id: 'usr_harshita',
+    username: 'harshita',
+    name: 'Harshita',
+    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=harshita&backgroundColor=ffd5dc,c0aede,d1d4f9',
+    bio: 'Living life • LMC Squad member ✨',
+    status: 'online',
+    role: 'user',
+  },
+  {
+    id: 'usr_koshen',
+    username: 'koshen',
+    name: 'Koshen Siwanchi',
+    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=koshen&backgroundColor=b6e3f4,d1d4f9',
+    bio: 'LMC Squad Leader ⚡',
+    status: 'online',
+    role: 'admin',
+  },
+];
 
 /**
  * Validate username format:
@@ -53,3 +72,50 @@ export function isUsernameAvailable(
   );
 }
 
+/**
+ * Instagram-Style Ranked Search:
+ * Prioritizes:
+ * 1. Username starts with query (e.g. typing "h" -> @harshita)
+ * 2. Display Name starts with query (e.g. typing "h" -> Harshita)
+ * 3. User ID starts with query (e.g. usr_h...)
+ * 4. Username or Name contains query
+ */
+export function searchUsersInstagramStyle(
+  query: string,
+  users: UserProfile[]
+): UserProfile[] {
+  const q = query.trim().toLowerCase().replace(/^@/, '');
+  if (!q) return users;
+
+  const exactUsernamePrefix: UserProfile[] = [];
+  const namePrefix: UserProfile[] = [];
+  const idPrefix: UserProfile[] = [];
+  const otherMatches: UserProfile[] = [];
+
+  const seenIds = new Set<string>();
+
+  for (const u of users) {
+    if (!u || seenIds.has(u.id)) continue;
+
+    const uName = (u.username || '').toLowerCase();
+    const dName = (u.name || '').toLowerCase();
+    const uId = (u.id || '').toLowerCase();
+    const uBio = (u.bio || '').toLowerCase();
+
+    if (uName.startsWith(q)) {
+      exactUsernamePrefix.push(u);
+      seenIds.add(u.id);
+    } else if (dName.startsWith(q) || dName.split(/\s+/).some((part) => part.startsWith(q))) {
+      namePrefix.push(u);
+      seenIds.add(u.id);
+    } else if (uId.startsWith(q) || uId.startsWith(`usr_${q}`)) {
+      idPrefixUsers: idPrefix.push(u);
+      seenIds.add(u.id);
+    } else if (uName.includes(q) || dName.includes(q) || uId.includes(q) || uBio.includes(q)) {
+      otherMatches.push(u);
+      seenIds.add(u.id);
+    }
+  }
+
+  return [...exactUsernamePrefix, ...namePrefix, ...idPrefix, ...otherMatches];
+}

@@ -75,6 +75,7 @@ import {
   SEED_USERS,
   validateUsernameFormat,
   isUsernameAvailable,
+  searchUsersInstagramStyle,
 } from '@/lib/users';
 import { MusicTrack, RoomPlaybackState, CURATED_TRACKS } from '@/lib/musicPlayer';
 import {
@@ -261,7 +262,7 @@ export default function Home() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // Load Registered Users Directory (Purge any old dummy seed users)
+    // Load Registered Users Directory (Always include SEED_USERS with Harshita & Koshen)
     const FAKE_USER_IDS = ['usr_kai', 'usr_aria', 'usr_zayn', 'usr_rin', 'usr_marcus', 'usr_elena'];
     const FAKE_USERNAMES = ['kai', 'aria', 'zayn', 'rin', 'marcus', 'elena'];
     let allUsers: UserProfile[] = [];
@@ -275,11 +276,42 @@ export default function Home() {
               !FAKE_USER_IDS.includes(u.id) &&
               !FAKE_USERNAMES.includes(u.username?.toLowerCase())
           );
-          localStorage.setItem('lmc_registered_users', JSON.stringify(allUsers));
         }
       } catch {}
     }
+
+    // Merge SEED_USERS (Harshita, Koshen) so they are always in directory
+    const userMap = new Map<string, UserProfile>();
+    for (const su of SEED_USERS) {
+      userMap.set(su.username.toLowerCase(), su);
+    }
+    for (const au of allUsers) {
+      if (au && au.username) {
+        userMap.set(au.username.toLowerCase(), au);
+      }
+    }
+    const mergedUsers = Array.from(userMap.values());
+    allUsers = mergedUsers;
     setRegisteredUsers(allUsers);
+    localStorage.setItem('lmc_registered_users', JSON.stringify(allUsers));
+
+    // Also fetch the full directory from server API across all devices
+    fetch('/api/users')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && Array.isArray(data.users)) {
+          setRegisteredUsers((prev) => {
+            const map = new Map<string, UserProfile>();
+            for (const su of SEED_USERS) if (su?.username) map.set(su.username.toLowerCase(), su);
+            for (const u of prev) if (u?.username) map.set(u.username.toLowerCase(), u);
+            for (const u of data.users) if (u?.username) map.set(u.username.toLowerCase(), u);
+            const combined = Array.from(map.values());
+            localStorage.setItem('lmc_registered_users', JSON.stringify(combined));
+            return combined;
+          });
+        }
+      })
+      .catch(() => {});
 
     // 1. Load User Session
     const storedUser = localStorage.getItem('lmc_session');
@@ -460,6 +492,15 @@ export default function Home() {
         localStorage.setItem('lmc_registered_users', JSON.stringify(existing));
       }
     }
+
+    // Persist to server API
+    try {
+      fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fullUser),
+      }).catch(() => {});
+    } catch {}
   };
 
   const handleLogout = () => {
@@ -803,16 +844,9 @@ export default function Home() {
       });
   }, [messages, activeGroupId, searchQuery]);
 
-  // User Search Matching by @username, user ID or display name
+  // User Search Matching by @username, user ID or display name (Instagram Ranked Search)
   const matchingUsers = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim().replace(/^@/, '');
-    if (!q) return [];
-    return registeredUsers.filter(
-      (u) =>
-        u.username.toLowerCase().includes(q) ||
-        u.name.toLowerCase().includes(q) ||
-        (u.id && u.id.toLowerCase().includes(q))
-    );
+    return searchUsersInstagramStyle(searchQuery, registeredUsers);
   }, [searchQuery, registeredUsers]);
 
   // Shared Media and Links
@@ -2437,6 +2471,18 @@ export default function Home() {
           onJoinGroup={handleJoinGroup}
           onStartCall={startCall}
           triggerToast={triggerToast}
+          onSyncUsers={(serverList) => {
+            setRegisteredUsers((prev) => {
+              const map = new Map<string, UserProfile>();
+              for (const u of prev) if (u?.username) map.set(u.username.toLowerCase(), u);
+              for (const u of serverList) if (u?.username) map.set(u.username.toLowerCase(), u);
+              const merged = Array.from(map.values());
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('lmc_registered_users', JSON.stringify(merged));
+              }
+              return merged;
+            });
+          }}
         />
       )}
 

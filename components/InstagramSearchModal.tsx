@@ -18,7 +18,7 @@ import {
   ArrowRight,
   Shield,
 } from 'lucide-react';
-import { UserProfile } from '@/lib/users';
+import { UserProfile, searchUsersInstagramStyle } from '@/lib/users';
 import { Group } from '@/lib/supabase';
 
 interface InstagramSearchModalProps {
@@ -33,6 +33,7 @@ interface InstagramSearchModalProps {
   onJoinGroup: (groupId: string) => void;
   onStartCall: (type: 'audio' | 'video', name: string, avatar: string) => void;
   triggerToast: (msg: string) => void;
+  onSyncUsers?: (users: UserProfile[]) => void;
 }
 
 type SearchTab = 'all' | 'accounts' | 'channels';
@@ -49,26 +50,66 @@ export default function InstagramSearchModal({
   onJoinGroup,
   onStartCall,
   triggerToast,
+  onSyncUsers,
 }: InstagramSearchModalProps) {
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<SearchTab>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  if (!isOpen) return null;
+  const [serverUsers, setServerUsers] = useState<UserProfile[]>([]);
 
   const cleanQuery = query.trim().toLowerCase().replace(/^@/, '');
 
-  // Filter Users
+  // Live fetch from server directory across all devices
+  React.useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+
+    const fetchUsers = async () => {
+      try {
+        const url = cleanQuery
+          ? `/api/users?q=${encodeURIComponent(cleanQuery)}`
+          : '/api/users';
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (active && Array.isArray(data.users)) {
+            setServerUsers(data.users);
+            if (onSyncUsers) {
+              onSyncUsers(data.users);
+            }
+          }
+        }
+      } catch (err) {
+        // Fallback silently to client registeredUsers
+      }
+    };
+
+    fetchUsers();
+    const timer = setTimeout(fetchUsers, 150);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [cleanQuery, isOpen, onSyncUsers]);
+
+  if (!isOpen) return null;
+
+  // Merge prop registeredUsers with serverUsers (deduplicate by username or id)
+  const allAvailableUsers = useMemo(() => {
+    const map = new Map<string, UserProfile>();
+    for (const u of registeredUsers) {
+      if (u && u.username) map.set(u.username.toLowerCase(), u);
+    }
+    for (const u of serverUsers) {
+      if (u && u.username) map.set(u.username.toLowerCase(), u);
+    }
+    return Array.from(map.values());
+  }, [registeredUsers, serverUsers]);
+
+  // Instagram-Style Ranked Filter
   const matchedUsers = useMemo(() => {
-    if (!cleanQuery) return registeredUsers;
-    return registeredUsers.filter((u) => {
-      const matchId = (u.id || '').toLowerCase().includes(cleanQuery);
-      const matchUsername = (u.username || '').toLowerCase().includes(cleanQuery);
-      const matchName = (u.name || '').toLowerCase().includes(cleanQuery);
-      const matchBio = (u.bio || '').toLowerCase().includes(cleanQuery);
-      return matchId || matchUsername || matchName || matchBio;
-    });
-  }, [cleanQuery, registeredUsers]);
+    return searchUsersInstagramStyle(cleanQuery, allAvailableUsers);
+  }, [cleanQuery, allAvailableUsers]);
 
   // Filter Channels / Groups
   const matchedGroups = useMemo(() => {

@@ -113,6 +113,15 @@ export default function AuthLoginScreen({
       provider: 'custom' as const,
     };
 
+    // Broadcast and persist to global server registry
+    try {
+      fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser),
+      }).catch(() => {});
+    } catch {}
+
     onLoginSuccess(newUser);
     triggerToast(`Welcome to LMC Chats, @${cleanUsername}! 🚀`);
   };
@@ -154,15 +163,26 @@ export default function AuthLoginScreen({
       const cleanName = googleName.trim() || email.split('@')[0];
       const avatar = `https://api.dicebear.com/7.x/notionists/svg?seed=${cleanUsername}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
 
-      onLoginSuccess({
+      const googleProfile = {
         id: `usr_${cleanUsername}`,
         username: cleanUsername,
         name: cleanName,
         email: email,
         avatar: avatar,
         bio: 'Google verified member ⚡',
-        provider: 'google',
-      });
+        provider: 'google' as const,
+      };
+
+      // Broadcast and persist to global server registry
+      try {
+        fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(googleProfile),
+        }).catch(() => {});
+      } catch {}
+
+      onLoginSuccess(googleProfile);
       setGoogleLoading(false);
       triggerToast(`Signed in as ${email} 🎉`);
     }, 400);
