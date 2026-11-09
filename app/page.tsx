@@ -75,6 +75,12 @@ import DiscoverChannelsModal from '@/components/DiscoverChannelsModal';
 import UserWelcomeModal from '@/components/UserWelcomeModal';
 import VoiceNotePlayer from '@/components/VoiceNotePlayer';
 import IncomingCallModal from '@/components/IncomingCallModal';
+import WhatsAppChatsList from '@/components/WhatsAppChatsList';
+import CreateStoryModal from '@/components/CreateStoryModal';
+import StoryViewerModal from '@/components/StoryViewerModal';
+import NewChatModal from '@/components/NewChatModal';
+import { UserStory } from '@/types/story';
+import { fetchServerStories, postNewStory, markStoryAsViewed, getLocalStories } from '@/lib/stories';
 import {
   UserProfile,
   SEED_USERS,
@@ -190,6 +196,12 @@ export default function Home() {
 
   // Custom User Stickers (like WhatsApp)
   const [userStickers, setUserStickers] = useState<string[]>([]);
+
+  // WhatsApp / Telegram Stories & New Chat
+  const [stories, setStories] = useState<UserStory[]>([]);
+  const [showCreateStoryModal, setShowCreateStoryModal] = useState(false);
+  const [viewingStory, setViewingStory] = useState<UserStory | null>(null);
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
 
   // Modals & Drawers
   const [showNewGroupModal, setShowNewGroupModal] = useState(false);
@@ -616,6 +628,21 @@ export default function Home() {
         }
       } catch {}
     }
+
+    // 7. Load Stories
+    setStories(getLocalStories());
+    fetchServerStories().then((list) => {
+      if (Array.isArray(list)) setStories(list);
+    });
+
+    try {
+      const bcStories = new BroadcastChannel('lmc_stories_channel');
+      bcStories.onmessage = (event) => {
+        if (event.data?.type === 'STORIES_UPDATED' && Array.isArray(event.data.stories)) {
+          setStories(event.data.stories);
+        }
+      };
+    } catch {}
   }, []);
 
   // Real-Time Cross-Device Sync Poller (Phone 1 <-> Phone 2 live updates)
@@ -2226,6 +2253,53 @@ export default function Home() {
       replyingToMessage,
       notifyTyping,
     ]
+  );
+
+  // Story / Status Action Handlers
+  const handlePublishStory = useCallback(
+    async (storyPayload: Partial<UserStory>) => {
+      const published = await postNewStory(storyPayload);
+      if (published) {
+        setStories((prev) => [published, ...prev.filter((s) => s.id !== published.id)]);
+        triggerToast('Status updated! Disappears after 24 hours ✨');
+      }
+    },
+    [triggerToast]
+  );
+
+  const handleSendStoryReply = useCallback(
+    (targetHandle: string, storyContent: string, replyText: string) => {
+      const targetUser = registeredUsers.find(
+        (u) => u.username.toLowerCase() === targetHandle.toLowerCase()
+      ) || { name: targetHandle, username: targetHandle };
+
+      handleStartDm(targetUser);
+
+      // Send formatted direct reply
+      setTimeout(() => {
+        handleSendMessage(
+          `💬 *Replying to status:* "${storyContent.slice(0, 45)}${storyContent.length > 45 ? '...' : ''}"\n\n${replyText}`
+        );
+        triggerToast(`Sent status reply to @${targetHandle}! 🚀`);
+      }, 200);
+    },
+    [registeredUsers, handleStartDm, handleSendMessage, triggerToast]
+  );
+
+  const handleMarkStoryViewed = useCallback(
+    (storyId: string) => {
+      const myU = user.username || user.name || 'user';
+      markStoryAsViewed(storyId, myU);
+      setStories((prev) =>
+        prev.map((s) => {
+          if (s.id === storyId && !s.views.includes(myU.toLowerCase())) {
+            return { ...s, views: [...s.views, myU.toLowerCase()] };
+          }
+          return s;
+        })
+      );
+    },
+    [user.username, user.name]
   );
 
   // Voice Memo / Audio Recording Handlers
@@ -3858,582 +3932,239 @@ export default function Home() {
         </div>
       )}
 
-      {/* LEFT SIDEBAR (Discord & Linear style professional navigation) */}
-      <aside
-        className={`fixed md:relative top-0 bottom-0 left-0 z-40 bg-[#0C0F17] border-r border-[#1B212E] flex flex-col transition-all duration-300 ease-out select-none ${
-          railCollapsed ? 'w-[72px] min-w-[72px]' : 'w-[268px] min-w-[268px]'
-        } ${mobileRailOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'}`}
+      {/* 1. WHATSAPP & TELEGRAM CHAT CONVERSATIONS LIST (Primary screen on mobile when !activeGroupId, Left panel on desktop) */}
+      <div
+        className={`h-full shrink-0 transition-all select-none relative z-30 ${
+          !activeGroupId
+            ? 'w-full md:w-[360px] lg:w-[400px]'
+            : 'hidden md:block md:w-[360px] lg:w-[400px]'
+        }`}
       >
-        {/* Workspace Brand Header */}
-        <div className="h-14 flex items-center justify-between px-3.5 border-b border-[#1A202E] shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-full overflow-hidden bg-transparent shrink-0 ring-1 ring-white/10 shadow-sm">
-              <img src="/logo.png" alt="LMC Logo" className="w-full h-full object-cover rounded-full" />
-            </div>
-            {!railCollapsed && (
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="font-bold text-[14px] tracking-tight text-white truncate">LMC Chats</span>
-                <span className="text-[10px] bg-indigo-500/15 text-indigo-400 font-semibold px-1.5 py-0.5 rounded border border-indigo-500/30">
-                  Squad
-                </span>
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setRailCollapsed(!railCollapsed)}
-              className="hidden md:grid place-items-center w-7 h-7 rounded-lg text-[#7A8396] hover:text-white hover:bg-white/5 transition-colors"
-              title={railCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-            >
-              <PanelLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setMobileRailOpen(false)}
-              className="md:hidden grid place-items-center w-7 h-7 rounded-lg text-[#7A8396] hover:text-white hover:bg-white/5"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        <WhatsAppChatsList
+          currentUser={user}
+          activeGroupId={activeGroupId}
+          groups={visibleGroups}
+          messages={messages}
+          activeDmUsernames={activeDmUsernames}
+          registeredUsers={registeredUsers}
+          presenceMap={presenceMap}
+          stories={stories}
+          pendingDmRequestsCount={pendingIncomingRequests.length}
+          onSelectChat={(groupId) => {
+            setActiveGroupId(groupId);
+          }}
+          onOpenNewChatModal={() => setShowNewChatModal(true)}
+          onOpenCreateStory={() => setShowCreateStoryModal(true)}
+          onViewStory={(s) => setViewingStory(s)}
+          onOpenInstagramSearch={() => setShowInstagramSearch(true)}
+          onOpenStatusMenu={() => setShowStatusMenu(!showStatusMenu)}
+          onOpenSettingsModal={() => {
+            setProfileNameInput(user.name);
+            setProfileBioInput(user.bio || '');
+            setProfileAvatarSelected(user.avatar || DEFAULT_AVATAR_DATA_URL);
+            setShowProfileModal(true);
+          }}
+          onViewDmRequests={() => {
+            if (pendingIncomingRequests.length > 0) {
+              setActiveGroupId(pendingIncomingRequests[0].roomId);
+            }
+          }}
+        />
 
-        {/* Navigation & Channel List */}
-        <div className="flex-1 overflow-y-auto scroll px-2 py-2 space-y-3">
-          {!railCollapsed && (
-            <div className="mb-1">
-              {/* Sleek Search Entry Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowInstagramSearch(true);
-                  setMobileRailOpen(false);
-                }}
-                className="w-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-left px-3 py-2 rounded-xl text-xs text-[#A8B2C7] hover:text-white flex items-center justify-between transition-all group"
-              >
-                <span className="flex items-center gap-2">
-                  <Search className="w-3.5 h-3.5 text-pink-400 group-hover:scale-110 transition-transform" />
-                  <span className="truncate">Search users or channels...</span>
-                </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 font-mono text-[#7A8396]">
-                  /
-                </span>
-              </button>
-            </div>
-          )}
-
-          {/* Public Channels Section */}
-          <div>
-            {!railCollapsed ? (
-              <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase text-[#7A8396]">
-                <span className="flex items-center gap-1.5">Channels</span>
-                <div className="flex items-center gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowDiscoverChannels(true);
-                      setMobileRailOpen(false);
-                    }}
-                    className="w-5 h-5 rounded hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-purple-300 transition-colors"
-                    title="Discover Public Channels"
-                  >
-                    <Compass className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewGroupIsPrivate(false);
-                      setShowNewGroupModal(true);
-                      setMobileRailOpen(false);
-                    }}
-                    className="w-5 h-5 rounded hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white transition-colors"
-                    title="Create New Channel"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="w-full h-px bg-white/10 my-1" />
-            )}
-
-            <div className="space-y-0.5 mt-1">
-              {visibleGroups.filter((g) => !g.is_private).length === 0 && !railCollapsed && (
-                <div className="px-3 py-2 text-center">
-                  <p className="text-[11px] text-[#5A6376] italic">No channels yet</p>
-                </div>
-              )}
-              {visibleGroups
-                .filter((g) => !g.is_private)
-                .map((group) => {
-                  const isActive = group.id === activeGroupId;
-                  return (
-                    <button
-                      key={group.id}
-                      onClick={() => {
-                        setActiveGroupId(group.id);
-                        setMobileRailOpen(false);
-                      }}
-                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-left relative group ${
-                        isActive
-                          ? 'bg-[#6366F1]/15 text-white font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:bg-[#6366F1] before:rounded-r'
-                          : 'text-[#9DA6B8] hover:bg-white/[0.05] hover:text-white font-medium'
-                      }`}
-                      title={group.name}
-                    >
-                      <div className="relative shrink-0">
-                        {group.avatar && group.avatar !== '/logo.png' ? (
-                          <div className="w-5 h-5 rounded-full overflow-hidden bg-transparent shrink-0">
-                            <img src={group.avatar} alt={group.name} className="w-full h-full object-cover rounded-full" />
-                          </div>
-                        ) : (
-                          <Hash
-                            className={`w-4 h-4 shrink-0 ${
-                              isActive ? 'text-[#818CF8]' : 'text-[#7A8396] group-hover:text-white'
-                            }`}
-                          />
-                        )}
-                      </div>
-                      {!railCollapsed && (
-                        <div className="flex-1 min-w-0 flex items-center justify-between gap-1">
-                          <span className="text-[13px] truncate">{group.name}</span>
-                          {group.unreadCount && group.unreadCount > 0 ? (
-                            <span className="bg-[#6366F1] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                              {group.unreadCount}
-                            </span>
-                          ) : null}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-            </div>
-          </div>
-
-          {/* Private Rooms Section */}
-          <div>
-            {!railCollapsed ? (
-              <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase text-[#7A8396]">
-                <span className="flex items-center gap-1.5">Private Rooms</span>
-              </div>
-            ) : (
-              <div className="w-full h-px bg-white/10 my-1" />
-            )}
-
-            <div className="space-y-0.5 mt-1">
-              {visibleGroups.filter((g) => g.is_private).length === 0 && !railCollapsed && (
-                <div className="px-3 py-2 text-center">
-                  <p className="text-[11px] text-[#5A6376] italic">No private rooms</p>
-                </div>
-              )}
-              {visibleGroups
-                .filter((g) => g.is_private)
-                .map((group) => {
-                  const isActive = group.id === activeGroupId;
-                  return (
-                    <button
-                      key={group.id}
-                      onClick={() => {
-                        setActiveGroupId(group.id);
-                        setMobileRailOpen(false);
-                      }}
-                      className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-left relative group ${
-                        isActive
-                          ? 'bg-[#6366F1]/15 text-white font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:bg-[#6366F1] before:rounded-r'
-                          : 'text-[#9DA6B8] hover:bg-white/[0.05] hover:text-white font-medium'
-                      }`}
-                      title={group.name}
-                    >
-                      <Lock
-                        className={`w-3.5 h-3.5 shrink-0 ${
-                          isActive ? 'text-[#F59E0B]' : 'text-[#7A8396] group-hover:text-white'
-                        }`}
-                      />
-                      {!railCollapsed && (
-                        <div className="flex-1 min-w-0 flex items-center justify-between gap-1">
-                          <span className="text-[13px] truncate">{group.name}</span>
-                          <span className="text-[9px] text-[#F59E0B] font-semibold bg-[#F59E0B]/10 px-1.5 py-0.5 rounded">
-                            Lock
-                          </span>
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-            </div>
-          </div>
-
-          {/* Direct Messages (DMs) Section */}
-          <div className="mt-3">
-            {!railCollapsed ? (
-              <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase text-[#7A8396]">
-                <span className="flex items-center gap-1.5">Direct Messages</span>
-                <button
-                  type="button"
-                  onClick={() => setShowInstagramSearch(true)}
-                  className="w-5 h-5 rounded hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white transition-colors"
-                  title="Search user to start Direct Message"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ) : (
-              <div className="w-full h-px bg-white/10 my-1" />
-            )}
-
-            <div className="space-y-0.5 mt-1">
-              {activeDmUsernames.length === 0 && !railCollapsed && (
-                <div className="px-3 py-2 text-center">
-                  <p className="text-[11px] text-[#5A6376] italic">No direct chats yet</p>
-                </div>
-              )}
-              {activeDmUsernames.map((targetHandle) => {
-                const myHandle = (user.username || user.name || 'user').toLowerCase().replace(/[^a-z0-9_]/g, '');
-                const sorted = [myHandle, targetHandle.toLowerCase()].sort();
-                const dmRoomId = `dm_${sorted[0]}_${sorted[1]}`;
-                const isActive = activeGroupId === dmRoomId;
-                const targetProfile = registeredUsers.find(
-                  (u) => u.username.toLowerCase() === targetHandle.toLowerCase()
-                );
-
-                return (
-                  <button
-                    key={dmRoomId}
-                    type="button"
-                    onClick={() => {
-                      setActiveGroupId(dmRoomId);
-                      setMobileRailOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-left relative group ${
-                      isActive
-                        ? 'bg-indigo-600/20 text-white font-semibold before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:bg-indigo-500 before:rounded-r'
-                        : 'text-[#9DA6B8] hover:bg-white/[0.05] hover:text-white font-medium'
-                    }`}
-                    title={`Chat with @${targetHandle}`}
-                  >
-                    <div className="relative shrink-0">
-                      <div className="w-5 h-5 rounded-full overflow-hidden bg-[#141824] border border-white/10">
-                        <img
-                          src={targetProfile?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${targetHandle}&backgroundColor=b6e3f4,d1d4f9`}
-                          alt={targetHandle}
-                          className="w-full h-full object-cover rounded-full"
-                        />
-                      </div>
-                      {presenceMap[targetHandle.toLowerCase()]?.is_online ? (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 border border-[#0A0D14] animate-pulse" />
-                      ) : (
-                        <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-slate-500 border border-[#0A0D14]" />
-                      )}
-                    </div>
-                    {!railCollapsed && (
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] truncate">{targetProfile?.name || `@${targetHandle}`}</p>
-                        <p className="text-[10px] truncate">
-                          {presenceMap[targetHandle.toLowerCase()]?.is_online ? (
-                            <span className="text-emerald-400 font-medium">Online</span>
-                          ) : (
-                            <span className="text-[#7A8396]">{presenceMap[targetHandle.toLowerCase()]?.last_seen_text || `@${targetHandle}`}</span>
-                          )}
-                        </p>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* User Profile Footer (Discord / Slack style) */}
-        <div className="p-2 border-t border-[#1A202E] bg-[#0A0D14]/90 backdrop-blur shrink-0 relative">
-          <div className="flex items-center justify-between gap-2 p-1 rounded-xl hover:bg-white/[0.04] transition-colors">
-            <button
-              onClick={() => setShowStatusMenu(!showStatusMenu)}
-              className="flex items-center gap-2.5 min-w-0 flex-1 text-left group"
-              title="Click to change status"
-            >
-              <div className="relative shrink-0">
-                <div className="w-8 h-8 rounded-full overflow-hidden bg-[#161C28] border border-white/15">
-                  <img
-                    src={user.avatar || DEFAULT_AVATAR_DATA_URL}
-                    alt={user.name || 'User'}
-                    className="w-full h-full object-cover rounded-full"
-                  />
-                </div>
-                <span
-                  className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#0A0D14] ${
-                    user.status === 'online' ? 'bg-[#22C55E]' : user.status === 'idle' ? 'bg-[#F59E0B]' : 'bg-[#EF4444]'
-                  }`}
+        {/* Upwards / Flyout Status & Profile Menu */}
+        {showStatusMenu && (
+          <div className="absolute top-16 left-3 z-50 w-64 bg-[#141824] border border-white/10 rounded-2xl p-2 shadow-2xl animate-msg-in">
+            <div className="px-2 py-1.5 border-b border-white/10 mb-1.5 flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full overflow-hidden bg-[#161C28] shrink-0 border border-white/10">
+                <img
+                  src={user.avatar || DEFAULT_AVATAR_DATA_URL}
+                  alt="avatar"
+                  className="w-full h-full object-cover rounded-full"
                 />
               </div>
-              {!railCollapsed && (
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-white truncate group-hover:text-[#818CF8] transition-colors">
-                    {user.name || 'Set your name'}
-                  </p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[10px] text-indigo-400 font-mono font-semibold truncate">
-                      @{user.username || 'user'}
-                    </span>
-                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/10 text-slate-300 font-mono shrink-0">
-                      ID: {user.id || `usr_${user.username || 'me'}`}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </button>
-
-            {!railCollapsed && (
-              <button
-                onClick={() => {
-                  setProfileNameInput(user.name);
-                  setProfileBioInput(user.bio || '');
-                  setProfileAvatarSelected(user.avatar || DEFAULT_AVATAR_DATA_URL);
-                  setShowProfileModal(true);
-                }}
-                className="w-7 h-7 rounded-lg grid place-items-center text-[#7A8396] hover:text-white hover:bg-white/10 transition-colors shrink-0"
-                title="Edit Profile & Photo"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Upwards Discord-style Status Flyout */}
-          {showStatusMenu && (
-            <div className="absolute bottom-14 left-2 right-2 z-50 bg-[#141824] border border-white/10 rounded-2xl p-2 shadow-2xl animate-msg-in">
-              <div className="px-2 py-1.5 border-b border-white/10 mb-1.5 flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full overflow-hidden bg-[#161C28] shrink-0 border border-white/10">
-                  <img
-                    src={user.avatar || DEFAULT_AVATAR_DATA_URL}
-                    alt="avatar"
-                    className="w-full h-full object-cover rounded-full"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-white truncate">{user.name || 'User'}</p>
-                  <div className="flex items-center justify-between gap-1 mt-0.5">
-                    <span className="text-[10px] text-indigo-400 font-mono">@{user.username || 'user'}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const idText = user.id || `usr_${user.username}`;
-                        if (typeof navigator !== 'undefined') {
-                          navigator.clipboard?.writeText(idText);
-                          triggerToast(`Copied your User ID: ${idText} 📋`);
-                        }
-                      }}
-                      className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 font-mono flex items-center gap-1 transition-colors"
-                      title="Click to copy your User ID"
-                    >
-                      <span>ID: {user.id || `usr_${user.username}`}</span>
-                      <Copy className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-white truncate">{user.name || 'User'}</p>
+                <div className="flex items-center justify-between gap-1 mt-0.5">
+                  <span className="text-[10px] text-indigo-400 font-mono">@{user.username || 'user'}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const idText = user.id || `usr_${user.username}`;
+                      if (typeof navigator !== 'undefined') {
+                        navigator.clipboard?.writeText(idText);
+                        triggerToast(`Copied your User ID: ${idText} 📋`);
+                      }
+                    }}
+                    className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 font-mono flex items-center gap-1 transition-colors"
+                    title="Click to copy your User ID"
+                  >
+                    <span>ID: {user.id || `usr_${user.username}`}</span>
+                    <Copy className="w-2.5 h-2.5" />
+                  </button>
                 </div>
               </div>
+            </div>
 
-              <div className="space-y-0.5">
-                <button
-                  onClick={() => {
-                    saveUserSession({ ...user, status: 'online' });
-                    setShowStatusMenu(false);
-                  }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left text-white transition-colors"
-                >
-                  <span className="w-2 h-2 rounded-full bg-[#22C55E]" />
-                  <span className="flex-1">Online</span>
-                  {user.status === 'online' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
-                </button>
-                <button
-                  onClick={() => {
-                    saveUserSession({ ...user, status: 'idle' });
-                    setShowStatusMenu(false);
-                  }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left text-white transition-colors"
-                >
-                  <span className="w-2 h-2 rounded-full bg-[#F59E0B]" />
-                  <span className="flex-1">Away</span>
-                  {user.status === 'idle' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
-                </button>
-                <button
-                  onClick={() => {
-                    saveUserSession({ ...user, status: 'dnd' });
-                    setShowStatusMenu(false);
-                  }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left text-white transition-colors"
-                >
-                  <span className="w-2 h-2 rounded-full bg-[#EF4444]" />
-                  <span className="flex-1">Do Not Disturb</span>
-                  {user.status === 'dnd' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
-                </button>
-              </div>
-
-              <div className="border-t border-white/10 my-1.5" />
-
+            <div className="space-y-0.5">
               <button
                 onClick={() => {
+                  saveUserSession({ ...user, status: 'online' });
                   setShowStatusMenu(false);
-                  setShowAvatarStudio(true);
                 }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-[#A78BFA] font-medium transition-colors"
+                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left text-white transition-colors"
               >
-                <Palette className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Snapchat Avatar Studio</span>
+                <span className="w-2 h-2 rounded-full bg-[#22C55E]" />
+                <span className="flex-1">Online</span>
+                {user.status === 'online' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
               </button>
-
               <button
                 onClick={() => {
+                  saveUserSession({ ...user, status: 'idle' });
                   setShowStatusMenu(false);
-                  setProfileNameInput(user.name);
-                  setProfileBioInput(user.bio || '');
-                  setProfileAvatarSelected(user.avatar || DEFAULT_AVATAR_DATA_URL);
-                  setShowProfileModal(true);
                 }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-[#818CF8] font-medium transition-colors"
+                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left text-white transition-colors"
               >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>Edit Profile & Status</span>
+                <span className="w-2 h-2 rounded-full bg-[#F59E0B]" />
+                <span className="flex-1">Away</span>
+                {user.status === 'idle' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
               </button>
-
               <button
                 onClick={() => {
+                  saveUserSession({ ...user, status: 'dnd' });
                   setShowStatusMenu(false);
-                  setShowGoogleAuthModal(true);
                 }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-slate-200 font-medium transition-colors"
+                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left text-white transition-colors"
               >
-                <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  />
-                </svg>
-                <span>{user.provider === 'google' ? 'Switch Google Account' : 'Sign in with Google'}</span>
-              </button>
-
-              {isAdminOfActiveGroup && (
-                <button
-                  onClick={() => {
-                    setShowStatusMenu(false);
-                    setShowAdminModal(true);
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-amber-500/10 text-amber-300 font-medium transition-colors"
-                >
-                  <Crown className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Admin & Ban Panel</span>
-                </button>
-              )}
-
-              <div className="border-t border-white/10 my-1.5" />
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-rose-500/15 text-rose-400 font-medium transition-colors"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Log Out / Switch Account</span>
+                <span className="w-2 h-2 rounded-full bg-[#EF4444]" />
+                <span className="flex-1">Do Not Disturb</span>
+                {user.status === 'dnd' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
               </button>
             </div>
-          )}
-        </div>
-      </aside>
 
-      {/* Mobile Sidebar Scrim */}
-      {mobileRailOpen && (
-        <div
-          onClick={() => setMobileRailOpen(false)}
-          className="fixed inset-0 z-30 bg-black/70 backdrop-blur-sm md:hidden"
-        />
-      )}
+            <div className="border-t border-white/10 my-1.5" />
 
-      {/* MAIN CHAT COLUMN */}
-      <main className="flex-1 flex flex-col min-w-0 h-full relative bg-[#0B0E17]">
+            <button
+              onClick={() => {
+                setShowStatusMenu(false);
+                setShowAvatarStudio(true);
+              }}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-[#A78BFA] font-medium transition-colors"
+            >
+              <Palette className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Snapchat Avatar Studio</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowStatusMenu(false);
+                setProfileNameInput(user.name);
+                setProfileBioInput(user.bio || '');
+                setProfileAvatarSelected(user.avatar || DEFAULT_AVATAR_DATA_URL);
+                setShowProfileModal(true);
+              }}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-[#818CF8] font-medium transition-colors"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>Edit Profile & Status</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowStatusMenu(false);
+                setShowGoogleAuthModal(true);
+              }}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-slate-200 font-medium transition-colors"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                />
+              </svg>
+              <span>{user.provider === 'google' ? 'Switch Google Account' : 'Sign in with Google'}</span>
+            </button>
+
+            {isAdminOfActiveGroup && (
+              <button
+                onClick={() => {
+                  setShowStatusMenu(false);
+                  setShowAdminModal(true);
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-amber-500/10 text-amber-300 font-medium transition-colors"
+              >
+                <Crown className="w-3.5 h-3.5 text-amber-400" />
+                <span>Admin & Ban Panel</span>
+              </button>
+            )}
+
+            <div className="border-t border-white/10 my-1.5" />
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-rose-500/15 text-rose-400 font-medium transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Log Out / Switch Account</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 2. MAIN CONVERSATION COLUMN (WhatsApp Web / Telegram Desktop 2-column or mobile conversation view) */}
+      <main
+        className={`flex-1 flex flex-col min-w-0 h-full relative bg-[#0B0E17] ${
+          !activeGroupId ? 'hidden md:flex' : 'flex'
+        }`}
+      >
         {!activeGroup ? (
-          <div className="flex-1 flex flex-col min-w-0 h-full">
-            {/* Minimal Header */}
-            <header className="h-16 px-3 sm:px-5 flex items-center justify-between border-b border-[#1B212E] bg-[#0B0E17]/95 backdrop-blur-md z-10 shrink-0">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <button
-                  type="button"
-                  onClick={() => setMobileRailOpen(true)}
-                  className="md:hidden w-9 h-9 rounded-xl grid place-items-center text-[#7A8396] hover:text-white hover:bg-white/5 active:scale-95 shrink-0"
-                  title="Open Menu"
-                >
-                  <Menu className="w-5 h-5" />
-                </button>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-indigo-600/20 text-indigo-400 grid place-items-center font-bold text-xs">
-                    #
-                  </div>
-                  <h1 className="text-sm sm:text-base font-bold text-white tracking-tight">LMC Chats</h1>
-                </div>
+          /* WhatsApp Web / Telegram Desktop Welcome Screen */
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none bg-[#090C13]">
+            <div className="relative mb-6">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-emerald-500/20 via-indigo-500/20 to-purple-500/20 border border-white/10 grid place-items-center shadow-2xl">
+                <MessageSquare className="w-10 h-10 text-emerald-400" />
               </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowInstagramSearch(true)}
-                  className="w-9 h-9 rounded-xl grid place-items-center text-pink-400 hover:text-pink-300 hover:bg-pink-500/10 active:scale-90 transition-all shrink-0"
-                  title="Search Users & IDs"
-                >
-                  <Search className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewGroupIsPrivate(false);
-                    setShowNewGroupModal(true);
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/30 active:scale-95 transition-all"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Create Group</span>
-                </button>
-              </div>
-            </header>
-
-            {/* Clean Blank Slate */}
-            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center select-none">
-              <div className="w-16 h-16 rounded-3xl bg-indigo-600/10 border border-indigo-500/20 grid place-items-center mb-4 text-indigo-400 shadow-xl">
-                <MessageSquare className="w-7 h-7" />
-              </div>
-              <h2 className="text-lg sm:text-xl font-bold text-white mb-2">No Channels Yet</h2>
-              <p className="text-xs sm:text-sm text-[#7A8396] max-w-sm mb-6">
-                Create a channel to start chatting with your squad, or use search to find friends.
-              </p>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewGroupIsPrivate(false);
-                    setShowNewGroupModal(true);
-                  }}
-                  className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm flex items-center gap-2 shadow-lg shadow-indigo-600/30 active:scale-95 transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create Group</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowInstagramSearch(true)}
-                  className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold text-sm flex items-center gap-2 border border-white/10 active:scale-95 transition-all"
-                >
-                  <Search className="w-4 h-4" />
-                  <span>Search Users</span>
-                </button>
-              </div>
+              <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-indigo-500 text-white grid place-items-center text-xs shadow-md">
+                ⚡
+              </span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-white mb-2">LMC Chats Web</h2>
+            <p className="text-xs sm:text-sm text-[#7A8396] max-w-sm mb-6 leading-relaxed">
+              Send and receive messages with your squad in real-time. Select a chat from the left or click New Chat to start talking.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowNewChatModal(true)}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-600/30 active:scale-95 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                <span>New Chat</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowInstagramSearch(true)}
+                className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 border border-white/10 active:scale-95 transition-all"
+              >
+                <Search className="w-4 h-4" />
+                <span>Search Squad</span>
+              </button>
+            </div>
+            <div className="mt-12 flex items-center gap-2 text-[11px] text-[#5A6376]">
+              <Lock className="w-3.5 h-3.5 text-emerald-400/80" />
+              <span>End-to-end encrypted • Real-time Sync • WebRTC Voice & Video</span>
             </div>
           </div>
         ) : (
@@ -4483,13 +4214,13 @@ export default function Home() {
           ) : (
             <>
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                {/* 3-line hamburger menu for mobile */}
+                {/* Mobile Back Button (ArrowLeft) -> Returns to WhatsApp Chats list! */}
                 <button
-                  onClick={() => setMobileRailOpen(true)}
-                  className="md:hidden w-9 h-9 rounded-xl grid place-items-center text-[#7A8396] hover:text-white hover:bg-white/5 active:scale-95 shrink-0"
-                  title="Open Menu"
+                  onClick={() => setActiveGroupId('')}
+                  className="md:hidden w-9 h-9 rounded-xl grid place-items-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 active:scale-95 shrink-0"
+                  title="Back to Chats"
                 >
-                  <Menu className="w-5 h-5" />
+                  <ArrowLeft className="w-5 h-5" />
                 </button>
 
                 {/* Clickable Channel Header to view Group Details */}
@@ -6045,6 +5776,41 @@ export default function Home() {
         </div>
       </aside>
       )}
+
+      {/* NEW CHAT MODAL (WhatsApp Style Contact Picker) */}
+      <NewChatModal
+        isOpen={showNewChatModal}
+        onClose={() => setShowNewChatModal(false)}
+        registeredUsers={registeredUsers}
+        currentUserId={user.id}
+        currentUsername={user.username}
+        presenceMap={presenceMap}
+        onStartDm={handleStartDm}
+        onCreateGroup={() => {
+          setNewGroupIsPrivate(false);
+          setShowNewGroupModal(true);
+        }}
+        onDiscoverChannels={() => setShowDiscoverChannels(true)}
+      />
+
+      {/* CREATE STORY / STATUS MODAL */}
+      <CreateStoryModal
+        isOpen={showCreateStoryModal}
+        onClose={() => setShowCreateStoryModal(false)}
+        currentUser={user}
+        onPublishStory={handlePublishStory}
+      />
+
+      {/* STORY VIEWER MODAL (Instagram / WhatsApp Fullscreen Player) */}
+      <StoryViewerModal
+        isOpen={Boolean(viewingStory)}
+        onClose={() => setViewingStory(null)}
+        story={viewingStory}
+        allStories={stories}
+        currentUser={user}
+        onSendStoryReply={handleSendStoryReply}
+        onMarkViewed={handleMarkStoryViewed}
+      />
     </div>
   );
 }
