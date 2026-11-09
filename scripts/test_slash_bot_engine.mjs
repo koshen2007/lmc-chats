@@ -7,7 +7,7 @@
  * 4. Bunk squad join/retract update via PATCH /api/messages
  */
 
-import { executeSlashCommand } from '../lib/slashBot.js';
+import { executeSlashCommand } from '../lib/slashBot.ts';
 
 const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3009';
 const AUDIT_HEADERS = {
@@ -148,3 +148,4 @@ runBotTests().catch((err) => {
   console.error('Fatal test error:', err);
   process.exit(1);
 });
+
