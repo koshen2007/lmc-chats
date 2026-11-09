@@ -53,6 +53,7 @@ import {
   AtSign,
   Copy,
   Trash2,
+  ArrowLeft,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured, Group, Message, BannedUser } from '@/lib/supabase';
 import { STICKERS, AVATAR_OPTIONS, FALLBACK_GIFS, EMOJI_CATEGORIES } from '@/lib/data';
@@ -131,6 +132,7 @@ export default function Home() {
   const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>(SEED_USERS);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showUserSearchDropdown, setShowUserSearchDropdown] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   // Real-time username availability validation
   const [usernameAvailability, setUsernameAvailability] = useState<{
@@ -1951,7 +1953,7 @@ export default function Home() {
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <form
             onSubmit={handleSaveProfile}
-            className="w-full max-w-sm bg-[#131722] border border-[#232B3E] rounded-3xl p-6 shadow-2xl animate-msg-in flex flex-col"
+            className="w-full max-w-sm bg-[#131722] border border-[#232B3E] rounded-3xl p-5 sm:p-6 shadow-2xl animate-msg-in flex flex-col max-h-[92vh] overflow-y-auto scroll"
           >
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -2258,7 +2260,7 @@ export default function Home() {
         <div className="fixed inset-0 z-[190] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <form
             onSubmit={handleCreateGroup}
-            className="w-full max-w-sm bg-[#131722] border border-[#232B3E] rounded-3xl p-6 shadow-2xl animate-msg-in"
+            className="w-full max-w-sm bg-[#131722] border border-[#232B3E] rounded-3xl p-5 sm:p-6 shadow-2xl animate-msg-in max-h-[90vh] overflow-y-auto scroll"
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-white flex items-center gap-2">
@@ -2700,195 +2702,257 @@ export default function Home() {
       {/* MAIN CHAT COLUMN */}
       <main className="flex-1 flex flex-col min-w-0 h-full relative bg-[#0B0E17]">
         {/* Chat Header */}
-        <header className="h-16 px-3 sm:px-5 flex items-center justify-between border-b border-[#1B212E] bg-[#0B0E17]/95 backdrop-blur-md z-10 shrink-0">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            {/* 3-line hamburger menu for mobile */}
-            <button
-              onClick={() => setMobileRailOpen(true)}
-              className="md:hidden w-10 h-10 rounded-xl grid place-items-center text-[#7A8396] hover:text-white hover:bg-white/5 active:scale-95"
-              title="Open Menu"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-
-            {/* Clickable Channel Header to view Group Details */}
-            <div
-              onClick={() => setInfoOpen(!infoOpen)}
-              className="flex items-center gap-2.5 cursor-pointer hover:opacity-85 transition-opacity min-w-0"
-              title="View Channel Details & Members"
-            >
-              <div className="relative shrink-0">
-                <div className="w-10 h-10 rounded-full overflow-hidden bg-transparent border border-white/10 shadow-sm">
-                  <img src={activeGroup.avatar || '/logo.png'} alt={activeGroup.name} className="w-full h-full object-cover rounded-full" />
-                </div>
-                {activeGroup.is_private && (
-                  <span className="absolute -bottom-0.5 -right-0.5 bg-black/90 p-0.5 rounded-full text-[#F59E0B]">
-                    <Lock className="w-2.5 h-2.5" />
-                  </span>
+        <header className="h-16 px-2.5 sm:px-5 flex items-center justify-between border-b border-[#1B212E] bg-[#0B0E17]/95 backdrop-blur-md z-10 shrink-0 relative">
+          {mobileSearchOpen ? (
+            /* Full-width Mobile Search Bar Overlay */
+            <div className="flex-1 flex items-center gap-2 animate-msg-in">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileSearchOpen(false);
+                  setSearchQuery('');
+                  setShowUserSearchDropdown(false);
+                }}
+                className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white shrink-0 active:scale-95 transition-all"
+                title="Back"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-[#7A8396] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => setShowUserSearchDropdown(true)}
+                  placeholder="Search @username, ID, messages..."
+                  className="w-full bg-[#131722] border border-[#232B3E] focus:border-[#6366F1] rounded-xl pl-9 pr-8 py-2 text-xs text-[#E9ECF4] placeholder-[#5A6376] outline-none"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setShowUserSearchDropdown(false);
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#7A8396] hover:text-white"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 )}
               </div>
-              <div className="truncate">
-                <h1 className="text-sm sm:text-base font-bold text-white flex items-center gap-1.5 truncate">
-                  {activeGroup.name}
-                </h1>
-                <p className="text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
-                  <span>{(activeGroup.members || []).length} members</span>
-                  <span>• Tap for info</span>
-                </p>
-              </div>
             </div>
-          </div>
-
-          {/* Right Header Actions: Voice Call, Video Call, Search & Info */}
-          <div className="flex items-center gap-1 sm:gap-2">
-            {/* Search Input with User @username & Message Search */}
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => setShowUserSearchDropdown(true)}
-                placeholder="Search @username, ID, messages..."
-                className="bg-[#131722] border border-[#232B3E] rounded-xl pl-8 pr-7 py-1.5 text-xs text-[#E9ECF4] placeholder-[#5A6376] focus:outline-none focus:border-[#6366F1] w-32 sm:w-52 lg:w-64 transition-all"
-              />
-              {searchQuery && (
+          ) : (
+            <>
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                {/* 3-line hamburger menu for mobile */}
                 <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setShowUserSearchDropdown(false);
-                  }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[#7A8396] hover:text-white"
+                  onClick={() => setMobileRailOpen(true)}
+                  className="md:hidden w-9 h-9 rounded-xl grid place-items-center text-[#7A8396] hover:text-white hover:bg-white/5 active:scale-95 shrink-0"
+                  title="Open Menu"
                 >
-                  <X className="w-3 h-3" />
+                  <Menu className="w-5 h-5" />
                 </button>
-              )}
 
-              {/* Live Search Results Dropdown for @username and User IDs */}
-              {showUserSearchDropdown && searchQuery.trim().length > 0 && (
-                <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 z-50 animate-msg-in">
-                  <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#7A8396] flex items-center justify-between border-b border-white/10 mb-1">
-                    <span>User Search (@username / ID)</span>
+                {/* Clickable Channel Header to view Group Details */}
+                <div
+                  onClick={() => setInfoOpen(!infoOpen)}
+                  className="flex items-center gap-2 sm:gap-2.5 cursor-pointer hover:opacity-85 transition-opacity min-w-0"
+                  title="View Channel Details & Members"
+                >
+                  <div className="relative shrink-0">
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden bg-transparent border border-white/10 shadow-sm">
+                      <img src={activeGroup.avatar || '/logo.png'} alt={activeGroup.name} className="w-full h-full object-cover rounded-full" />
+                    </div>
+                    {activeGroup.is_private && (
+                      <span className="absolute -bottom-0.5 -right-0.5 bg-black/90 p-0.5 rounded-full text-[#F59E0B]">
+                        <Lock className="w-2.5 h-2.5" />
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h1 className="text-xs sm:text-base font-bold text-white flex items-center gap-1.5 truncate">
+                      {activeGroup.name}
+                    </h1>
+                    <p className="text-[10px] sm:text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
+                      <span>{(activeGroup.members || []).length} members</span>
+                      <span className="hidden xs:inline">• Info</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Header Actions */}
+              <div className="flex items-center gap-0.5 sm:gap-1.5 shrink-0">
+                {/* Search icon button for mobile */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileSearchOpen(true);
+                    setShowUserSearchDropdown(true);
+                  }}
+                  className="sm:hidden w-8 h-8 rounded-lg grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all"
+                  title="Search"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+
+                {/* Desktop Search Input with User @username & Message Search */}
+                <div className="relative hidden sm:block">
+                  <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={() => setShowUserSearchDropdown(true)}
+                    placeholder="Search @username, ID, messages..."
+                    className="bg-[#131722] border border-[#232B3E] rounded-xl pl-8 pr-7 py-1.5 text-xs text-[#E9ECF4] placeholder-[#5A6376] focus:outline-none focus:border-[#6366F1] w-44 lg:w-60 transition-all"
+                  />
+                  {searchQuery && (
                     <button
-                      type="button"
-                      onClick={() => setShowUserSearchDropdown(false)}
-                      className="text-white hover:opacity-75"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setShowUserSearchDropdown(false);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#7A8396] hover:text-white"
                     >
                       <X className="w-3 h-3" />
                     </button>
-                  </div>
-                  <div className="max-h-60 overflow-y-auto scroll space-y-1">
-                    {matchingUsers.length > 0 ? (
-                      matchingUsers.map((u) => (
-                        <div
-                          key={u.id || u.username}
-                          className="flex items-center justify-between p-2 rounded-xl bg-white/[0.02] hover:bg-white/[0.08] transition-colors"
-                        >
-                          <div
-                            onClick={() => {
-                              setViewingProfile({
-                                id: u.id,
-                                username: u.username,
-                                name: u.name,
-                                avatar: u.avatar,
-                                bio: u.bio,
-                                status: u.status,
-                              });
-                              setShowUserSearchDropdown(false);
-                            }}
-                            className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
-                          >
-                            <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/10" />
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold text-white truncate">{u.name}</p>
-                              <p className="text-[10px] text-indigo-400 font-mono truncate">@{u.username}</p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              handleAddMemberToChannel(u);
-                              setShowUserSearchDropdown(false);
-                            }}
-                            className="text-[10px] font-semibold text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-600 px-2 py-1 rounded-lg transition-colors ml-2 shrink-0 flex items-center gap-1"
-                            title={`Add @${u.username} to #${activeGroup.name}`}
-                          >
-                            <UserPlus className="w-3 h-3" />
-                            <span>Add</span>
-                          </button>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="p-3 text-center text-xs text-[#7A8396]">
-                        No user found matching "{searchQuery}"
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
-              )}
+
+                {/* Admin Moderation & Ban Panel Button */}
+                {isAdminOfActiveGroup && (
+                  <button
+                    onClick={() => setShowAdminModal(true)}
+                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 active:scale-90 transition-all shadow-sm shrink-0"
+                    title="Admin Moderation & Ban Panel"
+                  >
+                    <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+                  </button>
+                )}
+
+                {/* Add Member Button */}
+                <button
+                  onClick={() => setShowAddMemberModal(true)}
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                  title={`Add Members to #${activeGroup.name}`}
+                >
+                  <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
+                </button>
+
+                {/* Voice Call Button */}
+                <button
+                  onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                  title="Start Voice Call"
+                >
+                  <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#22C55E]" />
+                </button>
+
+                {/* Video Call Button */}
+                <button
+                  onClick={() => startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png')}
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                  title="Start Video Call"
+                >
+                  <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#818CF8]" />
+                </button>
+
+                {/* Telegram Music Bot & Room Player Button */}
+                <button
+                  onClick={() => setShowMusicBotModal(true)}
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all relative shrink-0"
+                  title="LMC Music Bot & Channel Player"
+                >
+                  <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
+                  {roomPlayback?.isPlaying && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  )}
+                </button>
+
+                {/* Channel Info Button */}
+                <button
+                  onClick={() => setInfoOpen(!infoOpen)}
+                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center transition-all shrink-0 ${
+                    infoOpen ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Channel Details"
+                >
+                  <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Live Search Results Dropdown for @username and User IDs */}
+          {showUserSearchDropdown && searchQuery.trim().length > 0 && (
+            <div className="absolute left-2.5 right-2.5 sm:left-auto sm:right-4 top-full mt-2 sm:w-80 bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 z-50 animate-msg-in">
+              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#7A8396] flex items-center justify-between border-b border-white/10 mb-1">
+                <span>User Search (@username / ID)</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUserSearchDropdown(false);
+                    setMobileSearchOpen(false);
+                  }}
+                  className="text-white hover:opacity-75"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+              <div className="max-h-60 overflow-y-auto scroll space-y-1">
+                {matchingUsers.length > 0 ? (
+                  matchingUsers.map((u) => (
+                    <div
+                      key={u.id || u.username}
+                      className="flex items-center justify-between p-2 rounded-xl bg-white/[0.02] hover:bg-white/[0.08] transition-colors"
+                    >
+                      <div
+                        onClick={() => {
+                          setViewingProfile({
+                            id: u.id,
+                            username: u.username,
+                            name: u.name,
+                            avatar: u.avatar,
+                            bio: u.bio,
+                            status: u.status,
+                          });
+                          setShowUserSearchDropdown(false);
+                          setMobileSearchOpen(false);
+                        }}
+                        className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
+                      >
+                        <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/10" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-white truncate">{u.name}</p>
+                          <p className="text-[10px] text-indigo-400 font-mono truncate">@{u.username}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleAddMemberToChannel(u);
+                          setShowUserSearchDropdown(false);
+                          setMobileSearchOpen(false);
+                        }}
+                        className="text-[10px] font-semibold text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-600 px-2 py-1 rounded-lg transition-colors ml-2 shrink-0 flex items-center gap-1"
+                        title={`Add @${u.username} to #${activeGroup.name}`}
+                      >
+                        <UserPlus className="w-3 h-3" />
+                        <span>Add</span>
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-3 text-center text-xs text-[#7A8396]">
+                    No user found matching "{searchQuery}"
+                  </div>
+                )}
+              </div>
             </div>
-
-            {/* Admin Moderation & Ban Panel Button */}
-            {isAdminOfActiveGroup && (
-              <button
-                onClick={() => setShowAdminModal(true)}
-                className="w-9 h-9 rounded-xl grid place-items-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 active:scale-90 transition-all shadow-sm"
-                title="Admin Moderation & Ban Panel"
-              >
-                <Crown className="w-4 h-4 text-amber-400" />
-              </button>
-            )}
-
-            {/* Add Member Button */}
-            <button
-              onClick={() => setShowAddMemberModal(true)}
-              className="w-9 h-9 rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all"
-              title={`Add Members to #${activeGroup.name}`}
-            >
-              <UserPlus className="w-4 h-4 text-emerald-400" />
-            </button>
-
-            {/* Voice Call Button */}
-            <button
-              onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
-              className="w-9 h-9 rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all"
-              title="Start Voice Call"
-            >
-              <Phone className="w-4 h-4 text-[#22C55E]" />
-            </button>
-
-            {/* Video Call Button */}
-            <button
-              onClick={() => startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png')}
-              className="w-9 h-9 rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all"
-              title="Start Video Call"
-            >
-              <Video className="w-4 h-4 text-[#818CF8]" />
-            </button>
-
-            {/* Telegram Music Bot & Room Player Button */}
-            <button
-              onClick={() => setShowMusicBotModal(true)}
-              className="w-9 h-9 rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all relative"
-              title="LMC Music Bot & Channel Player"
-            >
-              <Bot className="w-4 h-4 text-indigo-400" />
-              {roomPlayback?.isPlaying && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              )}
-            </button>
-
-            {/* Channel Info Button */}
-            <button
-              onClick={() => setInfoOpen(!infoOpen)}
-              className={`w-9 h-9 rounded-xl grid place-items-center transition-all ${
-                infoOpen ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
-              }`}
-              title="Channel Details"
-            >
-              <Info className="w-4 h-4" />
-            </button>
-          </div>
+          )}
         </header>
 
         {/* Telegram-style Pinned Audio Player Bar */}
@@ -3087,11 +3151,27 @@ export default function Home() {
 
                     <button
                       onClick={(e) => {
+                        e.stopPropagation();
                         const rect = e.currentTarget.getBoundingClientRect();
-                        setReactionPopCoords({ x: rect.left, y: rect.top - 45 });
+                        const screenW = typeof window !== 'undefined' ? window.innerWidth : 360;
+                        const popWidth = 288;
+                        const pad = 8;
+                        // On mobile: center horizontally relative to clicked button, clamped within viewport
+                        let left = rect.left - 100;
+                        if (screenW < 640) {
+                          left = Math.max(pad, Math.min(screenW - popWidth - pad, rect.left + rect.width / 2 - popWidth / 2));
+                        } else {
+                          left = Math.max(pad, Math.min(screenW - popWidth - pad, left));
+                        }
+                        // Vertical placement: show above if space permits, else below
+                        let top = rect.top - 46;
+                        if (top < 65) {
+                          top = rect.bottom + 8;
+                        }
+                        setReactionPopCoords({ x: left, y: top });
                         setReactionPopForMsg(reactionPopForMsg === msg.id ? null : msg.id);
                       }}
-                      className="opacity-0 group-hover:opacity-100 hover:bg-white/10 p-1 rounded-full text-[#7A8396] hover:text-white transition-all text-xs"
+                      className="opacity-75 sm:opacity-0 sm:group-hover:opacity-100 hover:opacity-100 p-1.5 rounded-full text-[#7A8396] hover:text-white transition-all text-xs touch-manipulation active:scale-110"
                       title="Add Reaction"
                     >
                       <SmilePlus className="w-3.5 h-3.5" />
@@ -3100,7 +3180,7 @@ export default function Home() {
                     {(isAdminOfActiveGroup || isMe) && (
                       <button
                         onClick={() => handleDeleteMessage(msg.id)}
-                        className="opacity-0 group-hover:opacity-100 hover:bg-rose-500/20 p-1 rounded-full text-[#7A8396] hover:text-rose-400 transition-all text-xs"
+                        className="opacity-75 sm:opacity-0 sm:group-hover:opacity-100 hover:opacity-100 p-1.5 rounded-full text-[#7A8396] hover:text-rose-400 transition-all text-xs touch-manipulation active:scale-110"
                         title={isAdminOfActiveGroup ? "Delete Message (Admin)" : "Delete Message"}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -3116,30 +3196,58 @@ export default function Home() {
 
         {/* Reaction Quick Bar Popover */}
         {reactionPopForMsg && (
-          <div
-            style={{
-              top: `${Math.max(10, reactionPopCoords.y)}px`,
-              left: `${Math.max(10, reactionPopCoords.x - 80)}px`,
-            }}
-            className="fixed z-50 flex items-center gap-1 bg-[#161B28]/95 backdrop-blur-md border border-white/10 p-1.5 rounded-2xl shadow-2xl animate-pop-in"
-          >
-            {['🔥', '😂', '❤️', '👍', '🎉', '👀', '💯', '🚀'].map((em) => (
-              <button
-                key={em}
-                onClick={() => handleToggleReaction(reactionPopForMsg, em)}
-                className="w-7 h-7 rounded-xl hover:bg-white/10 grid place-items-center text-base transition-transform hover:scale-125"
-              >
-                {em}
-              </button>
-            ))}
-          </div>
+          <>
+            {/* Backdrop to easily dismiss reaction bar on touch or click */}
+            <div
+              className="fixed inset-0 z-40 bg-black/20 sm:bg-transparent"
+              onClick={() => setReactionPopForMsg(null)}
+              onTouchStart={() => setReactionPopForMsg(null)}
+            />
+            <div
+              style={{
+                top: `${reactionPopCoords.y}px`,
+                left: `${reactionPopCoords.x}px`,
+                maxWidth: 'calc(100vw - 16px)',
+              }}
+              className="fixed z-50 flex items-center gap-1 sm:gap-1.5 bg-[#141824]/95 backdrop-blur-xl border border-white/15 p-1.5 rounded-2xl shadow-2xl animate-pop-in touch-manipulation select-none"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {['🔥', '😂', '❤️', '👍', '🎉', '👀', '💯', '🚀'].map((em) => (
+                <button
+                  key={em}
+                  onClick={() => {
+                    handleToggleReaction(reactionPopForMsg, em);
+                    setReactionPopForMsg(null);
+                  }}
+                  className="w-8 h-8 rounded-xl hover:bg-white/10 active:bg-white/25 active:scale-125 grid place-items-center text-lg sm:text-base transition-transform select-none touch-manipulation"
+                >
+                  {em}
+                </button>
+              ))}
+            </div>
+          </>
         )}
 
         {/* COMPOSER DOCK */}
-        <div className="p-2.5 sm:p-4 bg-[#0B0E17] border-t border-[#1B212E] relative">
+        <div className="p-2 sm:p-4 bg-[#0B0E17] border-t border-[#1B212E] relative pb-[max(0.625rem,env(safe-area-inset-bottom))]">
+          {/* Mobile Backdrop for Trays */}
+          {(showTray || showEmojiPicker) && (
+            <div
+              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px] md:hidden"
+              onClick={() => {
+                setShowTray(false);
+                setShowEmojiPicker(false);
+              }}
+              onTouchStart={() => {
+                setShowTray(false);
+                setShowEmojiPicker(false);
+              }}
+            />
+          )}
+
           {/* Sticker & GIF Drawer (with WhatsApp Custom Stickers) */}
           {showTray && (
-            <div className="absolute bottom-full mb-3 right-2.5 sm:right-6 left-2.5 sm:left-auto sm:w-[420px] bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3.5 shadow-2xl z-50 animate-msg-in">
+            <div className="absolute bottom-full mb-3 right-2.5 sm:right-6 left-2.5 sm:left-auto w-[calc(100vw-20px)] sm:w-[420px] max-h-[60vh] bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3.5 shadow-2xl z-50 animate-msg-in flex flex-col">
               <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/10">
                 <div className="flex gap-1 bg-black/40 p-1 rounded-xl">
                   <button
@@ -3273,7 +3381,7 @@ export default function Home() {
 
           {/* INSTAGRAM EMOJI PICKER WITH INSTANT SEARCH */}
           {showEmojiPicker && (
-            <div className="absolute bottom-full mb-3 right-2.5 sm:right-28 left-2.5 sm:left-auto sm:w-[340px] bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3 shadow-2xl z-50 animate-msg-in">
+            <div className="absolute bottom-full mb-3 right-2.5 sm:right-28 left-2.5 sm:left-auto w-[calc(100vw-20px)] sm:w-[340px] max-h-[60vh] bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3 shadow-2xl z-50 animate-msg-in flex flex-col">
               {/* Emoji Search */}
               <div className="relative mb-2">
                 <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-2.5 top-1/2 -translate-y-1/2" />
@@ -3368,11 +3476,11 @@ export default function Home() {
               if (!inputText.trim()) return;
               handleSendMessage(inputText, 'text');
             }}
-            className="max-w-4xl mx-auto flex items-end gap-2 bg-[#131722] border border-[#232B3E] focus-within:border-[#6366F1] rounded-2xl p-2 transition-all shadow-xl"
+            className="max-w-4xl mx-auto flex items-end gap-1.5 sm:gap-2 bg-[#131722] border border-[#232B3E] focus-within:border-[#6366F1] rounded-2xl p-1.5 sm:p-2 transition-all shadow-xl"
           >
             {/* Upload Image button */}
             <label
-              className="p-2 rounded-xl text-[#A8B2C7] hover:text-white hover:bg-white/5 cursor-pointer shrink-0"
+              className="p-1.5 sm:p-2 rounded-xl text-[#A8B2C7] hover:text-white hover:bg-white/5 cursor-pointer shrink-0 active:scale-95 transition-all"
               title="Upload Image"
             >
               <input
@@ -3414,13 +3522,13 @@ export default function Home() {
               }}
               placeholder={
                 ghostModeActive
-                  ? 'Ghost Mode Active: Type self-destructing message...'
+                  ? 'Ghost Mode: Burns in 10s...'
                   : `Message #${activeGroup.name}... (try /play lofi)`
               }
-              className="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 text-sm text-[#E9ECF4] placeholder-[#5A6376] max-h-32 leading-relaxed"
+              className="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 text-base sm:text-sm text-[#E9ECF4] placeholder-[#5A6376] max-h-32 leading-relaxed"
             />
 
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
               {/* Ghost Mode (Burn-on-Read) Toggle */}
               <button
                 type="button"
@@ -3433,7 +3541,7 @@ export default function Home() {
                       : 'Ghost Mode OFF'
                   );
                 }}
-                className={`p-2 rounded-xl transition-all ${
+                className={`p-1.5 sm:p-2 rounded-xl transition-all ${
                   ghostModeActive
                     ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-md shadow-amber-500/20 animate-pulse'
                     : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
@@ -3450,7 +3558,7 @@ export default function Home() {
                   setShowEmojiPicker(!showEmojiPicker);
                   setShowTray(false);
                 }}
-                className={`p-2 rounded-xl transition-all ${
+                className={`p-1.5 sm:p-2 rounded-xl transition-all ${
                   showEmojiPicker ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
                 }`}
                 title="Instagram Emojis"
@@ -3465,7 +3573,7 @@ export default function Home() {
                   setShowTray(!showTray);
                   setShowEmojiPicker(false);
                 }}
-                className={`p-2 rounded-xl transition-all ${
+                className={`p-1.5 sm:p-2 rounded-xl transition-all ${
                   showTray ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
                 }`}
                 title="Stickers & GIFs"
@@ -3477,7 +3585,7 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={!inputText.trim() || isSending}
-                className={`w-9 h-9 rounded-xl grid place-items-center text-white transition-all shadow-md ml-1 ${
+                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl grid place-items-center text-white transition-all shadow-md ml-0.5 sm:ml-1 ${
                   inputText.trim() && !isSending
                     ? ghostModeActive
                       ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 active:scale-95 shadow-amber-500/30'
@@ -3485,7 +3593,7 @@ export default function Home() {
                     : 'bg-[#1C2230] text-[#5A6376] cursor-not-allowed'
                 }`}
               >
-                <Send className="w-4 h-4" />
+                <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             </div>
           </form>

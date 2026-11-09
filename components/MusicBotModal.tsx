@@ -103,8 +103,8 @@ export default function MusicBotModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-msg-in">
-      <div className="w-full max-w-lg bg-[#111522] border border-[#232B3E] rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+    <div className="fixed inset-0 z-[220] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-msg-in">
+      <div className="w-full max-w-lg bg-[#111522] border border-[#232B3E] rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-[#141A2B]">
           <div className="flex items-center gap-3">
@@ -132,11 +132,11 @@ export default function MusicBotModal({
         </div>
 
         {/* Tab selection */}
-        <div className="flex items-center gap-1 p-2 border-b border-white/10 bg-[#0E121E]">
+        <div className="flex items-center gap-1 p-2 border-b border-white/10 bg-[#0E121E] overflow-x-auto scroll whitespace-nowrap">
           <button
             type="button"
             onClick={() => setActiveTab('upload')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+            className={`flex-1 min-w-[100px] flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold shrink-0 transition-all ${
               activeTab === 'upload'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                 : 'text-[#8892B0] hover:text-white hover:bg-white/5'
@@ -148,7 +148,7 @@ export default function MusicBotModal({
           <button
             type="button"
             onClick={() => setActiveTab('url')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+            className={`flex-1 min-w-[100px] flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold shrink-0 transition-all ${
               activeTab === 'url'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                 : 'text-[#8892B0] hover:text-white hover:bg-white/5'
@@ -160,7 +160,7 @@ export default function MusicBotModal({
           <button
             type="button"
             onClick={() => setActiveTab('stations')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+            className={`flex-1 min-w-[100px] flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold shrink-0 transition-all ${
               activeTab === 'stations'
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                 : 'text-[#8892B0] hover:text-white hover:bg-white/5'

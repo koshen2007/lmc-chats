@@ -85,8 +85,8 @@ export default function AdminModerationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[240] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-msg-in">
-      <div className="w-full max-w-xl bg-[#111522] border border-[#232B3E] rounded-3xl shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
+    <div className="fixed inset-0 z-[240] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-msg-in">
+      <div className="w-full max-w-xl bg-[#111522] border border-[#232B3E] rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-[#151B2E]">
           <div className="flex items-center gap-3">
@@ -116,11 +116,11 @@ export default function AdminModerationModal({
         </div>
 
         {/* Tab Selection */}
-        <div className="flex items-center gap-1 p-2 border-b border-white/10 bg-[#0E121E]">
+        <div className="flex items-center gap-1 p-2 border-b border-white/10 bg-[#0E121E] overflow-x-auto scroll whitespace-nowrap">
           <button
             type="button"
             onClick={() => setActiveTab('members')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+            className={`flex-1 min-w-[110px] flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold shrink-0 transition-all ${
               activeTab === 'members'
                 ? 'bg-[#6366F1] text-white shadow-md'
                 : 'text-[#8892B0] hover:text-white hover:bg-white/5'
@@ -132,7 +132,7 @@ export default function AdminModerationModal({
           <button
             type="button"
             onClick={() => setActiveTab('banned')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+            className={`flex-1 min-w-[110px] flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold shrink-0 transition-all ${
               activeTab === 'banned'
                 ? 'bg-rose-600 text-white shadow-md'
                 : 'text-[#8892B0] hover:text-white hover:bg-white/5'
@@ -144,7 +144,7 @@ export default function AdminModerationModal({
           <button
             type="button"
             onClick={() => setActiveTab('chat')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+            className={`flex-1 min-w-[110px] flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold shrink-0 transition-all ${
               activeTab === 'chat'
                 ? 'bg-amber-600 text-white shadow-md'
                 : 'text-[#8892B0] hover:text-white hover:bg-white/5'
@@ -156,7 +156,7 @@ export default function AdminModerationModal({
           <button
             type="button"
             onClick={() => setActiveTab('danger')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+            className={`flex-1 min-w-[110px] flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold shrink-0 transition-all ${
               activeTab === 'danger'
                 ? 'bg-red-800 text-white shadow-md'
                 : 'text-[#8892B0] hover:text-rose-400 hover:bg-white/5'
@@ -514,3 +514,4 @@ export default function AdminModerationModal({
     </div>
   );
 }
+
