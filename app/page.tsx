@@ -48,7 +48,6 @@ import {
   Ghost,
   Flame,
   Music,
-  Mail,
   Bot,
   Radio,
   Disc,
@@ -386,17 +385,24 @@ export default function Home() {
     if (typeof window === 'undefined') return;
 
     // Load Registered Users Directory (Only real registered users)
+    const FAKE_USER_IDS = ['usr_harshita', 'usr_koshen', 'usr_kai', 'usr_aria', 'usr_zayn', 'usr_rin', 'usr_marcus', 'usr_elena'];
+    const FAKE_USERNAMES = ['harshita', 'koshen', 'kai', 'aria', 'zayn', 'rin', 'marcus', 'elena'];
     let allUsers: UserProfile[] = [];
     const storedUsers = localStorage.getItem('lmc_registered_users');
     if (storedUsers) {
       try {
         const parsed = JSON.parse(storedUsers);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          allUsers = parsed.filter((u: UserProfile) => u && u.username);
+          allUsers = parsed.filter(
+            (u: UserProfile) =>
+              !FAKE_USER_IDS.includes(u.id) &&
+              !FAKE_USERNAMES.includes(u.username?.toLowerCase())
+          );
         }
       } catch {}
     }
 
+    // Merge SEED_USERS (Harshita, Koshen) so they are always in directory
     const userMap = new Map<string, UserProfile>();
     for (const su of SEED_USERS) {
       userMap.set(su.username.toLowerCase(), su);
@@ -3038,45 +3044,70 @@ export default function Home() {
         </div>
       )}
 
-      {/* MINIMALIST & PROFESSIONAL PROFILE SETTINGS MODAL */}
+      {/* EDIT PROFILE / LOGIN MODAL */}
       {showProfileModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <form
             onSubmit={handleSaveProfile}
-            className="w-full max-w-sm bg-[#101422] border border-white/10 rounded-3xl p-6 shadow-2xl animate-msg-in flex flex-col max-h-[92vh] overflow-y-auto scroll"
+            className="w-full max-w-sm bg-[#131722] border border-[#232B3E] rounded-3xl p-5 sm:p-6 shadow-2xl animate-msg-in flex flex-col max-h-[92vh] overflow-y-auto scroll"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-base font-bold text-white tracking-tight">Profile Settings</h2>
-                <p className="text-xs text-[#7A8396]">Update your public photo and identity</p>
+                <h2 className="text-lg font-bold text-white tracking-tight">Your Profile</h2>
+                <p className="text-xs text-[#7A8396]">Custom photo, bio & squad identity</p>
               </div>
               {user.name && (
                 <button
                   type="button"
                   onClick={() => setShowProfileModal(false)}
-                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white transition-colors"
+                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white"
                 >
                   <X className="w-4 h-4" />
                 </button>
               )}
             </div>
 
-            {/* Profile Avatar Centerpiece */}
-            <div className="flex flex-col items-center text-center mb-5">
-              <div className="relative w-20 h-20 rounded-full overflow-hidden bg-[#161C28] p-0.5 border-2 border-indigo-500/60 shadow-lg mb-3">
-                <img
-                  src={profileAvatarSelected}
-                  alt="Profile"
-                  className="w-full h-full object-cover rounded-full"
-                />
-              </div>
+            {/* Google Sign In One-Tap Button */}
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={() => setShowGoogleAuthModal(true)}
+                className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-2.5 px-3 rounded-2xl flex items-center justify-center gap-2.5 shadow-md transition-all active:scale-[0.98]"
+              >
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                  />
+                </svg>
+                <span className="text-xs">Sign in with Google</span>
+              </button>
 
-              {/* Action Buttons for Avatar */}
-              <div className="flex items-center gap-2">
-                <label className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white text-xs font-semibold border border-white/10 cursor-pointer flex items-center gap-1.5 transition-colors">
-                  <Upload className="w-3.5 h-3.5 text-[#A8B2C7]" />
-                  <span>Upload</span>
+              <div className="flex items-center gap-2 mt-3 mb-1">
+                <span className="flex-1 h-px bg-white/10" />
+                <span className="text-[10px] text-[#7A8396] uppercase font-semibold">Or Custom Identity</span>
+                <span className="flex-1 h-px bg-white/10" />
+              </div>
+            </div>
+
+            {/* Profile Avatar Selection & Studio */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-[#A8B2C7]">Profile Picture</label>
+                <label className="text-xs font-bold text-[#818CF8] hover:text-[#A5B4FC] cursor-pointer flex items-center gap-1">
+                  <Upload className="w-3.5 h-3.5" /> Upload Photo
                   <input
                     type="file"
                     accept="image/*"
@@ -3087,41 +3118,109 @@ export default function Home() {
                     }}
                   />
                 </label>
+              </div>
 
-                <button
-                  type="button"
-                  onClick={() => setShowAvatarStudio(true)}
-                  className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-indigo-300 text-xs font-semibold border border-white/10 flex items-center gap-1.5 transition-colors"
-                >
-                  <Palette className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Avatar Studio</span>
-                </button>
+              {/* Active Avatar Card */}
+              <div className="flex items-center gap-3 p-2.5 bg-[#0D1017] rounded-2xl border border-white/5 mb-2.5">
+                <div className="relative w-12 h-12 rounded-full overflow-hidden bg-[#161C28] p-0.5 border-2 border-[#6366F1] shrink-0 shadow-md">
+                  <img src={profileAvatarSelected} alt="Current" className="w-full h-full object-cover rounded-full" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-bold text-white truncate">Active Avatar</p>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-[#6366F1]/20 text-[#818CF8] font-semibold">
+                      Snap Vector
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-[#7A8396] truncate">Pick a preset or build custom below</p>
+                </div>
+              </div>
+
+              {/* Primary Launch Button for Avatar Studio */}
+              <button
+                type="button"
+                onClick={() => setShowAvatarStudio(true)}
+                className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 text-white font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 transition-all active:scale-[0.98] mb-2.5 group"
+              >
+                <Palette className="w-4 h-4 text-indigo-300 group-hover:rotate-12 transition-transform" />
+                <span className="text-xs">Create Custom Avatar (Studio)</span>
+              </button>
+
+              {/* Quick Presets Picker */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5 px-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#7A8396]">Quick Presets</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rand = PRESET_AVATARS[Math.floor(Math.random() * PRESET_AVATARS.length)];
+                      const dataUrl = svgToDataUrl(renderAvatarSvgString(rand.config));
+                      setProfileAvatarSelected(dataUrl);
+                      setAvatarStudioConfig(rand.config);
+                    }}
+                    className="text-[10px] font-semibold text-indigo-400 hover:text-indigo-300"
+                  >
+                    🎲 Shuffle
+                  </button>
+                </div>
+                <div className="grid grid-cols-6 gap-1.5 p-1.5 bg-[#0D1017] rounded-xl border border-white/5">
+                  {PRESET_AVATARS.map((p, idx) => {
+                    const pDataUrl = svgToDataUrl(renderAvatarSvgString(p.config));
+                    const isSelected = profileAvatarSelected === pDataUrl;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setProfileAvatarSelected(pDataUrl);
+                          setAvatarStudioConfig(p.config);
+                        }}
+                        className={`relative aspect-square rounded-full p-0.5 transition-all overflow-hidden bg-[#161C28] border-2 ${
+                          isSelected
+                            ? 'border-indigo-500 ring-2 ring-indigo-500/50 scale-105 shadow-md'
+                            : 'border-transparent hover:border-white/30 opacity-85 hover:opacity-100'
+                        }`}
+                        title={p.name + ' - ' + p.tag}
+                      >
+                        <img src={pDataUrl} alt={p.name} className="w-full h-full object-cover rounded-full" />
+                        {isSelected && (
+                          <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-indigo-600 text-white grid place-items-center text-[7px] shadow">
+                            ✓
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
-            {/* Display Name Input */}
-            <div className="mb-3.5">
-              <label className="text-xs font-medium text-[#A8B2C7] block mb-1.5">
-                Display Name
-              </label>
+            {/* Display Name input (Can be same for multiple people) */}
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-[#A8B2C7]">Display Name</label>
+                <span className="text-[10px] text-[#7A8396]">Can be shared with others</span>
+              </div>
               <input
                 type="text"
                 value={profileNameInput}
                 onChange={(e) => setProfileNameInput(e.target.value)}
                 placeholder="Enter your name"
-                className="w-full bg-[#0A0D14] border border-white/10 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-sm text-white placeholder-[#5A6376] outline-none transition-colors"
+                className="w-full bg-[#0D1017] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-[#5A6376] outline-none"
                 required
               />
             </div>
 
-            {/* Unique Username Input */}
-            <div className="mb-3.5">
-              <label className="text-xs font-medium text-[#A8B2C7] flex items-center gap-1 mb-1.5">
-                <AtSign className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Username</span>
-              </label>
+            {/* Unique Username input (Only 1 person can own it) */}
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-[#A8B2C7] flex items-center gap-1">
+                  <AtSign className="w-3 h-3 text-indigo-400" />
+                  <span>Unique Username</span>
+                </label>
+              </div>
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-indigo-400">@</span>
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-indigo-400">@</span>
                 <input
                   type="text"
                   value={profileUsernameInput}
@@ -3130,21 +3229,22 @@ export default function Home() {
                       e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')
                     )
                   }
-                  placeholder="username"
-                  className={`w-full bg-[#0A0D14] border rounded-xl pl-8 pr-3.5 py-2 text-sm text-white placeholder-[#5A6376] outline-none transition-colors ${
+                  placeholder="your_handle"
+                  className={`w-full bg-[#0D1017] border rounded-xl pl-8 pr-3.5 py-2.5 text-sm text-white placeholder-[#5A6376] outline-none transition-colors ${
                     profileUsernameInput
                       ? usernameAvailability.available
                         ? 'border-emerald-500/60 focus:border-emerald-500'
                         : 'border-rose-500/60 focus:border-rose-500'
-                      : 'border-white/10 focus:border-indigo-500'
+                      : 'border-[#232B3E] focus:border-[#6366F1]'
                   }`}
                   required
                 />
               </div>
 
+              {/* Real-time uniqueness badge */}
               {profileUsernameInput && (
                 <p
-                  className={`text-[11px] font-medium flex items-center gap-1 mt-1.5 px-1 ${
+                  className={`text-[11px] font-semibold flex items-center gap-1 mt-1.5 px-1 ${
                     usernameAvailability.available ? 'text-emerald-400' : 'text-rose-400'
                   }`}
                 >
@@ -3160,39 +3260,27 @@ export default function Home() {
 
             {/* Bio Input */}
             <div className="mb-5">
-              <label className="text-xs font-medium text-[#A8B2C7] block mb-1.5">Bio</label>
+              <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">Bio</label>
               <textarea
                 value={profileBioInput}
                 onChange={(e) => setProfileBioInput(e.target.value)}
-                placeholder="Write a short bio..."
+                placeholder="Write a bio about yourself..."
                 rows={2}
-                className="w-full bg-[#0A0D14] border border-white/10 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-[#5A6376] outline-none resize-none transition-colors"
+                className="w-full bg-[#0D1017] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2 text-xs text-white placeholder-[#5A6376] outline-none resize-none"
               />
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2 pt-1">
-              {user.name && (
-                <button
-                  type="button"
-                  onClick={() => setShowProfileModal(false)}
-                  className="flex-1 py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-[#A8B2C7] hover:text-white font-medium text-xs border border-white/10 transition-colors"
-                >
-                  Cancel
-                </button>
-              )}
-              <button
-                type="submit"
-                disabled={!profileUsernameInput || !usernameAvailability.available}
-                className={`flex-1 font-semibold py-2.5 px-3 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 ${
-                  profileUsernameInput && usernameAvailability.available
-                    ? 'bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white shadow-indigo-600/30'
-                    : 'bg-[#1C2230] text-[#5A6376] cursor-not-allowed'
-                }`}
-              >
-                <span>Save Changes</span>
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={!profileUsernameInput || !usernameAvailability.available}
+              className={`w-full font-semibold py-3 rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 ${
+                profileUsernameInput && usernameAvailability.available
+                  ? 'bg-[#6366F1] hover:bg-[#5457E5] active:scale-[0.98] text-white shadow-[#6366F1]/25'
+                  : 'bg-[#1C2230] text-[#5A6376] cursor-not-allowed'
+              }`}
+            >
+              Save Profile & ID <Send className="w-4 h-4" />
+            </button>
           </form>
         </div>
       )}
@@ -3634,83 +3722,12 @@ export default function Home() {
             )}
 
             <div className="space-y-0.5 mt-1">
-              {/* INCOMING INSTAGRAM-STYLE MESSAGE REQUESTS */}
-              {pendingIncomingRequests.length > 0 && !railCollapsed && (
-                <div className="mb-2 p-2 rounded-xl bg-indigo-950/40 border border-indigo-500/30 animate-msg-in">
-                  <div className="flex items-center justify-between mb-1.5 px-1">
-                    <span className="text-[11px] font-bold text-indigo-300 flex items-center gap-1.5">
-                      <Mail className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Message Requests</span>
-                    </span>
-                    <span className="px-1.5 py-0.2 rounded-full bg-indigo-500 text-white font-mono text-[10px] font-bold shadow-sm">
-                      {pendingIncomingRequests.length}
-                    </span>
-                  </div>
-                  <div className="space-y-1">
-                    {pendingIncomingRequests.map((req) => {
-                      const senderProfile = registeredUsers.find(
-                        (u) => u.username.toLowerCase() === req.senderHandle.toLowerCase()
-                      );
-                      const isActive = activeGroupId === req.roomId;
-                      return (
-                        <button
-                          key={req.roomId}
-                          type="button"
-                          onClick={() => {
-                            setActiveGroupId(req.roomId);
-                            setMobileRailOpen(false);
-                          }}
-                          className={`w-full flex items-center justify-between p-1.5 rounded-lg text-left transition-all ${
-                            isActive
-                              ? 'bg-indigo-600/30 text-white'
-                              : 'hover:bg-white/5 text-slate-300'
-                          }`}
-                          title={`Review request from @${req.senderHandle}`}
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <img
-                              src={
-                                senderProfile?.avatar ||
-                                `https://api.dicebear.com/7.x/notionists/svg?seed=${req.senderHandle}&backgroundColor=b6e3f4,d1d4f9`
-                              }
-                              alt={req.senderHandle}
-                              className="w-5 h-5 rounded-full object-cover shrink-0 border border-white/10"
-                            />
-                            <span className="text-xs truncate font-medium">
-                              {senderProfile?.name || `@${req.senderHandle}`}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-indigo-400 font-semibold shrink-0 bg-indigo-500/10 px-1.5 py-0.5 rounded">
-                            Review
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {activeDmUsernames.filter((targetHandle) => {
-                const myH = (user.username || user.name || 'user').toLowerCase().replace(/[^a-z0-9_]/g, '');
-                const sorted = [myH, targetHandle.toLowerCase()].sort();
-                const dmRoomId = `dm_${sorted[0]}_${sorted[1]}`;
-                const req = dmRequests[dmRoomId];
-                // Hide if it's currently a pending incoming request (shown above in Message Requests)
-                return !(req && req.target.toLowerCase() === myH && req.status === 'pending');
-              }).length === 0 && !railCollapsed && pendingIncomingRequests.length === 0 && (
+              {activeDmUsernames.length === 0 && !railCollapsed && (
                 <div className="px-3 py-2 text-center">
                   <p className="text-[11px] text-[#5A6376] italic">No direct chats yet</p>
                 </div>
               )}
-              {activeDmUsernames
-                .filter((targetHandle) => {
-                  const myH = (user.username || user.name || 'user').toLowerCase().replace(/[^a-z0-9_]/g, '');
-                  const sorted = [myH, targetHandle.toLowerCase()].sort();
-                  const dmRoomId = `dm_${sorted[0]}_${sorted[1]}`;
-                  const req = dmRequests[dmRoomId];
-                  return !(req && req.target.toLowerCase() === myH && req.status === 'pending');
-                })
-                .map((targetHandle) => {
+              {activeDmUsernames.map((targetHandle) => {
                 const myHandle = (user.username || user.name || 'user').toLowerCase().replace(/[^a-z0-9_]/g, '');
                 const sorted = [myHandle, targetHandle.toLowerCase()].sort();
                 const dmRoomId = `dm_${sorted[0]}_${sorted[1]}`;
@@ -3718,8 +3735,6 @@ export default function Home() {
                 const targetProfile = registeredUsers.find(
                   (u) => u.username.toLowerCase() === targetHandle.toLowerCase()
                 );
-                const req = dmRequests[dmRoomId];
-                const isPendingOutgoing = req && req.initiator.toLowerCase() === myHandle && req.status === 'pending';
 
                 return (
                   <button
@@ -3754,9 +3769,7 @@ export default function Home() {
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] truncate">{targetProfile?.name || `@${targetHandle}`}</p>
                         <p className="text-[10px] truncate">
-                          {isPendingOutgoing ? (
-                            <span className="text-amber-400 font-medium">Request Sent</span>
-                          ) : presenceMap[targetHandle.toLowerCase()]?.is_online ? (
+                          {presenceMap[targetHandle.toLowerCase()]?.is_online ? (
                             <span className="text-emerald-400 font-medium">Online</span>
                           ) : (
                             <span className="text-[#7A8396]">{presenceMap[targetHandle.toLowerCase()]?.last_seen_text || `@${targetHandle}`}</span>
@@ -4474,60 +4487,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Instagram-style Direct Message Request Review Banner */}
-        {isDmMode && (() => {
-          const activeDmReq = dmRequests[activeGroupId];
-          const isPendingForMe = activeDmReq && activeDmReq.target.toLowerCase() === myHandle && activeDmReq.status === 'pending';
-          const isPendingFromMe = activeDmReq && activeDmReq.initiator.toLowerCase() === myHandle && activeDmReq.status === 'pending';
-
-          if (isPendingForMe) {
-            return (
-              <div className="bg-[#121626]/95 border-b border-indigo-500/30 p-4 shrink-0 animate-msg-in flex flex-col items-center text-center">
-                <div className="w-12 h-12 rounded-full overflow-hidden mb-2 border-2 border-indigo-500 shadow-md">
-                  <img
-                    src={activeGroup.avatar || DEFAULT_AVATAR_DATA_URL}
-                    alt={activeGroup.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <h3 className="text-sm font-bold text-white">{activeGroup.name}</h3>
-                <p className="text-xs text-[#8A95AB] mt-1 max-w-sm">
-                  wants to send you a message. They won't know you've seen it until you accept.
-                </p>
-                <div className="flex items-center gap-2 mt-3 w-full max-w-xs">
-                  <button
-                    type="button"
-                    onClick={() => handleDeclineDmRequest(activeGroupId)}
-                    className="flex-1 py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-rose-400 font-semibold text-xs border border-white/10 transition-colors"
-                  >
-                    Decline
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAcceptDmRequest(activeGroupId)}
-                    className="flex-1 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all active:scale-95"
-                  >
-                    Accept
-                  </button>
-                </div>
-              </div>
-            );
-          }
-
-          if (isPendingFromMe) {
-            return (
-              <div className="bg-[#121626]/80 border-b border-white/5 px-4 py-2.5 shrink-0 flex items-center justify-between text-xs text-[#8A95AB]">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                  <span>Message request sent. Waiting for {activeGroup.name} to accept.</span>
-                </div>
-              </div>
-            );
-          }
-
-          return null;
-        })()}
-
         {/* Message Stream */}
         <div className="flex-1 overflow-y-auto scroll p-3 sm:p-6 space-y-4">
           <div className="flex items-center justify-center my-2">
@@ -5170,36 +5129,6 @@ export default function Home() {
                 <Plus className="w-4 h-4" />
                 <span>Join Channel</span>
               </button>
-            </div>
-          ) : isDmMode && dmRequests[activeGroupId]?.target.toLowerCase() === myHandle && dmRequests[activeGroupId]?.status === 'pending' ? (
-            <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#121622]/90 backdrop-blur-md border border-indigo-500/30 rounded-2xl p-3 sm:p-4 shadow-lg animate-msg-in">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <Mail className="w-5 h-5 text-indigo-400 shrink-0" />
-                <div>
-                  <p className="text-xs sm:text-sm font-bold text-white truncate">
-                    Accept request to reply to @{activeGroup.name}
-                  </p>
-                  <p className="text-[10px] sm:text-xs text-[#7A8396]">
-                    You can read messages before accepting.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handleDeclineDmRequest(activeGroupId)}
-                  className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-rose-400 font-semibold text-xs border border-white/10 transition-colors"
-                >
-                  Decline
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAcceptDmRequest(activeGroupId)}
-                  className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all active:scale-95"
-                >
-                  Accept Request
-                </button>
-              </div>
             </div>
           ) : (
             <form
