@@ -520,7 +520,9 @@ export default function Home() {
                 g.id !== 'lmc-squad' &&
                 g.id !== 'lmc-main-lounge' &&
                 g.name !== 'LMC Squad' &&
-                g.name !== 'LMC Main Lounge'
+                g.name !== 'LMC Main Lounge' &&
+                !g.name.toLowerCase().includes('gang war') &&
+                !g.id.toLowerCase().includes('gang')
             )
             .map((g) => {
               const cleanMembers = (g.members || []).filter(
@@ -556,7 +558,8 @@ export default function Home() {
                 m.id !== 'init-1' &&
                 m.id !== 'init-2' &&
                 m.sender_name !== 'Alex' &&
-                m.sender_name !== 'Sam'
+                m.sender_name !== 'Sam' &&
+                !m.group_id?.toLowerCase().includes('gang')
             )
             .map((m) =>
               m.group_id === 'lmc-main-lounge' ? { ...m, group_id: 'lmc-squad' } : m
@@ -4166,9 +4169,14 @@ export default function Home() {
                   <p className="text-xs font-semibold text-white truncate group-hover:text-[#818CF8] transition-colors">
                     {user.name || 'Set your name'}
                   </p>
-                  <p className="text-[10px] text-[#7A8396] truncate">
-                    {user.status === 'online' ? 'Online' : user.status === 'idle' ? 'Away' : 'Do Not Disturb'}
-                  </p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[10px] text-indigo-400 font-mono font-semibold truncate">
+                      @{user.username || 'user'}
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/10 text-slate-300 font-mono shrink-0">
+                      ID: {user.id || `usr_${user.username || 'me'}`}
+                    </span>
+                  </div>
                 </div>
               )}
             </button>
@@ -4202,7 +4210,25 @@ export default function Home() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-white truncate">{user.name || 'User'}</p>
-                  <p className="text-[10px] text-[#7A8396] truncate">{user.bio || 'LMC squad member'}</p>
+                  <div className="flex items-center justify-between gap-1 mt-0.5">
+                    <span className="text-[10px] text-indigo-400 font-mono">@{user.username || 'user'}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const idText = user.id || `usr_${user.username}`;
+                        if (typeof navigator !== 'undefined') {
+                          navigator.clipboard?.writeText(idText);
+                          triggerToast(`Copied your User ID: ${idText} 📋`);
+                        }
+                      }}
+                      className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 font-mono flex items-center gap-1 transition-colors"
+                      title="Click to copy your User ID"
+                    >
+                      <span>ID: {user.id || `usr_${user.username}`}</span>
+                      <Copy className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -4520,19 +4546,39 @@ export default function Home() {
                           .split('_')
                           .find((u) => u.toLowerCase() !== (user.username || user.name || '').toLowerCase());
                         const dmPresence = dmPartnerHandle ? presenceMap[dmPartnerHandle.toLowerCase()] : null;
-                        if (dmPresence?.is_online) {
-                          return (
-                            <p className="text-[10px] sm:text-[11px] text-emerald-400 font-semibold flex items-center gap-1 truncate">
-                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                              <span>Online</span>
-                            </p>
-                          );
-                        }
+                        const partner = registeredUsers.find(
+                          (u) => u.username.toLowerCase() === (dmPartnerHandle || '').toLowerCase()
+                        );
+                        const partnerId = partner?.id || (dmPartnerHandle ? `usr_${dmPartnerHandle}` : '');
+
                         return (
-                          <p className="text-[10px] sm:text-[11px] text-[#7A8396] flex items-center gap-1 truncate">
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0" />
-                            <span>{dmPresence?.last_seen_text || 'Offline'}</span>
-                          </p>
+                          <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] truncate">
+                            {dmPresence?.is_online ? (
+                              <span className="text-emerald-400 font-semibold flex items-center gap-1 shrink-0">
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                <span>Online</span>
+                              </span>
+                            ) : (
+                              <span className="text-[#7A8396] flex items-center gap-1 shrink-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                                <span>{dmPresence?.last_seen_text || 'Offline'}</span>
+                              </span>
+                            )}
+                            {dmPartnerHandle && (
+                              <>
+                                <span className="text-[#5A6376]">•</span>
+                                <span className="text-indigo-400 font-mono font-medium truncate">@{dmPartnerHandle}</span>
+                              </>
+                            )}
+                            {partnerId && (
+                              <>
+                                <span className="text-[#5A6376]">•</span>
+                                <span className="text-[#A8B2C7] font-mono text-[9px] bg-white/5 px-1.5 py-0.2 rounded shrink-0">
+                                  ID: {partnerId}
+                                </span>
+                              </>
+                            )}
+                          </div>
                         );
                       })()
                     ) : (

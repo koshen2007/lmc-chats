@@ -59,14 +59,16 @@ function getGroups(): ApiGroup[] {
       const data = fs.readFileSync(filePath, 'utf-8');
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed)) {
-        // Filter out legacy fake squad groups
+        // Filter out legacy fake squad groups and gang wars
         groups = parsed.filter(
           (g) =>
             g &&
             g.id !== 'lmc-squad' &&
             g.id !== 'lmc-main-lounge' &&
             g.name !== 'LMC Squad' &&
-            g.name !== 'LMC Main Lounge'
+            g.name !== 'LMC Main Lounge' &&
+            !g.name.toLowerCase().includes('gang war') &&
+            !g.id.toLowerCase().includes('gang')
         );
       }
     } catch (e) {
@@ -156,10 +158,12 @@ export async function POST(request: Request) {
     if (action === 'sync' && Array.isArray(body.groups)) {
       const map = new Map<string, ApiGroup>();
       for (const g of currentGroups) {
-        if (g && g.id && !g.id.startsWith('dm_')) map.set(g.id, g);
+        if (g && g.id && !g.id.startsWith('dm_') && !g.name.toLowerCase().includes('gang war') && !g.id.toLowerCase().includes('gang')) {
+          map.set(g.id, g);
+        }
       }
       for (const g of body.groups) {
-        if (g && g.id && !g.id.startsWith('dm_')) {
+        if (g && g.id && !g.id.startsWith('dm_') && !g.name.toLowerCase().includes('gang war') && !g.id.toLowerCase().includes('gang')) {
           const existing = map.get(g.id);
           map.set(g.id, existing ? { ...existing, ...g } : g);
         }
