@@ -56,6 +56,7 @@ import {
   ArrowLeft,
   Compass,
   Users,
+  MoreVertical,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured, Group, Message, BannedUser } from '@/lib/supabase';
 import { STICKERS, AVATAR_OPTIONS, FALLBACK_GIFS, EMOJI_CATEGORIES } from '@/lib/data';
@@ -190,6 +191,7 @@ export default function Home() {
 
   // Modals & Drawers
   const [showNewGroupModal, setShowNewGroupModal] = useState(false);
+  const [mobileHeaderMenuOpen, setMobileHeaderMenuOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
   const [newGroupIsPrivate, setNewGroupIsPrivate] = useState(false);
@@ -1178,6 +1180,49 @@ export default function Home() {
     broadcastMusicState(null);
     triggerToast('Music player closed');
   }, [broadcastMusicState]);
+
+  // Canvas Image Compressor (Downscales high-res photos to prevent storage overflow)
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height = Math.round((height * MAX_WIDTH) / width);
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width = Math.round((width * MAX_HEIGHT) / height);
+              height = MAX_HEIGHT;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.82));
+          } else {
+            resolve(event.target?.result as string);
+          }
+        };
+        img.onerror = () => resolve(event.target?.result as string);
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
 
   // SEND MESSAGE (With Strict Deduplication Lock, Ghost Mode & Bot Commands)
   const handleSendMessage = useCallback(
@@ -3016,7 +3061,7 @@ export default function Home() {
               </div>
 
               {/* Right Header Actions */}
-              <div className="flex items-center gap-0.5 sm:gap-1.5 shrink-0">
+              <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 relative">
                 {/* Instagram Search Button */}
                 <button
                   type="button"
@@ -3024,53 +3069,10 @@ export default function Home() {
                   className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-pink-400 hover:text-pink-300 hover:bg-pink-500/10 active:scale-90 transition-all shrink-0"
                   title="Instagram Search (IDs, @usernames, Channels)"
                 >
-                  <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <Search className="w-4 h-4" />
                 </button>
 
-                {/* Create Channel Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewGroupIsPrivate(false);
-                    setShowNewGroupModal(true);
-                  }}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/30 text-indigo-300 active:scale-90 transition-all shrink-0"
-                  title="Create New Channel (+)"
-                >
-                  <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
-                </button>
-
-                {/* Discover Channels Button */}
-                <button
-                  type="button"
-                  onClick={() => setShowDiscoverChannels(true)}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                  title="Discover Public Channels"
-                >
-                  <Compass className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
-                </button>
-
-                {/* Admin Moderation & Ban Panel Button */}
-                {isAdminOfActiveGroup && (
-                  <button
-                    onClick={() => setShowAdminModal(true)}
-                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 active:scale-90 transition-all shadow-sm shrink-0"
-                    title="Admin Moderation & Ban Panel"
-                  >
-                    <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
-                  </button>
-                )}
-
-                {/* Add Member Button */}
-                <button
-                  onClick={() => setShowAddMemberModal(true)}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
-                  title={`Add Members to #${activeGroup.name}`}
-                >
-                  <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
-                </button>
-
-                {/* Voice Call Button */}
+                {/* Voice Call Button (Always visible on mobile & desktop) */}
                 <button
                   onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
                   className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
@@ -3079,19 +3081,19 @@ export default function Home() {
                   <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#22C55E]" />
                 </button>
 
-                {/* Video Call Button */}
+                {/* Desktop-only: Video Call Button */}
                 <button
                   onClick={() => startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png')}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
                   title="Start Video Call"
                 >
                   <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#818CF8]" />
                 </button>
 
-                {/* Telegram Music Bot & Room Player Button */}
+                {/* Desktop-only: Telegram Music Bot */}
                 <button
                   onClick={() => setShowMusicBotModal(true)}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all relative shrink-0"
+                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all relative shrink-0"
                   title="LMC Music Bot & Channel Player"
                 >
                   <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
@@ -3099,6 +3101,149 @@ export default function Home() {
                     <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
                   )}
                 </button>
+
+                {/* Desktop-only: Add Member Button */}
+                <button
+                  onClick={() => setShowAddMemberModal(true)}
+                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                  title={`Add Members to #${activeGroup.name}`}
+                >
+                  <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
+                </button>
+
+                {/* Desktop-only: Create Channel Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewGroupIsPrivate(false);
+                    setShowNewGroupModal(true);
+                  }}
+                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/30 text-indigo-300 active:scale-90 transition-all shrink-0"
+                  title="Create New Channel (+)"
+                >
+                  <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400" />
+                </button>
+
+                {/* Desktop-only: Discover Channels Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowDiscoverChannels(true)}
+                  className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center text-[#A8B2C7] hover:text-white hover:bg-white/5 active:scale-90 transition-all shrink-0"
+                  title="Discover Public Channels"
+                >
+                  <Compass className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
+                </button>
+
+                {/* Desktop-only: Admin Moderation Button */}
+                {isAdminOfActiveGroup && (
+                  <button
+                    onClick={() => setShowAdminModal(true)}
+                    className="hidden sm:grid w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl place-items-center bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 active:scale-90 transition-all shadow-sm shrink-0"
+                    title="Admin Moderation & Ban Panel"
+                  >
+                    <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+                  </button>
+                )}
+
+                {/* Mobile-only: 3-Dots More Menu Toggle */}
+                <div className="relative sm:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setMobileHeaderMenuOpen(!mobileHeaderMenuOpen)}
+                    className={`w-8 h-8 rounded-lg grid place-items-center transition-all ${
+                      mobileHeaderMenuOpen ? 'bg-white/10 text-white' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
+                    }`}
+                    title="More actions"
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </button>
+
+                  {/* Mobile 3-Dots Dropdown */}
+                  {mobileHeaderMenuOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40 bg-black/30"
+                        onClick={() => setMobileHeaderMenuOpen(false)}
+                      />
+                      <div className="absolute right-0 top-full mt-2 w-52 bg-[#141826] border border-white/10 rounded-2xl shadow-2xl p-2 z-50 animate-msg-in flex flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMobileHeaderMenuOpen(false);
+                            startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png');
+                          }}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                        >
+                          <Video className="w-4 h-4 text-indigo-400" />
+                          <span>Start Video Call</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMobileHeaderMenuOpen(false);
+                            setShowMusicBotModal(true);
+                          }}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                        >
+                          <Bot className="w-4 h-4 text-purple-400" />
+                          <span>Music Bot & Player</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMobileHeaderMenuOpen(false);
+                            setShowAddMemberModal(true);
+                          }}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                        >
+                          <UserPlus className="w-4 h-4 text-emerald-400" />
+                          <span>Add Members</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMobileHeaderMenuOpen(false);
+                            setNewGroupIsPrivate(false);
+                            setShowNewGroupModal(true);
+                          }}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                        >
+                          <Plus className="w-4 h-4 text-indigo-400" />
+                          <span>Create New Channel</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMobileHeaderMenuOpen(false);
+                            setShowDiscoverChannels(true);
+                          }}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                        >
+                          <Compass className="w-4 h-4 text-amber-400" />
+                          <span>Discover Channels</span>
+                        </button>
+
+                        {isAdminOfActiveGroup && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMobileHeaderMenuOpen(false);
+                              setShowAdminModal(true);
+                            }}
+                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:bg-amber-500/10 transition-all text-left border-t border-white/5 mt-1 pt-2"
+                          >
+                            <Crown className="w-4 h-4 text-amber-400" />
+                            <span>Admin Ban & Delete</span>
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
 
                 {/* Channel Info Button */}
                 <button
@@ -3751,7 +3896,7 @@ export default function Home() {
               }}
               className="max-w-4xl mx-auto flex items-end gap-1.5 sm:gap-2 bg-[#131722] border border-[#232B3E] focus-within:border-[#6366F1] rounded-2xl p-1.5 sm:p-2 transition-all shadow-xl"
             >
-            {/* Upload Image button */}
+            {/* Upload Image button with Compression */}
             <label
               className="p-1.5 sm:p-2 rounded-xl text-[#A8B2C7] hover:text-white hover:bg-white/5 cursor-pointer shrink-0 active:scale-95 transition-all"
               title="Upload Image"
@@ -3760,16 +3905,23 @@ export default function Home() {
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => {
+                onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = () => {
-                    if (typeof reader.result === 'string') {
-                      handleSendMessage('', 'image', reader.result);
-                    }
-                  };
-                  reader.readAsDataURL(file);
+                  try {
+                    const compressedDataUrl = await compressImage(file);
+                    handleSendMessage('', 'image', compressedDataUrl);
+                  } catch (err) {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      if (typeof reader.result === 'string') {
+                        handleSendMessage('', 'image', reader.result);
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                  } finally {
+                    e.target.value = '';
+                  }
                 }}
               />
               <Upload className="w-4 h-4" />
@@ -3798,7 +3950,7 @@ export default function Home() {
                   ? 'Ghost Mode: Burns in 10s...'
                   : `Message #${activeGroup.name}... (try /play lofi)`
               }
-              className="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 text-base sm:text-sm text-[#E9ECF4] placeholder-[#5A6376] max-h-32 leading-relaxed"
+              className="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 text-base sm:text-sm text-[#E9ECF4] placeholder-[#5A6376] max-h-32 leading-relaxed no-scrollbar"
             />
 
             <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
