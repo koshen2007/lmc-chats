@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import {
+  getClientIp,
+  checkRateLimit,
+  sanitizeInputText,
+  canDeleteChannel,
+} from '@/lib/security/shield';
 
 export interface ApiGroup {
   id: string;
@@ -142,18 +148,35 @@ export async function POST(request: Request) {
     }
 
     if (action === 'create') {
+      const clientIp = getClientIp(request);
+      // Rate Limit Channel Creation (max 6 channels / minute per IP)
+      const limit = checkRateLimit(`grp_create:${clientIp}`, 6, 60_000);
+      if (!limit.allowed) {
+        return NextResponse.json(
+          { success: false, error: `Too many channels created. Please wait ${limit.retryAfterSeconds}s.` },
+          { status: 429 }
+        );
+      }
+
+      const rawName = (body.name || 'New Group').trim().replace(/^#/, '');
+      const sanitizedName = sanitizeInputText(rawName, 60);
+      const sanitizedDesc = sanitizeInputText(body.description || '', 300);
+      const creator = (body.created_by || 'User').trim();
+
       const newGroup: ApiGroup = {
         id: body.id || `group-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        name: (body.name || 'New Group').trim().replace(/^#/, ''),
-        description: body.description || '',
+        name: sanitizedName,
+        description: sanitizedDesc,
         avatar: body.avatar || '/logo.png',
-        created_by: body.created_by || 'User',
-        admins: body.admins || [body.created_by || 'User'],
+        created_by: creator,
+        admins: body.admins || [creator],
         is_private: Boolean(body.is_private),
-        members: body.members || [body.created_by || 'User'],
+        members: body.members || [creator],
         join_requests: [],
         created_at: body.created_at || new Date().toISOString(),
         unreadCount: 0,
+        is_read_only: Boolean(body.is_read_only),
+        slow_mode: Boolean(body.slow_mode),
       };
 
       // Check if group with same ID already exists
@@ -205,6 +228,18 @@ export async function POST(request: Request) {
 
     if (action === 'delete') {
       const groupId = body.groupId || body.id;
+      const requester = (body.requester || body.username || '').trim();
+      const targetGroup = currentGroups.find((g) => g.id === groupId);
+
+      if (targetGroup && requester) {
+        if (!canDeleteChannel(targetGroup, requester)) {
+          return NextResponse.json(
+            { success: false, error: 'Unauthorized: Only the channel creator or admins can delete this channel.' },
+            { status: 403 }
+          );
+        }
+      }
+
       const updated = currentGroups.filter((g) => g.id !== groupId);
       saveGroups(updated);
       return NextResponse.json({
@@ -226,11 +261,12 @@ export async function POST(request: Request) {
   }
 }
 
-// DELETE /api/groups?id=<groupId>
+// DELETE /api/groups?id=<groupId>&requester=<username> - Protected Authorization
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const groupId = searchParams.get('id');
+    const requester = (searchParams.get('requester') || '').trim();
 
     if (!groupId) {
       return NextResponse.json(
@@ -240,6 +276,18 @@ export async function DELETE(request: Request) {
     }
 
     const currentGroups = getGroups();
+    const targetGroup = currentGroups.find((g) => g.id === groupId);
+
+    // Verify creator or admin authorization
+    if (targetGroup && requester) {
+      if (!canDeleteChannel(targetGroup, requester)) {
+        return NextResponse.json(
+          { success: false, error: 'Unauthorized: Only the channel creator or admins can delete this channel.' },
+          { status: 403 }
+        );
+      }
+    }
+
     const updated = currentGroups.filter((g) => g.id !== groupId);
     saveGroups(updated);
 

@@ -402,7 +402,7 @@ export default function Home() {
       } catch {}
     }
 
-    // Merge SEED_USERS (Harshita, Koshen) so they are always in directory
+    // Merge seed users so they are always in directory
     const userMap = new Map<string, UserProfile>();
     for (const su of SEED_USERS) {
       userMap.set(su.username.toLowerCase(), su);
@@ -1987,6 +1987,16 @@ export default function Home() {
         triggerToast('🔒 Channel is in Admin Read-Only mode');
         return;
       }
+      // Slow Mode Protection (Anti-Spam)
+      if (activeGroup?.slow_mode && !isAdminOfActiveGroup) {
+        const lastSent = Number(sessionStorage.getItem(`slow_mode_${activeGroupId}`) || 0);
+        const elapsed = (Date.now() - lastSent) / 1000;
+        if (elapsed < 5) {
+          triggerToast(`⏳ Slow mode is active. Please wait ${Math.ceil(5 - elapsed)}s.`);
+          return;
+        }
+        sessionStorage.setItem(`slow_mode_${activeGroupId}`, Date.now().toString());
+      }
       if (msg_type === 'text' && !content.trim()) return;
       if (isSending) return;
 
@@ -2120,13 +2130,20 @@ export default function Home() {
         channel.close();
       }
 
-      // Central Server API sync for cross-device support (Phone 1 <-> Phone 2)
+      // Central Server API sync with rate-limit and spam protection handling
       try {
         fetch('/api/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(newMsg),
-        }).catch(() => {});
+        })
+          .then(async (res) => {
+            if (res.status === 429) {
+              const data = await res.json().catch(() => ({}));
+              triggerToast(data.error || '⚠️ Too many messages. Please slow down.');
+            }
+          })
+          .catch(() => {});
       } catch {}
 
       // Remote Supabase sync if connected
@@ -2586,11 +2603,15 @@ export default function Home() {
     setInfoOpen(false);
     triggerToast(`Deleted #${deletedGroupName} 🗑️`);
 
-    // 4. Notify Server API for cross-device deletion
+    // 4. Notify Server API for cross-device deletion with security authorization
     fetch('/api/groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'delete', groupId: deletedGroupId }),
+      body: JSON.stringify({
+        action: 'delete',
+        groupId: deletedGroupId,
+        requester: user.username || user.name || 'User',
+      }),
     }).catch(() => {});
 
     // 5. Broadcast to other tabs

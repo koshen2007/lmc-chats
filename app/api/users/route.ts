@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import {
+  getClientIp,
+  checkRateLimit,
+  sanitizeInputText,
+} from '@/lib/security/shield';
 
 export interface ApiUserProfile {
   id: string;
@@ -18,8 +23,6 @@ export interface ApiUserProfile {
 
 // Initial empty directory (only real registered users exist)
 const INITIAL_USERS: ApiUserProfile[] = [];
-
-const LEGACY_FAKE_USERNAMES = ['kai', 'aria', 'zayn', 'rin', 'marcus', 'elena'];
 
 // In-memory cache across server requests
 declare global {
@@ -54,7 +57,7 @@ function loadUsers(): ApiUserProfile[] {
       if (Array.isArray(parsed) && parsed.length > 0) {
         const map = new Map<string, ApiUserProfile>();
         for (const u of parsed) {
-          if (u && u.username && !LEGACY_FAKE_USERNAMES.includes(u.username.toLowerCase())) {
+          if (u && u.username) {
             map.set(u.username.toLowerCase(), u);
           }
         }
@@ -137,22 +140,52 @@ export async function GET(request: Request) {
   });
 }
 
-// POST /api/users
+// POST /api/users - Rate Limited & Anti-Hijacking Protected
 export async function POST(request: Request) {
   try {
+    const clientIp = getClientIp(request);
+
+    // 1. IP Rate Limiting (Anti-Bot flood: max 12 registrations / minute per IP)
+    const limit = checkRateLimit(`user_reg:${clientIp}`, 12, 60_000);
+    if (!limit.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Too many registration attempts. Please wait ${limit.retryAfterSeconds}s.`,
+        },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const rawUsername = (body.username || body.name || '').trim().toLowerCase().replace(/^@/, '').replace(/[^a-z0-9_]/g, '');
-    const cleanName = (body.name || rawUsername).trim();
+    const cleanName = sanitizeInputText((body.name || rawUsername).trim(), 50);
 
-    if (!rawUsername) {
+    if (!rawUsername || rawUsername.length < 3 || rawUsername.length > 20) {
       return NextResponse.json(
-        { success: false, error: 'Username or Name is required' },
+        { success: false, error: 'Username must be between 3 and 20 alphanumeric characters' },
         { status: 400 }
       );
     }
 
     const currentUsers = loadUsers();
     const userId = body.id || `usr_${rawUsername}`;
+
+    // 2. Anti-Hijacking Check: If username already exists under a DIFFERENT user ID, reject update
+    const existingIndex = currentUsers.findIndex(
+      (u) => u.username.toLowerCase() === rawUsername || u.id === userId
+    );
+
+    if (existingIndex >= 0) {
+      const existingUser = currentUsers[existingIndex];
+      // Only the same user ID is authorized to update their profile
+      if (existingUser.id !== userId && existingUser.username.toLowerCase() === rawUsername) {
+        return NextResponse.json(
+          { success: false, error: `@${rawUsername} is already registered by another account` },
+          { status: 409 }
+        );
+      }
+    }
 
     const newUser: ApiUserProfile = {
       id: userId,
@@ -161,18 +194,13 @@ export async function POST(request: Request) {
       avatar:
         body.avatar ||
         `https://api.dicebear.com/7.x/notionists/svg?seed=${rawUsername}&backgroundColor=b6e3f4,c0aede,d1d4f9`,
-      bio: body.bio || 'Living life • LMC Squad member ⚡',
+      bio: body.bio ? sanitizeInputText(body.bio, 160) : 'LMC Chats member ⚡',
       status: body.status || 'online',
       role: body.role || 'user',
       provider: body.provider || 'custom',
       email: body.email,
       created_at: body.created_at || new Date().toISOString(),
     };
-
-    // Update if exists or add new
-    const existingIndex = currentUsers.findIndex(
-      (u) => u.username.toLowerCase() === rawUsername || u.id === userId
-    );
 
     let updatedUsers: ApiUserProfile[];
     if (existingIndex >= 0) {

@@ -514,7 +514,7 @@ export default function AuthLoginScreen({
                     type="text"
                     value={googleName}
                     onChange={(e) => setGoogleName(e.target.value)}
-                    placeholder="e.g. Koshen Siwanchi"
+                    placeholder="e.g. Alex Hunter"
                     className="w-full bg-[#0A0D14] border border-[#232B3E] focus:border-[#4285F4] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-[#5A6376] outline-none"
                   />
                 </div>
