@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, ShieldCheck, Mail, ArrowRight, Sparkles, Check } from 'lucide-react';
+import { X, ShieldCheck, Mail, ArrowRight, Check } from 'lucide-react';
 import { signInWithGoogle, isSupabaseConfigured } from '@/lib/supabase';
 
 interface GoogleAuthModalProps {

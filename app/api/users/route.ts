@@ -16,26 +16,16 @@ export interface ApiUserProfile {
   created_at?: string;
 }
 
-// Initial seed directory with Harshita and Koshen
+// Initial seed directory with Harshita
 const INITIAL_USERS: ApiUserProfile[] = [
   {
     id: 'usr_harshita',
     username: 'harshita',
     name: 'Harshita',
     avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=harshita&backgroundColor=ffd5dc,c0aede,d1d4f9',
-    bio: 'Living life • LMC Squad member ✨',
+    bio: 'Living life • Squad member',
     status: 'online',
     role: 'user',
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'usr_koshen',
-    username: 'koshen',
-    name: 'Koshen Siwanchi',
-    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=koshen&backgroundColor=b6e3f4,d1d4f9',
-    bio: 'LMC Squad Leader ⚡',
-    status: 'online',
-    role: 'admin',
     created_at: new Date().toISOString(),
   },
 ];
@@ -71,7 +61,7 @@ function loadUsers(): ApiUserProfile[] {
       const data = fs.readFileSync(filePath, 'utf-8');
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Merge with initial users to guarantee Harshita & Koshen are always present
+        // Merge with initial users to guarantee Harshita is always present
         const map = new Map<string, ApiUserProfile>();
         for (const u of INITIAL_USERS) {
           map.set(u.username.toLowerCase(), u);
@@ -222,3 +212,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

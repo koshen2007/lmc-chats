@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  Sparkles,
   Plus,
   Search,
   Phone,
@@ -42,6 +41,7 @@ import {
   MessageSquare,
   LogOut,
   Edit3,
+  Palette,
   Settings,
   Hash,
   Ghost,
@@ -99,20 +99,7 @@ interface CurrentUser {
   email?: string;
 }
 
-const DEFAULT_GROUPS: Group[] = [
-  {
-    id: 'lmc-squad',
-    name: 'LMC Squad',
-    description: 'Official squad room for chats, calls & music.',
-    avatar: '/logo.png',
-    created_by: 'LMC',
-    is_private: false,
-    members: [],
-    join_requests: [],
-    created_at: new Date().toISOString(),
-    unreadCount: 0,
-  },
-];
+const DEFAULT_GROUPS: Group[] = [];
 
 const INITIAL_MESSAGES: Message[] = [];
 
@@ -181,7 +168,7 @@ export default function Home() {
 
   // Groups and Messages with permanent LocalStorage persistence
   const [groups, setGroups] = useState<Group[]>(DEFAULT_GROUPS);
-  const [activeGroupId, setActiveGroupId] = useState<string>(DEFAULT_GROUPS[0].id);
+  const [activeGroupId, setActiveGroupId] = useState<string>('');
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -366,36 +353,42 @@ export default function Home() {
       } catch {}
     }
 
-    // 2. Load Persisted Groups & auto-migrate old "LMC Main Lounge" and purge dummy members
+    // 2. Load Persisted Groups & purge dummy mock groups ('lmc-squad', 'lmc-main-lounge', etc.)
     const FAKE_MEMBERS = ['alex', 'sam', 'kira'];
     const storedGroups = localStorage.getItem('lmc_saved_groups');
     if (storedGroups) {
       try {
         const parsedGroups = JSON.parse(storedGroups);
-        if (Array.isArray(parsedGroups) && parsedGroups.length > 0) {
-          const sanitized = parsedGroups.map((g) => {
-            const cleanMembers = (g.members || []).filter(
-              (m: string) => !FAKE_MEMBERS.includes(m.toLowerCase())
-            );
-            if (g.name === 'LMC Main Lounge' || g.id === 'lmc-main-lounge') {
-              return {
-                ...g,
-                id: 'lmc-squad',
-                name: 'LMC Squad',
-                avatar: '/logo.png',
-                description: 'Official squad room for chats, calls & music.',
-                members: cleanMembers,
-              };
-            }
-            return { ...g, members: cleanMembers };
-          });
+        if (Array.isArray(parsedGroups)) {
+          const sanitized = parsedGroups
+            .filter(
+              (g) =>
+                g &&
+                g.id !== 'lmc-squad' &&
+                g.id !== 'lmc-main-lounge' &&
+                g.name !== 'LMC Squad' &&
+                g.name !== 'LMC Main Lounge'
+            )
+            .map((g) => {
+              const cleanMembers = (g.members || []).filter(
+                (m: string) => !FAKE_MEMBERS.includes(m.toLowerCase())
+              );
+              return { ...g, members: cleanMembers };
+            });
           setGroups(sanitized);
-          setActiveGroupId(sanitized[0].id);
+          if (sanitized.length > 0) {
+            setActiveGroupId(sanitized[0].id);
+          } else {
+            setActiveGroupId('');
+          }
           localStorage.setItem('lmc_saved_groups', JSON.stringify(sanitized));
         }
       } catch {
         // ignore
       }
+    } else {
+      setGroups([]);
+      setActiveGroupId('');
     }
 
     // 3. Load Persisted Messages & auto-migrate, removing dummy messages
@@ -748,7 +741,7 @@ export default function Home() {
 
   // Active Group Resolution
   const activeGroup = useMemo(() => {
-    return groups.find((g) => g.id === activeGroupId) || groups[0] || DEFAULT_GROUPS[0];
+    return groups.find((g) => g.id === activeGroupId) || groups[0] || null;
   }, [groups, activeGroupId]);
 
   // Group Visibility Rules
@@ -1728,13 +1721,10 @@ export default function Home() {
 
   // ADMIN: DELETE CHANNEL
   const handleDeleteChannel = useCallback(() => {
-    if (activeGroup.id === 'lmc-squad') {
-      triggerToast('Cannot delete default squad channel');
-      return;
-    }
+    if (!activeGroup) return;
     const updatedGroups = groups.filter((g) => g.id !== activeGroup.id);
     savePersistedGroups(updatedGroups);
-    setActiveGroupId('lmc-squad');
+    setActiveGroupId(updatedGroups[0]?.id || '');
     triggerToast(`Deleted #${activeGroup.name}`);
   }, [activeGroup, groups]);
 
@@ -1936,7 +1926,7 @@ export default function Home() {
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[220] flex items-center gap-2 bg-[#1A2234]/95 backdrop-blur-md border border-white/10 px-4 py-2.5 rounded-2xl shadow-2xl text-xs sm:text-sm animate-msg-in">
-          <Sparkles className="w-4 h-4 text-[#818CF8]" />
+          <Info className="w-4 h-4 text-[#818CF8]" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -2239,7 +2229,7 @@ export default function Home() {
                 onClick={() => setShowAvatarStudio(true)}
                 className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 text-white font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 transition-all active:scale-[0.98] mb-2.5 group"
               >
-                <Sparkles className="w-4 h-4 text-yellow-300 group-hover:rotate-12 transition-transform" />
+                <Palette className="w-4 h-4 text-indigo-300 group-hover:rotate-12 transition-transform" />
                 <span className="text-xs">Create Custom Avatar (Studio)</span>
               </button>
 
@@ -2302,7 +2292,7 @@ export default function Home() {
                 type="text"
                 value={profileNameInput}
                 onChange={(e) => setProfileNameInput(e.target.value)}
-                placeholder="e.g. Koshen Siwanchi"
+                placeholder="Enter your name"
                 className="w-full bg-[#0D1017] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-[#5A6376] outline-none"
                 required
               />
@@ -2315,7 +2305,6 @@ export default function Home() {
                   <AtSign className="w-3 h-3 text-indigo-400" />
                   <span>Unique Username</span>
                 </label>
-                <span className="text-[10px] text-amber-400 font-medium">100% Unique</span>
               </div>
               <div className="relative">
                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-indigo-400">@</span>
@@ -2327,7 +2316,7 @@ export default function Home() {
                       e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')
                     )
                   }
-                  placeholder="username (e.g. koshen)"
+                  placeholder="your_handle"
                   className={`w-full bg-[#0D1017] border rounded-xl pl-8 pr-3.5 py-2.5 text-sm text-white placeholder-[#5A6376] outline-none transition-colors ${
                     profileUsernameInput
                       ? usernameAvailability.available
@@ -2403,7 +2392,7 @@ export default function Home() {
       )}
 
       {/* ADD MEMBER TO CHANNEL MODAL */}
-      {showAddMemberModal && (
+      {showAddMemberModal && activeGroup && (
         <AddMemberModal
           channelName={activeGroup.name}
           currentMembers={activeGroup.members || []}
@@ -2414,7 +2403,7 @@ export default function Home() {
       )}
 
       {/* ADMIN MODERATION & BAN PANEL MODAL */}
-      {showAdminModal && (
+      {showAdminModal && activeGroup && (
         <AdminModerationModal
           isOpen={showAdminModal}
           onClose={() => setShowAdminModal(false)}
@@ -2709,6 +2698,11 @@ export default function Home() {
             )}
 
             <div className="space-y-0.5 mt-1">
+              {visibleGroups.filter((g) => !g.is_private).length === 0 && !railCollapsed && (
+                <div className="px-3 py-2 text-center">
+                  <p className="text-[11px] text-[#5A6376] italic">No channels yet</p>
+                </div>
+              )}
               {visibleGroups
                 .filter((g) => !g.is_private)
                 .map((group) => {
@@ -2777,6 +2771,11 @@ export default function Home() {
             )}
 
             <div className="space-y-0.5 mt-1">
+              {visibleGroups.filter((g) => g.is_private).length === 0 && !railCollapsed && (
+                <div className="px-3 py-2 text-center">
+                  <p className="text-[11px] text-[#5A6376] italic">No private rooms</p>
+                </div>
+              )}
               {visibleGroups
                 .filter((g) => g.is_private)
                 .map((group) => {
@@ -2927,7 +2926,7 @@ export default function Home() {
                 }}
                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-[#A78BFA] font-medium transition-colors"
               >
-                <Sparkles className="w-3.5 h-3.5 text-pink-400" />
+                <Palette className="w-3.5 h-3.5 text-indigo-400" />
                 <span>Snapchat Avatar Studio</span>
               </button>
 
@@ -3010,7 +3009,85 @@ export default function Home() {
 
       {/* MAIN CHAT COLUMN */}
       <main className="flex-1 flex flex-col min-w-0 h-full relative bg-[#0B0E17]">
-        {/* Chat Header */}
+        {!activeGroup ? (
+          <div className="flex-1 flex flex-col min-w-0 h-full">
+            {/* Minimal Header */}
+            <header className="h-16 px-3 sm:px-5 flex items-center justify-between border-b border-[#1B212E] bg-[#0B0E17]/95 backdrop-blur-md z-10 shrink-0">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMobileRailOpen(true)}
+                  className="md:hidden w-9 h-9 rounded-xl grid place-items-center text-[#7A8396] hover:text-white hover:bg-white/5 active:scale-95 shrink-0"
+                  title="Open Menu"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-600/20 text-indigo-400 grid place-items-center font-bold text-xs">
+                    #
+                  </div>
+                  <h1 className="text-sm sm:text-base font-bold text-white tracking-tight">LMC Chats</h1>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowInstagramSearch(true)}
+                  className="w-9 h-9 rounded-xl grid place-items-center text-pink-400 hover:text-pink-300 hover:bg-pink-500/10 active:scale-90 transition-all shrink-0"
+                  title="Search Users & IDs"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewGroupIsPrivate(false);
+                    setShowNewGroupModal(true);
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/30 active:scale-95 transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Create Group</span>
+                </button>
+              </div>
+            </header>
+
+            {/* Clean Blank Slate */}
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center select-none">
+              <div className="w-16 h-16 rounded-3xl bg-indigo-600/10 border border-indigo-500/20 grid place-items-center mb-4 text-indigo-400 shadow-xl">
+                <MessageSquare className="w-7 h-7" />
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-white mb-2">No Channels Yet</h2>
+              <p className="text-xs sm:text-sm text-[#7A8396] max-w-sm mb-6">
+                Create a channel to start chatting with your squad, or use search to find friends.
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewGroupIsPrivate(false);
+                    setShowNewGroupModal(true);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm flex items-center gap-2 shadow-lg shadow-indigo-600/30 active:scale-95 transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Group</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowInstagramSearch(true)}
+                  className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold text-sm flex items-center gap-2 border border-white/10 active:scale-95 transition-all"
+                >
+                  <Search className="w-4 h-4" />
+                  <span>Search Users</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Chat Header */}
         <header className="h-16 px-2.5 sm:px-5 flex items-center justify-between border-b border-[#1B212E] bg-[#0B0E17]/95 backdrop-blur-md z-10 shrink-0 relative">
           {mobileSearchOpen ? (
             /* Full-width Mobile Search Bar Overlay */
@@ -4070,10 +4147,13 @@ export default function Home() {
           </form>
           )}
         </div>
+          </>
+        )}
       </main>
 
       {/* RIGHT SIDEBAR (Instagram-style Group Details & Members) */}
-      <aside
+      {activeGroup && (
+        <aside
         className={`fixed md:relative top-0 bottom-0 right-0 z-40 bg-[#0E121B] border-l border-[#1B212E] w-[300px] min-w-[300px] flex flex-col transition-transform duration-300 ease-out ${
           infoOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full md:hidden'
         }`}
@@ -4341,6 +4421,7 @@ export default function Home() {
           </div>
         </div>
       </aside>
+      )}
     </div>
   );
 }

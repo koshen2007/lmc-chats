@@ -9,7 +9,6 @@ import {
   Upload,
   Link as LinkIcon,
   Bot,
-  Sparkles,
   Volume2,
   FileAudio,
 } from 'lucide-react';
@@ -330,8 +329,8 @@ export default function MusicBotModal({
 
           {/* Bot Command Cheatsheet */}
           <div className="p-3 bg-white/[0.02] border border-white/5 rounded-2xl mt-4">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-[#7A8396] mb-1.5 flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-yellow-400" />
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[#7A8396] mb-1.5 flex items-center gap-1.5">
+              <Bot className="w-3.5 h-3.5 text-indigo-400" />
               Telegram-Style Chat Commands
             </p>
             <div className="grid grid-cols-2 gap-1.5 text-[10px] text-[#A8B2C7] font-mono">

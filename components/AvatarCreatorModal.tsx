@@ -6,7 +6,6 @@ import {
   Shuffle,
   RotateCcw,
   Check,
-  Sparkles,
   Palette,
   Eye,
   Smile,
@@ -70,7 +69,7 @@ export default function AvatarCreatorModal({
     { id: 'hair', label: 'Hair', icon: <Palette className="w-3.5 h-3.5" /> },
     { id: 'eyes', label: 'Eyes', icon: <Eye className="w-3.5 h-3.5" /> },
     { id: 'mouth', label: 'Mouth & Lips', icon: <Smile className="w-3.5 h-3.5" /> },
-    { id: 'beard', label: 'Beard', icon: <Sparkles className="w-3.5 h-3.5" /> },
+    { id: 'beard', label: 'Beard', icon: <User className="w-3.5 h-3.5" /> },
     { id: 'outfit', label: 'Outfit', icon: <Shirt className="w-3.5 h-3.5" /> },
     { id: 'gear', label: 'Gear & Glasses', icon: <Glasses className="w-3.5 h-3.5" /> },
     { id: 'backdrop', label: 'Backdrop', icon: <Wand2 className="w-3.5 h-3.5" /> },
@@ -83,7 +82,7 @@ export default function AvatarCreatorModal({
         <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-[#131826]">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 grid place-items-center">
-              <Sparkles className="w-4 h-4" />
+              <Palette className="w-4 h-4" />
             </div>
             <div>
               <h2 className="text-base font-bold text-white tracking-tight">Avatar Studio</h2>

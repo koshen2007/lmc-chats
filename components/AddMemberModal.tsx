@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { X, Search, UserPlus, Check, Users, Sparkles } from 'lucide-react';
+import { X, Search, UserPlus, Check, Users } from 'lucide-react';
 import { UserProfile } from '@/lib/users';
 
 interface AddMemberModalProps {

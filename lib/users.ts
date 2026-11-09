@@ -20,18 +20,9 @@ export const SEED_USERS: UserProfile[] = [
     username: 'harshita',
     name: 'Harshita',
     avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=harshita&backgroundColor=ffd5dc,c0aede,d1d4f9',
-    bio: 'Living life • LMC Squad member ✨',
+    bio: 'Living life • Squad member',
     status: 'online',
     role: 'user',
-  },
-  {
-    id: 'usr_koshen',
-    username: 'koshen',
-    name: 'Koshen Siwanchi',
-    avatar: 'https://api.dicebear.com/7.x/notionists/svg?seed=koshen&backgroundColor=b6e3f4,d1d4f9',
-    bio: 'LMC Squad Leader ⚡',
-    status: 'online',
-    role: 'admin',
   },
 ];
 

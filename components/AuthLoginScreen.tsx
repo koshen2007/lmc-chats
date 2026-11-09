@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Sparkles,
   Check,
   X,
   Upload,
@@ -277,9 +276,9 @@ export default function AuthLoginScreen({
                 <button
                   type="button"
                   onClick={() => setShowAvatarStudio(true)}
-                  className="mt-1 text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors"
+                  className="mt-1 text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 transition-colors"
                 >
-                  <Sparkles className="w-3 h-3 text-yellow-400" />
+                  <Palette className="w-3.5 h-3.5 text-indigo-400" />
                   <span>Customize in Avatar Studio</span>
                 </button>
               </div>
@@ -325,7 +324,7 @@ export default function AuthLoginScreen({
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="e.g. Koshen Siwanchi"
+                placeholder="Enter your name"
                 className="w-full bg-[#0A0D14] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-[#5A6376] outline-none transition-colors"
                 required
               />
@@ -338,7 +337,6 @@ export default function AuthLoginScreen({
                   <AtSign className="w-3 h-3 text-indigo-400" />
                   <span>Unique Username</span>
                 </label>
-                <span className="text-[10px] text-amber-400 font-medium">100% Unique</span>
               </div>
               <div className="relative">
                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-indigo-400">@</span>
@@ -381,7 +379,7 @@ export default function AuthLoginScreen({
               disabled={!username.trim() || !usernameCheck.available}
               className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 disabled:opacity-40 text-white font-bold py-3 rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.98] mt-2"
             >
-              <span>Enter LMC Chats & Squad Lounge</span>
+              <span>Enter Chats</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>

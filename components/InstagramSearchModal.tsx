@@ -11,7 +11,6 @@ import {
   Phone,
   Video,
   Check,
-  Sparkles,
   ExternalLink,
   Users,
   Compass,
