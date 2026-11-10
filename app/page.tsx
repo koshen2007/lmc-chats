@@ -6149,29 +6149,6 @@ export default function Home() {
               </button>
             </div>
 
-            {/* ADMIN: Direct Add Member Input */}
-            {isAdminOfActiveGroup && !isDmMode && (
-              <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider text-[#7A8396] block mb-1.5">
-                  Add Member
-                </label>
-                <form onSubmit={handleAdminAddMember} className="flex gap-1.5">
-                  <input
-                    type="text"
-                    value={adminAddMemberInput}
-                    onChange={(e) => setAdminAddMemberInput(e.target.value)}
-                    placeholder="Username to add..."
-                    className="flex-1 bg-[#131722] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3 py-1.5 text-xs text-white placeholder-[#5A6376] outline-none"
-                  />
-                  <button
-                    type="submit"
-                    className="bg-[#6366F1] hover:bg-[#5457E5] text-white px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0"
-                  >
-                    Add
-                  </button>
-                </form>
-              </div>
-            )}
 
             {/* Admin Moderation Panel Button */}
             {isAdminOfActiveGroup && (
