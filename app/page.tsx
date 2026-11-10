@@ -8,6 +8,7 @@ import {
   Video,
   Info,
   ChevronDown,
+  ChevronRight,
   PanelLeft,
   Menu,
   X,
@@ -4772,43 +4773,34 @@ export default function Home() {
                             className="fixed inset-0 z-40 bg-black/30"
                             onClick={() => setMobileHeaderMenuOpen(false)}
                           />
-                          <div className="absolute right-0 top-full mt-2 w-56 bg-[#131722]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-1.5 z-50 animate-msg-in flex flex-col gap-0.5">
+                          <div className="absolute right-0 top-full mt-2 w-52 bg-[#121622]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-1.5 z-50 animate-msg-in flex flex-col gap-0.5">
+                            {/* 1. Group / Chat Details */}
                             <button
                               type="button"
                               onClick={() => {
                                 setMobileHeaderMenuOpen(false);
-                                setShowSettingsModal(true);
+                                setInfoOpen(true);
                               }}
                               className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
                             >
-                              <Settings className="w-4 h-4 text-emerald-400" />
-                              <span>Settings & Preferences</span>
+                              <Info className="w-4 h-4 text-indigo-400" />
+                              <span>{isDmMode ? 'Chat Info' : 'Group Info'}</span>
                             </button>
 
+                            {/* 2. Search in Conversation */}
                             <button
                               type="button"
                               onClick={() => {
                                 setMobileHeaderMenuOpen(false);
-                                setShowInstagramSearch(true);
+                                setMobileSearchOpen(true);
                               }}
                               className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
                             >
                               <Search className="w-4 h-4 text-pink-400" />
-                              <span>Search Squad / DMs</span>
+                              <span>Search in Chat</span>
                             </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileHeaderMenuOpen(false);
-                                startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png');
-                              }}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                            >
-                              <Video className="w-4 h-4 text-indigo-400" />
-                              <span>Start Video Call</span>
-                            </button>
-
+                            {/* 3. Wallpaper & Theme */}
                             <button
                               type="button"
                               onClick={() => {
@@ -4818,27 +4810,10 @@ export default function Home() {
                               className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
                             >
                               <Palette className="w-4 h-4 text-purple-400" />
-                              <span>Wallpaper & Bubble Colors</span>
+                              <span>Wallpaper & Colors</span>
                             </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileHeaderMenuOpen(false);
-                                setShowMusicBotModal(true);
-                              }}
-                              className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                            >
-                              <span className="flex items-center gap-2.5">
-                                <Bot className="w-4 h-4 text-purple-400" />
-                                <span>Music Bot & Player</span>
-                              </span>
-                              {roomPlayback?.isPlaying && (
-                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                              )}
-                            </button>
-
-                            {/* Push Notification Toggle */}
+                            {/* 4. Mute / Sound Alerts */}
                             <button
                               type="button"
                               onClick={() => {
@@ -4850,97 +4825,52 @@ export default function Home() {
                               {!soundMuted && notificationPermission === 'granted' ? (
                                 <>
                                   <Bell className="w-4 h-4 text-emerald-400" />
-                                  <span>Sound Alerts: On</span>
+                                  <span>Mute Sound</span>
                                 </>
                               ) : (
                                 <>
                                   <BellOff className="w-4 h-4 text-[#7A8396]" />
-                                  <span>{soundMuted ? 'Sound: Muted' : 'Enable Notifications'}</span>
+                                  <span>{soundMuted ? 'Unmute Sound' : 'Enable Alerts'}</span>
                                 </>
                               )}
                             </button>
 
+                            {/* 5. Music Bot (if in room) */}
                             <button
                               type="button"
                               onClick={() => {
                                 setMobileHeaderMenuOpen(false);
-                                setShowPWAInstallModal(true);
+                                setShowMusicBotModal(true);
                               }}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-emerald-400 hover:bg-white/5 transition-all text-left"
+                              className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
                             >
-                              <Download className="w-4 h-4 text-emerald-400" />
-                              <span>Install App (PWA)</span>
+                              <span className="flex items-center gap-2.5">
+                                <Bot className="w-4 h-4 text-purple-400" />
+                                <span>Music Bot</span>
+                              </span>
+                              {roomPlayback?.isPlaying && (
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                              )}
                             </button>
 
-                            {!isDmMode && (
+                            {/* 6. Admin Delete Channel */}
+                            {isAdminOfActiveGroup && !isDmMode && (
                               <>
+                                <div className="border-t border-white/5 my-0.5" />
                                 <button
                                   type="button"
                                   onClick={() => {
                                     setMobileHeaderMenuOpen(false);
-                                    setShowAddMemberModal(true);
+                                    if (window.confirm(`Permanently delete #${activeGroup.name}?`)) {
+                                      handleDeleteChannel();
+                                    }
                                   }}
-                                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition-all text-left"
                                 >
-                                  <UserPlus className="w-4 h-4 text-emerald-400" />
-                                  <span>Add Members</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setMobileHeaderMenuOpen(false);
-                                    setNewGroupIsPrivate(false);
-                                    setShowNewGroupModal(true);
-                                  }}
-                                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                                >
-                                  <Plus className="w-4 h-4 text-indigo-400" />
-                                  <span>Create New Channel</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setMobileHeaderMenuOpen(false);
-                                    setShowDiscoverChannels(true);
-                                  }}
-                                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                                >
-                                  <Compass className="w-4 h-4 text-purple-400" />
-                                  <span>Discover Channels</span>
+                                  <Trash2 className="w-4 h-4 text-rose-400" />
+                                  <span>Delete Channel</span>
                                 </button>
                               </>
-                            )}
-
-                            {isAdminOfActiveGroup && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setMobileHeaderMenuOpen(false);
-                                  setShowAdminModal(true);
-                                }}
-                                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:bg-amber-500/10 transition-all text-left border-t border-white/5 mt-1 pt-2"
-                              >
-                                <Crown className="w-4 h-4 text-amber-400" />
-                                <span>Admin Moderation</span>
-                              </button>
-                            )}
-
-                            {isAdminOfActiveGroup && !isDmMode && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setMobileHeaderMenuOpen(false);
-                                  if (window.confirm(`Permanently delete #${activeGroup.name}?`)) {
-                                    handleDeleteChannel();
-                                  }
-                                }}
-                                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition-all text-left"
-                              >
-                                <Trash2 className="w-4 h-4 text-rose-400" />
-                                <span>Delete Channel</span>
-                              </button>
                             )}
                           </div>
                         </>
@@ -6053,53 +5983,43 @@ export default function Home() {
               </button>
             )}
 
-            {/* Quick Call Actions in Group */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
-                className="flex-1 bg-[#141824] hover:bg-[#1E2538] border border-[#232B3E] py-2 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-all"
-              >
-                <Phone className="w-3.5 h-3.5 text-[#22C55E]" /> Call
-              </button>
-              <button
-                onClick={() => startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png')}
-                className="flex-1 bg-[#6366F1] hover:bg-[#5457E5] py-2 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-all shadow"
-              >
-                <Video className="w-3.5 h-3.5" /> Video
-              </button>
-            </div>
-
-
-            {/* Admin Moderation Panel Button */}
-            {isAdminOfActiveGroup && (
-              <button
-                onClick={() => setShowAdminModal(true)}
-                className="w-full bg-gradient-to-r from-amber-500/20 to-rose-500/20 hover:from-amber-500/30 hover:to-rose-500/30 text-amber-300 border border-amber-500/30 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98]"
-              >
-                <Crown className="w-4 h-4 text-amber-400" />
-                <span>Admin Ban & Moderation</span>
-              </button>
-            )}
-
-            {/* Admin Direct Delete Channel Button */}
-            {isAdminOfActiveGroup && !isDmMode && (
+            {/* Sleek Action Bar: Voice Call, Video Call, and Add Member */}
+            <div className={`grid ${isDmMode ? 'grid-cols-2' : 'grid-cols-3'} gap-2`}>
               <button
                 type="button"
-                onClick={() => {
-                  const confirmed = window.confirm(
-                    `Are you sure you want to permanently delete #${activeGroup.name}? All messages will be wiped.`
-                  );
-                  if (confirmed) {
-                    handleDeleteChannel();
-                  }
-                }}
-                className="w-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 border border-rose-500/30 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98]"
-                title={`Permanently delete #${activeGroup.name}`}
+                onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
+                className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-all group"
               >
-                <Trash2 className="w-4 h-4 text-rose-400" />
-                <span>Delete Channel (#{activeGroup.name})</span>
+                <div className="w-8 h-8 rounded-full bg-emerald-500/10 group-hover:bg-emerald-500/20 text-emerald-400 grid place-items-center transition-colors">
+                  <Phone className="w-4 h-4" />
+                </div>
+                <span className="text-[11px] font-medium text-slate-300 group-hover:text-white">Voice</span>
               </button>
-            )}
+
+              <button
+                type="button"
+                onClick={() => startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png')}
+                className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-all group"
+              >
+                <div className="w-8 h-8 rounded-full bg-indigo-500/10 group-hover:bg-indigo-500/20 text-indigo-400 grid place-items-center transition-colors">
+                  <Video className="w-4 h-4" />
+                </div>
+                <span className="text-[11px] font-medium text-slate-300 group-hover:text-white">Video</span>
+              </button>
+
+              {!isDmMode && (
+                <button
+                  type="button"
+                  onClick={() => setShowAddMemberModal(true)}
+                  className="flex flex-col items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-all group"
+                >
+                  <div className="w-8 h-8 rounded-full bg-pink-500/10 group-hover:bg-pink-500/20 text-pink-400 grid place-items-center transition-colors">
+                    <UserPlus className="w-4 h-4" />
+                  </div>
+                  <span className="text-[11px] font-medium text-slate-300 group-hover:text-white">Add</span>
+                </button>
+              )}
+            </div>
 
             {/* Members List with Click to View Profile (Groups Only) */}
             {!isDmMode && (
@@ -6218,8 +6138,6 @@ export default function Home() {
                                   ) : (
                                     <span>{memberPresence?.last_seen_text || 'Offline'}</span>
                                   )}
-                                  <span>•</span>
-                                  <span>{isCreator ? 'Admin 👑' : 'Member'}</span>
                                 </p>
                               </div>
                               {isCreator && (
@@ -6310,6 +6228,45 @@ export default function Home() {
                 </div>
               )}
             </div>
+
+            {/* Admin Management Section (Clean subtle controls at bottom) */}
+            {isAdminOfActiveGroup && (
+              <div className="pt-3 border-t border-white/10 space-y-2 mt-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#7A8396]">
+                  Channel Admin
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAdminModal(true)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-all text-xs font-semibold"
+                >
+                  <span className="flex items-center gap-2.5 text-amber-300">
+                    <Crown className="w-4 h-4 text-amber-400" />
+                    <span>Admin Moderation & Bans</span>
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-slate-500" />
+                </button>
+
+                {!isDmMode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`Permanently delete #${activeGroup.name}? All messages will be wiped.`)) {
+                        handleDeleteChannel();
+                      }
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 transition-all text-xs font-semibold"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <Trash2 className="w-4 h-4 text-rose-400" />
+                      <span>Delete Channel</span>
+                    </span>
+                    <span className="text-[10px] text-rose-400/70 font-mono">#{activeGroup.name}</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </aside>
       )}

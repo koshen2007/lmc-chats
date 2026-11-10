@@ -78,7 +78,7 @@ export default function CreateStoryModal({
   const EMOJI_LIST = ['🔥', '✨', '❤️', '😂', '🚀', '⚡', '🎉', '💯', '🍕', '😎', '☕', '🌟'];
 
   return (
-    <div className="fixed inset-0 z-[220] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-msg-in">
+    <div className="fixed inset-0 z-[220] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-msg-in overflow-hidden">
       <div className="w-full max-w-md bg-[#111520] border border-[#232B3E] rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] relative">
         {/* Modal Header */}
         <div className="px-5 py-3.5 border-b border-white/10 flex items-center justify-between shrink-0">
@@ -123,8 +123,8 @@ export default function CreateStoryModal({
           </button>
         </div>
 
-        {/* Form Body - Scrollable so it never overflows viewport */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 flex flex-col gap-3.5 overflow-y-auto scroll flex-1 min-h-0">
+        {/* Form Body - Scrollable without horizontal scrollbars */}
+        <form onSubmit={handleSubmit} className="p-4 sm:p-5 flex flex-col gap-3.5 overflow-y-auto overflow-x-hidden scroll flex-1 min-h-0">
           {storyType === 'text' ? (
             <>
               {/* Text Preview Card - Compact & responsive */}
@@ -145,18 +145,18 @@ export default function CreateStoryModal({
                 </span>
               </div>
 
-              {/* Gradient Color Palette - Clean hidden scrollbar */}
+              {/* Gradient Color Palette - Responsive flex wrap (zero horizontal scrollbars) */}
               <div>
                 <label className="text-[11px] font-bold text-[#A8B2C7] uppercase tracking-wider block mb-1.5">
                   Choose Color Theme
                 </label>
-                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                <div className="flex items-center gap-2.5 flex-wrap py-1">
                   {STORY_GRADIENTS.map((grad) => (
                     <button
                       key={grad.name}
                       type="button"
                       onClick={() => setSelectedGradient(grad.value)}
-                      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr ${grad.value} shrink-0 ring-2 transition-transform ${
+                      className={`w-8 h-8 rounded-full bg-gradient-to-tr ${grad.value} shrink-0 ring-2 transition-transform ${
                         selectedGradient === grad.value
                           ? 'ring-white scale-110 shadow-lg'
                           : 'ring-transparent opacity-80 hover:opacity-100'
@@ -167,18 +167,18 @@ export default function CreateStoryModal({
                 </div>
               </div>
 
-              {/* Quick Emojis - Clean hidden scrollbar */}
+              {/* Quick Emojis - Clean 6-column grid with zero scrollbars */}
               <div>
                 <label className="text-[11px] font-bold text-[#A8B2C7] uppercase tracking-wider block mb-1.5">
                   Add Emoji
                 </label>
-                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+                <div className="grid grid-cols-6 gap-1.5 sm:gap-2 py-1">
                   {EMOJI_LIST.map((em) => (
                     <button
                       key={em}
                       type="button"
                       onClick={() => setTextContent((prev) => prev + em)}
-                      className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 grid place-items-center text-base shrink-0 active:scale-95 transition-all"
+                      className="h-9 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-base active:scale-95 transition-all border border-white/5"
                     >
                       {em}
                     </button>
