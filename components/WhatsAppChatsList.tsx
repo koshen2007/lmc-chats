@@ -340,6 +340,10 @@ export default function WhatsAppChatsList({
               <img
                 src={currentUser.avatar || 'https://api.dicebear.com/7.x/notionists/svg?seed=user'}
                 alt={currentUser.name || 'User'}
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = '/logo.png';
+                }}
                 className="w-full h-full object-cover rounded-full"
               />
             </div>
@@ -598,8 +602,12 @@ export default function WhatsAppChatsList({
                 <div className="relative shrink-0">
                   <div className="w-12 h-12 rounded-full overflow-hidden bg-[#161C28] border border-white/10 shadow-sm">
                     <img
-                      src={chat.avatar}
+                      src={chat.avatar || '/logo.png'}
                       alt={chat.name}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = '/logo.png';
+                      }}
                       className="w-full h-full object-cover rounded-full"
                     />
                   </div>

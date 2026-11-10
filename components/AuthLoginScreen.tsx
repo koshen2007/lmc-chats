@@ -453,8 +453,12 @@ export default function AuthLoginScreen({
                       <div className="flex items-center justify-between p-2.5 rounded-xl bg-indigo-950/50 border border-indigo-500/40 text-xs">
                         <div className="flex items-center gap-2 min-w-0">
                           <img
-                            src={existing.avatar}
+                            src={existing.avatar || DEFAULT_AVATAR_DATA_URL}
                             alt={existing.name}
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
+                            }}
                             className="w-7 h-7 rounded-full bg-black/40 border border-white/20 shrink-0 object-cover"
                           />
                           <div className="min-w-0">
@@ -517,8 +521,12 @@ export default function AuthLoginScreen({
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <img
-                          src={acc.avatar}
+                          src={acc.avatar || DEFAULT_AVATAR_DATA_URL}
                           alt={acc.name}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
+                          }}
                           className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0"
                         />
                         <div className="min-w-0">

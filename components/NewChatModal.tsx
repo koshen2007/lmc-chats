@@ -141,6 +141,10 @@ export default function NewChatModal({
                             `https://api.dicebear.com/7.x/notionists/svg?seed=${u.username}`
                           }
                           alt={u.name}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = '/logo.png';
+                          }}
                           className="w-full h-full object-cover rounded-full"
                         />
                       </div>

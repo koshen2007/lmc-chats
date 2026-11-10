@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { X, Search, UserPlus, Check, Users } from 'lucide-react';
+import { X, Search, UserPlus, Check, Users, AlertCircle, Loader2 } from 'lucide-react';
 import { UserProfile } from '@/lib/users';
 
 interface AddMemberModalProps {
@@ -21,6 +21,8 @@ export default function AddMemberModal({
 }: AddMemberModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [directInput, setDirectInput] = useState('');
+  const [isChecking, setIsChecking] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const filteredUsers = useMemo(() => {
     const q = searchQuery.toLowerCase().trim().replace(/^@/, '');
@@ -34,38 +36,70 @@ export default function AddMemberModal({
   }, [searchQuery, registeredUsers]);
 
   const isMember = (u: UserProfile) => {
-    const uName = u.name.toLowerCase();
-    const uUsername = u.username.toLowerCase();
-    return currentMembers.some(
-      (m) => m.toLowerCase() === uName || m.toLowerCase() === uUsername || m.toLowerCase() === `@${uUsername}`
-    );
+    const uName = (u.name || '').toLowerCase();
+    const uUsername = (u.username || '').toLowerCase();
+    return currentMembers.some((m) => {
+      const clean = (m || '').toLowerCase().replace(/^@/, '');
+      return clean === uName || clean === uUsername;
+    });
   };
 
-  const handleDirectAdd = (e: React.FormEvent) => {
+  const handleDirectAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     const raw = directInput.trim().replace(/^@/, '');
     if (!raw) return;
 
-    // Check if user already exists in directory
-    const existing = registeredUsers.find(
-      (u) => u.username.toLowerCase() === raw.toLowerCase() || u.name.toLowerCase() === raw.toLowerCase()
-    );
+    setErrorMsg(null);
+    setIsChecking(true);
 
-    if (existing) {
-      onAddMember(existing);
-    } else {
-      // Add custom username profile
-      const newProfile: UserProfile = {
-        id: `usr_${raw.toLowerCase().replace(/[^a-z0-9_]/g, '')}_${Math.floor(Math.random() * 1000)}`,
-        username: raw.toLowerCase().replace(/[^a-z0-9_]/g, ''),
-        name: directInput.trim(),
-        avatar: '/logo.png',
-        bio: 'Channel member ⚡',
-        status: 'online',
-      };
-      onAddMember(newProfile);
+    try {
+      // 1. Check in loaded registeredUsers directory first
+      let target = registeredUsers.find(
+        (u) =>
+          u.username.toLowerCase() === raw.toLowerCase() ||
+          u.name.toLowerCase() === raw.toLowerCase()
+      );
+
+      // 2. If not found in memory, query server API for latest registered users
+      if (!target) {
+        try {
+          const res = await fetch(`/api/users?q=${encodeURIComponent(raw)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.users && Array.isArray(data.users)) {
+              target = data.users.find(
+                (u: UserProfile) =>
+                  u.username.toLowerCase() === raw.toLowerCase() ||
+                  u.name.toLowerCase() === raw.toLowerCase()
+              );
+            }
+          }
+        } catch {
+          // ignore network error
+        }
+      }
+
+      // 3. Strictly reject non-existent users (DO NOT create fake dummy users)
+      if (!target) {
+        setErrorMsg(`User "@${raw}" does not exist on LMC Chats. Only registered users can be added.`);
+        setIsChecking(false);
+        return;
+      }
+
+      // 4. Check if user is already in the channel
+      if (isMember(target)) {
+        setErrorMsg(`@${target.username} is already a member of #${channelName}`);
+        setIsChecking(false);
+        return;
+      }
+
+      // 5. Valid registered user found -> add them
+      onAddMember(target);
+      setDirectInput('');
+      setErrorMsg(null);
+    } finally {
+      setIsChecking(false);
     }
-    setDirectInput('');
   };
 
   return (
@@ -95,26 +129,43 @@ export default function AddMemberModal({
         </div>
 
         {/* Direct Add Input Box */}
-        <form onSubmit={handleDirectAdd} className="p-3 border-b border-white/10 bg-[#0E121E] flex gap-2">
-          <div className="relative flex-1">
-            <span className="text-[#818CF8] font-bold text-xs absolute left-3 top-1/2 -translate-y-1/2">@</span>
-            <input
-              type="text"
-              value={directInput}
-              onChange={(e) => setDirectInput(e.target.value)}
-              placeholder="Enter exact @username to add..."
-              className="w-full bg-[#151A28] border border-[#232B3E] focus:border-indigo-500 rounded-xl pl-7 pr-3 py-2 text-xs text-white placeholder-[#5A6376] outline-none transition-colors"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={!directInput.trim()}
-            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 flex items-center gap-1 shadow-md shadow-indigo-600/20 transition-all active:scale-95"
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            <span>Add</span>
-          </button>
-        </form>
+        <div className="p-3 border-b border-white/10 bg-[#0E121E]">
+          <form onSubmit={handleDirectAdd} className="flex gap-2">
+            <div className="relative flex-1">
+              <span className="text-[#818CF8] font-bold text-xs absolute left-3 top-1/2 -translate-y-1/2">@</span>
+              <input
+                type="text"
+                value={directInput}
+                onChange={(e) => {
+                  setDirectInput(e.target.value);
+                  if (errorMsg) setErrorMsg(null);
+                }}
+                placeholder="Enter exact @username to add..."
+                className="w-full bg-[#151A28] border border-[#232B3E] focus:border-indigo-500 rounded-xl pl-7 pr-3 py-2 text-xs text-white placeholder-[#5A6376] outline-none transition-colors"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={!directInput.trim() || isChecking}
+              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shrink-0 flex items-center gap-1 shadow-md shadow-indigo-600/20 transition-all active:scale-95"
+            >
+              {isChecking ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <UserPlus className="w-3.5 h-3.5" />
+              )}
+              <span>{isChecking ? 'Checking...' : 'Add'}</span>
+            </button>
+          </form>
+
+          {/* Validation & Non-Existent User Error Banner */}
+          {errorMsg && (
+            <div className="mt-2.5 p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 animate-msg-in">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span className="leading-snug">{errorMsg}</span>
+            </div>
+          )}
+        </div>
 
         {/* Search input (only shown if there are registered users to filter) */}
         {registeredUsers.length > 0 && (
@@ -144,7 +195,15 @@ export default function AddMemberModal({
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="relative w-10 h-10 rounded-full overflow-hidden bg-[#1D2436] p-0.5 border border-white/10 shrink-0">
-                      <img src={u.avatar} alt={u.name} className="w-full h-full object-cover rounded-full" />
+                      <img
+                        src={u.avatar || '/logo.png'}
+                        alt={u.name}
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = '/logo.png';
+                        }}
+                        className="w-full h-full object-cover rounded-full"
+                      />
                       <span
                         className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[#111522] ${
                           u.status === 'online'

@@ -50,6 +50,10 @@ export default function UserWelcomeModal({
             <img
               src={user.avatar || '/logo.png'}
               alt={user.name}
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = '/logo.png';
+              }}
               className="w-full h-full object-cover rounded-xl"
             />
           </div>

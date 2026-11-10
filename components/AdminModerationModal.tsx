@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   X,
   Shield,
@@ -71,12 +71,39 @@ export default function AdminModerationModal({
 
   if (!isOpen) return null;
 
-  const currentMembers = channel.members || [];
-  const channelAdmins = channel.admins || (channel.created_by ? [channel.created_by] : []);
+  const FAKE_LIST = useMemo(() => new Set(['alex', 'sam', 'kira', 'harshita', 'pryanshu', 'priyanshu']), []);
 
-  const filteredMembers = currentMembers.filter((m) =>
-    m.toLowerCase().includes(memberSearch.toLowerCase().trim().replace(/^@/, ''))
-  );
+  const sanitizedMembers = useMemo(() => {
+    const uniqueMemberSet = new Set<string>();
+    const list: string[] = [];
+    for (const m of channel.members || []) {
+      if (!m) continue;
+      const clean = m.trim().replace(/^@/, '').toLowerCase();
+      if (!clean || FAKE_LIST.has(clean)) continue;
+      if (!uniqueMemberSet.has(clean)) {
+        uniqueMemberSet.add(clean);
+        list.push(clean);
+      }
+    }
+
+    const creatorClean = (channel.created_by || '').trim().replace(/^@/, '').toLowerCase();
+    if (creatorClean && !uniqueMemberSet.has(creatorClean) && !FAKE_LIST.has(creatorClean)) {
+      uniqueMemberSet.add(creatorClean);
+      list.unshift(creatorClean);
+    }
+    return list;
+  }, [channel.members, channel.created_by, FAKE_LIST]);
+
+  const channelAdmins = useMemo(() => {
+    const raw = channel.admins || (channel.created_by ? [channel.created_by] : []);
+    return raw.map((a) => a.toLowerCase().replace(/^@/, ''));
+  }, [channel.admins, channel.created_by]);
+
+  const filteredMembers = useMemo(() => {
+    const q = memberSearch.toLowerCase().trim().replace(/^@/, '');
+    if (!q) return sanitizedMembers;
+    return sanitizedMembers.filter((m: string) => m.includes(q));
+  }, [sanitizedMembers, memberSearch]);
 
   const handleDirectBanSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,7 +156,7 @@ export default function AdminModerationModal({
             }`}
           >
             <Shield className="w-3.5 h-3.5" />
-            <span>Members ({currentMembers.length})</span>
+            <span>Members ({sanitizedMembers.length})</span>
           </button>
           <button
             type="button"
@@ -187,37 +214,44 @@ export default function AdminModerationModal({
 
               <div className="space-y-2">
                 {filteredMembers.length > 0 ? (
-                  filteredMembers.map((mName) => {
-                    const isCreator = channel.created_by?.toLowerCase() === mName.toLowerCase();
-                    const isChannelAdmin = channelAdmins.some((a) => a.toLowerCase() === mName.toLowerCase());
+                  filteredMembers.map((cleanHandle: string) => {
+                    const isCreator = (channel.created_by || '').toLowerCase().replace(/^@/, '') === cleanHandle;
+                    const isChannelAdmin = channelAdmins.includes(cleanHandle);
                     const isMe =
-                      currentUser.username.toLowerCase() === mName.toLowerCase() ||
-                      currentUser.name.toLowerCase() === mName.toLowerCase();
+                      (currentUser.username || '').toLowerCase().replace(/^@/, '') === cleanHandle ||
+                      (currentUser.name || '').toLowerCase().trim() === cleanHandle;
 
                     const matchedUser = registeredUsers.find(
                       (u) =>
-                        u.username.toLowerCase() === mName.toLowerCase() ||
-                        u.name.toLowerCase() === mName.toLowerCase()
+                        u.username.toLowerCase() === cleanHandle ||
+                        u.name.toLowerCase() === cleanHandle
                     );
+
+                    const displayName = matchedUser?.name || cleanHandle;
+                    const displayUsername = matchedUser?.username ? `@${matchedUser.username}` : `@${cleanHandle}`;
 
                     return (
                       <div
-                        key={mName}
+                        key={cleanHandle}
                         className="flex items-center justify-between p-3 rounded-2xl bg-[#151A28] border border-white/5 hover:border-white/10 transition-all gap-2"
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="w-9 h-9 rounded-full overflow-hidden bg-[#1D2436] p-0.5 border border-white/10 shrink-0">
                             <img
                               src={matchedUser?.avatar || '/logo.png'}
-                              alt={mName}
+                              alt={cleanHandle}
+                              onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = '/logo.png';
+                              }}
                               className="w-full h-full object-cover rounded-full"
                             />
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-xs font-bold text-white truncate">{matchedUser?.name || mName}</span>
+                              <span className="text-xs font-bold text-white truncate">{displayName}</span>
                               <span className="text-[10px] text-indigo-400 font-mono">
-                                @{matchedUser?.username || mName}
+                                {displayUsername}
                               </span>
                               {isCreator && (
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-0.5">
@@ -243,7 +277,7 @@ export default function AdminModerationModal({
                             <button
                               type="button"
                               onClick={() =>
-                                isChannelAdmin ? onDemoteAdmin(mName) : onPromoteAdmin(mName)
+                                isChannelAdmin ? onDemoteAdmin(cleanHandle) : onPromoteAdmin(cleanHandle)
                               }
                               className={`px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all ${
                                 isChannelAdmin
@@ -258,7 +292,7 @@ export default function AdminModerationModal({
                             {/* Kick Member */}
                             <button
                               type="button"
-                              onClick={() => onKickMember(mName)}
+                              onClick={() => onKickMember(cleanHandle)}
                               className="px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-white/5 hover:bg-amber-600/20 text-[#A8B2C7] hover:text-amber-400 border border-white/5 transition-all"
                               title="Remove from this channel"
                             >
@@ -269,7 +303,7 @@ export default function AdminModerationModal({
                             <button
                               type="button"
                               onClick={() =>
-                                onBanUser(matchedUser?.username || mName, 'Banned by admin')
+                                onBanUser(matchedUser?.username || cleanHandle, 'Banned by admin')
                               }
                               className="px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 transition-all flex items-center gap-1"
                               title="Ban user from channel"

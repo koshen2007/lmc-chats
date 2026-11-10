@@ -305,8 +305,12 @@ export default function InstagramSearchModal({
                           <div className="relative shrink-0">
                             <div className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-yellow-400 via-pink-500 to-indigo-500 shadow-md">
                               <img
-                                src={u.avatar}
+                                src={u.avatar || '/logo.png'}
                                 alt={u.name}
+                                onError={(e) => {
+                                  e.currentTarget.onerror = null;
+                                  e.currentTarget.src = '/logo.png';
+                                }}
                                 className="w-full h-full object-cover rounded-full bg-[#0D1017]"
                               />
                             </div>

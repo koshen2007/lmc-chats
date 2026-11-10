@@ -145,8 +145,24 @@ interface CurrentUser {
 }
 
 const DEFAULT_GROUPS: Group[] = [];
-
 const INITIAL_MESSAGES: Message[] = [];
+
+const FAKE_MEMBERS_SET = new Set(['alex', 'sam', 'kira', 'harshita', 'pryanshu', 'priyanshu']);
+
+function sanitizeGroupMembers(members: string[]): string[] {
+  const seen = new Set<string>();
+  const cleanList: string[] = [];
+  for (const m of members || []) {
+    if (!m) continue;
+    const clean = m.trim().replace(/^@/, '').toLowerCase();
+    if (!clean || FAKE_MEMBERS_SET.has(clean)) continue;
+    if (!seen.has(clean)) {
+      seen.add(clean);
+      cleanList.push(`@${clean}`);
+    }
+  }
+  return cleanList;
+}
 
 export default function Home() {
   // Current user state
@@ -436,7 +452,7 @@ export default function Home() {
         if (customImg) {
           try {
             localStorage.setItem('lmc_chat_wallpaper_custom', customImg);
-          } catch {}
+          } catch { }
         } else {
           localStorage.removeItem('lmc_chat_wallpaper_custom');
         }
@@ -486,7 +502,7 @@ export default function Home() {
               !FAKE_USERNAMES.includes(u.username?.toLowerCase())
           );
         }
-      } catch {}
+      } catch { }
     }
 
     // Merge seed users so they are always in directory
@@ -520,7 +536,7 @@ export default function Home() {
           });
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     // 1. Load User Session
     const storedUser = localStorage.getItem('lmc_session');
@@ -572,11 +588,10 @@ export default function Home() {
         if (parsedConf && parsedConf.skinColor) {
           setAvatarStudioConfig(parsedConf);
         }
-      } catch {}
+      } catch { }
     }
 
-    // 2. Load Persisted Groups & purge dummy mock groups ('lmc-squad', 'lmc-main-lounge', etc.)
-    const FAKE_MEMBERS = ['alex', 'sam', 'kira'];
+    // 2. Load Persisted Groups & purge dummy mock groups ('lmc-squad', 'lmc-main-lounge', etc.) and fake/duplicate members
     const storedGroups = localStorage.getItem('lmc_saved_groups');
     if (storedGroups) {
       try {
@@ -593,12 +608,10 @@ export default function Home() {
                 !g.name.toLowerCase().includes('gang war') &&
                 !g.id.toLowerCase().includes('gang')
             )
-            .map((g) => {
-              const cleanMembers = (g.members || []).filter(
-                (m: string) => !FAKE_MEMBERS.includes(m.toLowerCase())
-              );
-              return { ...g, members: cleanMembers };
-            });
+            .map((g) => ({
+              ...g,
+              members: sanitizeGroupMembers(g.members || []),
+            }));
           setGroups(sanitized);
           if (sanitized.length > 0) {
             setActiveGroupId(sanitized[0].id);
@@ -662,7 +675,7 @@ export default function Home() {
         if (Array.isArray(parsedBanned)) {
           setBannedUsers(parsedBanned);
         }
-      } catch {}
+      } catch { }
     }
 
     // 6. Load Active DMs & DM Requests
@@ -673,7 +686,7 @@ export default function Home() {
         if (Array.isArray(parsedDms)) {
           setActiveDmUsernames(parsedDms);
         }
-      } catch {}
+      } catch { }
     }
 
     const storedDmRequests = localStorage.getItem('lmc_dm_requests');
@@ -683,7 +696,7 @@ export default function Home() {
         if (parsed && typeof parsed === 'object') {
           setDmRequests(parsed);
         }
-      } catch {}
+      } catch { }
     }
 
     // 7. Load Stories
@@ -699,7 +712,7 @@ export default function Home() {
           setStories(event.data.stories);
         }
       };
-    } catch {}
+    } catch { }
 
     // 8. Register PWA Service Worker & detect installability
     if ('serviceWorker' in navigator) {
@@ -814,7 +827,7 @@ export default function Home() {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(missing),
-                }).catch(() => {});
+                }).catch(() => { });
               }
             }
           }
@@ -833,7 +846,7 @@ export default function Home() {
                 setActiveTypers(others);
               }
             })
-            .catch(() => {});
+            .catch(() => { });
         }
 
         // 3. Sync Registered Users
@@ -880,7 +893,7 @@ export default function Home() {
           name: user.name,
           avatar: user.avatar,
         }),
-      }).catch(() => {});
+      }).catch(() => { });
     };
 
     sendHeartbeat();
@@ -930,7 +943,7 @@ export default function Home() {
             return data.incomingCall;
           });
         }
-      } catch {}
+      } catch { }
     };
 
     const callPoller = setInterval(checkIncomingCalls, 3000);
@@ -967,7 +980,7 @@ export default function Home() {
           group_id: activeGroupId,
           username: user.username,
         }),
-      }).catch(() => {});
+      }).catch(() => { });
 
       try {
         const channel = new BroadcastChannel('lmc_chat_sync');
@@ -976,7 +989,7 @@ export default function Home() {
           payload: { group_id: activeGroupId, username: user.username },
         });
         channel.close();
-      } catch {}
+      } catch { }
     }
   }, [activeGroupId, messages.length, user.username]);
 
@@ -1027,7 +1040,7 @@ export default function Home() {
             }
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, []);
 
@@ -1082,8 +1095,8 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fullUser),
-      }).catch(() => {});
-    } catch {}
+      }).catch(() => { });
+    } catch { }
 
     // Check if user has seen professional welcome onboarding screen
     const welcomedKey = `lmc_welcomed_${fullUser.id}`;
@@ -1119,9 +1132,13 @@ export default function Home() {
   };
 
   const savePersistedGroups = (newGroups: Group[]) => {
-    setGroups(newGroups);
+    const sanitized = newGroups.map((g) => ({
+      ...g,
+      members: sanitizeGroupMembers(g.members || []),
+    }));
+    setGroups(sanitized);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('lmc_saved_groups', JSON.stringify(newGroups));
+      localStorage.setItem('lmc_saved_groups', JSON.stringify(sanitized));
     }
   };
 
@@ -1133,7 +1150,7 @@ export default function Home() {
         const bc = new BroadcastChannel('lmc_chat_sync');
         bc.postMessage({ type: 'UPDATE_DM_REQUESTS', payload: updated });
         bc.close();
-      } catch {}
+      } catch { }
     }
   };
 
@@ -1167,7 +1184,7 @@ export default function Home() {
             payload: { id: messageId, metadata: updatedMetadata },
           });
           bc.close();
-        } catch {}
+        } catch { }
       }
 
       // 3. Central Server API sync
@@ -1179,8 +1196,8 @@ export default function Home() {
             id: messageId,
             metadata: updatedMetadata,
           }),
-        }).catch(() => {});
-      } catch {}
+        }).catch(() => { });
+      } catch { }
 
       // 4. Supabase sync if connected
       if (isSupabaseConfigured && supabase) {
@@ -1437,7 +1454,7 @@ export default function Home() {
         }
       };
       return () => bc.close();
-    } catch {}
+    } catch { }
   }, []);
 
   // Load Saved Room Music per channel
@@ -1450,7 +1467,7 @@ export default function Home() {
         if (parsed && parsed.track) {
           setRoomPlayback(parsed);
         }
-      } catch {}
+      } catch { }
     }
   }, [activeGroupId]);
 
@@ -1570,7 +1587,7 @@ export default function Home() {
               const bc = new BroadcastChannel('lmc_chat_sync');
               bc.postMessage({ type: 'UPDATE_DM_REQUESTS', payload: updated });
               bc.close();
-            } catch {}
+            } catch { }
           }
           return updated;
         }
@@ -1699,8 +1716,8 @@ export default function Home() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'join', groupId, memberName: `@${handle}` }),
-        }).catch(() => {});
-      } catch {}
+        }).catch(() => { });
+      } catch { }
       triggerToast(`Joined #${targetGroup.name}! 🎉`);
     } else {
       triggerToast(`Switched to #${targetGroup.name}`);
@@ -1825,7 +1842,7 @@ export default function Home() {
         const bc = new BroadcastChannel('lmc_local_sync');
         bc.postMessage({ type: 'user_registered', payload: updatedUser });
         bc.close();
-      } catch {}
+      } catch { }
     }
 
     setShowProfileModal(false);
@@ -1856,20 +1873,38 @@ export default function Home() {
     (targetUser: UserProfile) => {
       if (!activeGroup) return;
 
-      const memberTag = `@${targetUser.username.toLowerCase()}`;
-      const isAlready = (activeGroup.members || []).some(
-        (m) =>
-          m.toLowerCase() === memberTag ||
-          m.toLowerCase() === targetUser.username.toLowerCase() ||
-          m.toLowerCase() === targetUser.name.toLowerCase()
-      );
+      const cleanHandle = (targetUser.username || targetUser.name || '').toLowerCase().trim().replace(/^@/, '');
+      if (!cleanHandle) return;
 
-      if (isAlready) {
-        triggerToast(`@${targetUser.username} is already in #${activeGroup.name}`);
+      // Strictly verify user is registered on LMC Chats
+      const isRegistered = registeredUsers.some(
+        (u) =>
+          u.username.toLowerCase() === cleanHandle ||
+          u.name.toLowerCase() === cleanHandle ||
+          u.id === targetUser.id
+      );
+      if (!isRegistered) {
+        triggerToast(`❌ Cannot add @${cleanHandle}: user is not registered on LMC Chats!`);
         return;
       }
 
-      const updatedMembers = [...(activeGroup.members || []), memberTag];
+      const memberTag = `@${cleanHandle}`;
+      const isAlready = (activeGroup.members || []).some((m) => {
+        const cleanM = (m || '').toLowerCase().trim().replace(/^@/, '');
+        return cleanM === cleanHandle || cleanM === (targetUser.name || '').toLowerCase();
+      });
+
+      if (isAlready) {
+        triggerToast(`@${cleanHandle} is already in #${activeGroup.name}`);
+        return;
+      }
+
+      const currentFiltered = (activeGroup.members || []).filter((m) => {
+        const cleanM = (m || '').toLowerCase().trim().replace(/^@/, '');
+        return cleanM !== cleanHandle && cleanM !== (targetUser.name || '').toLowerCase();
+      });
+
+      const updatedMembers = sanitizeGroupMembers([...currentFiltered, memberTag]);
       const updatedGroup = { ...activeGroup, members: updatedMembers };
 
       setGroups((prev) => {
@@ -1912,17 +1947,17 @@ export default function Home() {
             groupId: activeGroup.id,
             memberName: memberTag,
           }),
-        }).catch(() => {});
+        }).catch(() => { });
         fetch('/api/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(announcementMsg),
-        }).catch(() => {});
-      } catch {}
+        }).catch(() => { });
+      } catch { }
 
       if (isSupabaseConfigured && supabase) {
-        Promise.resolve(supabase.from('groups').update({ members: updatedMembers }).eq('id', activeGroup.id)).catch(() => {});
-        Promise.resolve(supabase.from('messages').insert([announcementMsg])).catch(() => {});
+        Promise.resolve(supabase.from('groups').update({ members: updatedMembers }).eq('id', activeGroup.id)).catch(() => { });
+        Promise.resolve(supabase.from('messages').insert([announcementMsg])).catch(() => { });
       }
 
       triggerToast(`Added @${targetUser.username} to #${activeGroup.name}! 🎉`);
@@ -1949,7 +1984,7 @@ export default function Home() {
     setAvatarStudioConfig(config);
     try {
       localStorage.setItem('lmc_avatar_config', JSON.stringify(config));
-    } catch {}
+    } catch { }
 
     if (user.name) {
       const updatedUser: CurrentUser = {
@@ -1997,15 +2032,15 @@ export default function Home() {
           const bc = new BroadcastChannel('lmc_local_sync');
           bc.postMessage({ type: 'burn_sync', msgId });
           bc.close();
-        } catch {}
+        } catch { }
       }
 
       // 3. Delete from central server API for cross-device burn sync
       try {
         fetch(`/api/messages?id=${encodeURIComponent(msgId)}`, {
           method: 'DELETE',
-        }).catch(() => {});
-      } catch {}
+        }).catch(() => { });
+      } catch { }
 
       // 4. Permanently Delete from Supabase Database
       if (isSupabaseConfigured && supabase) {
@@ -2035,7 +2070,7 @@ export default function Home() {
           const bc = new BroadcastChannel('lmc_local_sync');
           bc.postMessage({ type: 'music_sync', payload: state });
           bc.close();
-        } catch {}
+        } catch { }
       }
 
       // Broadcast via Supabase Realtime channel
@@ -2090,7 +2125,7 @@ export default function Home() {
       });
 
       if (isSupabaseConfigured && supabase) {
-        Promise.resolve(supabase.from('messages').insert([botMsg])).catch(() => {});
+        Promise.resolve(supabase.from('messages').insert([botMsg])).catch(() => { });
       }
 
       triggerToast(`🎵 Now playing: ${track.title}`);
@@ -2203,7 +2238,7 @@ export default function Home() {
           name: user.name,
           is_typing: isTyping,
         }),
-      }).catch(() => {});
+      }).catch(() => { });
 
       try {
         const bc = new BroadcastChannel('lmc_typing_sync');
@@ -2214,7 +2249,7 @@ export default function Home() {
           is_typing: isTyping,
         });
         bc.close();
-      } catch {}
+      } catch { }
     },
     [activeGroupId, user.username, user.name]
   );
@@ -2349,7 +2384,7 @@ export default function Home() {
               signedNonce = signResult.nonce;
               signatureB64 = signResult.signature;
               publicKeyB64 = signResult.publicKey;
-            } catch {}
+            } catch { }
 
             const botMsg: Message = {
               id: uniqueId,
@@ -2385,18 +2420,18 @@ export default function Home() {
               const bc = new BroadcastChannel('lmc_chat_sync');
               bc.postMessage({ type: 'NEW_MESSAGE', payload: botMsg });
               bc.close();
-            } catch {}
+            } catch { }
 
             // Send to central server API
             fetch('/api/messages', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(botMsg),
-            }).catch(() => {});
+            }).catch(() => { });
 
             // Remote Supabase sync if connected
             if (isSupabaseConfigured && supabase) {
-              supabase.from('messages').insert([botMsg]).then(() => {});
+              supabase.from('messages').insert([botMsg]).then(() => { });
             }
 
             return;
@@ -2458,13 +2493,13 @@ export default function Home() {
         read_by: [user.username || user.name],
         reply_to: replyingToMessage
           ? {
-              id: replyingToMessage.id,
-              sender_name: replyingToMessage.sender_name,
-              sender_username: replyingToMessage.sender_username,
-              content: replyingToMessage.content,
-              msg_type: replyingToMessage.msg_type,
-              media_url: replyingToMessage.media_url,
-            }
+            id: replyingToMessage.id,
+            sender_name: replyingToMessage.sender_name,
+            sender_username: replyingToMessage.sender_username,
+            content: replyingToMessage.content,
+            msg_type: replyingToMessage.msg_type,
+            media_url: replyingToMessage.media_url,
+          }
           : null,
       };
 
@@ -2505,8 +2540,8 @@ export default function Home() {
               triggerToast(data.error || '⚠️ Too many messages. Please slow down.');
             }
           })
-          .catch(() => {});
-      } catch {}
+          .catch(() => { });
+      } catch { }
 
       // Remote Supabase sync if connected
       if (isSupabaseConfigured && supabase) {
@@ -2685,8 +2720,8 @@ export default function Home() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: msgId, reactions: newReactions }),
-      }).catch(() => {});
-    } catch {}
+      }).catch(() => { });
+    } catch { }
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -2702,15 +2737,23 @@ export default function Home() {
     e.preventDefault();
     if (!newGroupName.trim()) return;
 
-    const creatorHandle = user.username || user.name || 'Anonymous';
-    const initialMembers = [`@${creatorHandle}`, creatorHandle];
+    const creatorHandle = (user.username || user.name || 'Anonymous').trim().replace(/^@/, '');
+    const initialMembers = [`@${creatorHandle}`];
     if (newGroupInviteMember.trim()) {
       newGroupInviteMember
         .split(',')
-        .map((m) => m.trim().replace(/^@/, ''))
+        .map((m) => m.trim().replace(/^@/, '').toLowerCase())
         .filter(Boolean)
-        .forEach((m) => {
-          if (!initialMembers.includes(`@${m}`)) initialMembers.push(`@${m}`);
+        .forEach((cleanHandle) => {
+          // Strictly verify user is registered on LMC Chats
+          const isRegistered = registeredUsers.some(
+            (u) =>
+              u.username.toLowerCase() === cleanHandle ||
+              u.name.toLowerCase() === cleanHandle
+          );
+          if (isRegistered && !initialMembers.includes(`@${cleanHandle}`)) {
+            initialMembers.push(`@${cleanHandle}`);
+          }
         });
     }
 
@@ -2725,7 +2768,7 @@ export default function Home() {
       created_by: creatorHandle,
       admins: [creatorHandle],
       is_private: newGroupIsPrivate,
-      members: initialMembers,
+      members: sanitizeGroupMembers(initialMembers),
       join_requests: [],
       created_at: new Date().toISOString(),
       unreadCount: 0,
@@ -2747,8 +2790,8 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'create', ...newGroup }),
-      }).catch(() => {});
-    } catch {}
+      }).catch(() => { });
+    } catch { }
 
     if (typeof window !== 'undefined') {
       const channel = new BroadcastChannel('lmc_chat_sync');
@@ -2770,17 +2813,53 @@ export default function Home() {
     e.preventDefault();
     if (!adminAddMemberInput.trim() || !activeGroup || !isAdminOfActiveGroup) return;
 
-    const memberName = adminAddMemberInput.trim();
-    const updatedMembers = [...(activeGroup.members || [])];
-    if (!updatedMembers.some((m) => m.toLowerCase() === memberName.toLowerCase())) {
-      updatedMembers.push(memberName);
+    const rawHandle = adminAddMemberInput.trim().replace(/^@/, '');
+    const cleanHandle = rawHandle.toLowerCase();
+
+    // Verify user exists in registered directory or server API
+    let matchedUser = registeredUsers.find(
+      (u) => u.username.toLowerCase() === cleanHandle || u.name.toLowerCase() === cleanHandle
+    );
+
+    if (!matchedUser) {
+      try {
+        const res = await fetch(`/api/users?q=${encodeURIComponent(cleanHandle)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.users && Array.isArray(data.users)) {
+            matchedUser = data.users.find(
+              (u: UserProfile) =>
+                u.username.toLowerCase() === cleanHandle || u.name.toLowerCase() === cleanHandle
+            );
+          }
+        }
+      } catch {
+        // ignore
+      }
     }
+
+    if (!matchedUser) {
+      triggerToast(`❌ User @${rawHandle} does not exist on LMC Chats!`);
+      return;
+    }
+
+    const memberTag = `@${matchedUser.username.toLowerCase()}`;
+    const currentMembers = activeGroup.members || [];
+    if (currentMembers.some((m) => m.toLowerCase().replace(/^@/, '') === matchedUser.username.toLowerCase())) {
+      triggerToast(`@${matchedUser.username} is already a member of #${activeGroup.name}`);
+      return;
+    }
+
+    const updatedMembers = sanitizeGroupMembers([
+      ...currentMembers.filter((m) => m.toLowerCase().replace(/^@/, '') !== matchedUser!.username.toLowerCase()),
+      memberTag,
+    ]);
 
     const updatedGroup = { ...activeGroup, members: updatedMembers };
     const updatedGroups = groups.map((g) => (g.id === activeGroup.id ? updatedGroup : g));
     savePersistedGroups(updatedGroups);
     setAdminAddMemberInput('');
-    triggerToast(`Added ${memberName} to channel!`);
+    triggerToast(`Added @${matchedUser.username} to #${activeGroup.name}!`);
 
     if (typeof window !== 'undefined') {
       const channel = new BroadcastChannel('lmc_chat_sync');
@@ -2822,8 +2901,8 @@ export default function Home() {
       try {
         fetch(`/api/messages?id=${encodeURIComponent(messageId)}`, {
           method: 'DELETE',
-        }).catch(() => {});
-      } catch {}
+        }).catch(() => { });
+      } catch { }
 
       if (isSupabaseConfigured && supabase) {
         try {
@@ -2995,7 +3074,7 @@ export default function Home() {
     }
 
     if (isSupabaseConfigured && supabase) {
-      supabase.from('messages').delete().eq('group_id', activeGroupId).then(() => {});
+      supabase.from('messages').delete().eq('group_id', activeGroupId).then(() => { });
     }
   }, [activeGroupId, activeGroup]);
 
@@ -3055,7 +3134,7 @@ export default function Home() {
         groupId: deletedGroupId,
         requester: user.username || user.name || 'User',
       }),
-    }).catch(() => {});
+    }).catch(() => { });
 
     // 5. Broadcast to other tabs
     if (typeof window !== 'undefined') {
@@ -3063,7 +3142,7 @@ export default function Home() {
         const bc = new BroadcastChannel('lmc_chat_sync');
         bc.postMessage({ type: 'CLEAR_MESSAGES', payload: { group_id: deletedGroupId } });
         bc.close();
-      } catch {}
+      } catch { }
     }
   }, [activeGroup, groups]);
 
@@ -3175,10 +3254,10 @@ export default function Home() {
           try {
             gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
             setTimeout(() => ctx.close(), 600);
-          } catch {}
+          } catch { }
         }, 3500);
       }
-    } catch {}
+    } catch { }
 
     // Initialize WebRTC
     try {
@@ -3254,7 +3333,7 @@ export default function Home() {
               candidate: event.candidate,
               is_caller: true,
             }),
-          }).catch(() => {});
+          }).catch(() => { });
         }
       };
 
@@ -3281,7 +3360,7 @@ export default function Home() {
               endCall();
             }
           }
-        } catch {}
+        } catch { }
       }, 1500);
     } catch (err) {
       console.warn('Call setup notice:', err);
@@ -3357,7 +3436,7 @@ export default function Home() {
               candidate: event.candidate,
               is_caller: false,
             }),
-          }).catch(() => {});
+          }).catch(() => { });
         }
       };
 
@@ -3391,7 +3470,7 @@ export default function Home() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'reject', call_id: incomingCall.id }),
-    }).catch(() => {});
+    }).catch(() => { });
     setIncomingCall(null);
     triggerToast('Call declined');
   };
@@ -3408,7 +3487,7 @@ export default function Home() {
     if (audioContextRef.current) {
       try {
         audioContextRef.current.close();
-      } catch {}
+      } catch { }
       audioContextRef.current = null;
     }
     if (videoStreamRef.current) {
@@ -3425,7 +3504,7 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'end', call_id: activeCall.id }),
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     // Log call duration in chat if active
@@ -3453,7 +3532,7 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(callLogMsg),
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     setActiveCall(null);
@@ -3581,9 +3660,8 @@ export default function Home() {
                   autoPlay
                   playsInline
                   muted
-                  className={`absolute top-3 right-3 w-24 h-32 rounded-2xl object-cover border-2 border-white/30 shadow-2xl z-10 ${
-                    activeCall.isVideoOff ? 'hidden' : 'block'
-                  }`}
+                  className={`absolute top-3 right-3 w-24 h-32 rounded-2xl object-cover border-2 border-white/30 shadow-2xl z-10 ${activeCall.isVideoOff ? 'hidden' : 'block'
+                    }`}
                 />
 
                 <div className="absolute top-3 left-3 bg-black/60 px-2.5 py-1 rounded-full text-[10px] font-semibold text-white z-10 flex items-center gap-1">
@@ -3618,9 +3696,8 @@ export default function Home() {
           <div className="flex items-center gap-4 pb-6">
             <button
               onClick={() => setActiveCall({ ...activeCall, isMuted: !activeCall.isMuted })}
-              className={`w-12 h-12 rounded-full grid place-items-center transition-all ${
-                activeCall.isMuted ? 'bg-[#EF4444] text-white' : 'bg-white/10 hover:bg-white/20 text-white'
-              }`}
+              className={`w-12 h-12 rounded-full grid place-items-center transition-all ${activeCall.isMuted ? 'bg-[#EF4444] text-white' : 'bg-white/10 hover:bg-white/20 text-white'
+                }`}
               title="Mute/Unmute"
             >
               {activeCall.isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
@@ -3629,9 +3706,8 @@ export default function Home() {
             {activeCall.type === 'video' && (
               <button
                 onClick={() => setActiveCall({ ...activeCall, isVideoOff: !activeCall.isVideoOff })}
-                className={`w-12 h-12 rounded-full grid place-items-center transition-all ${
-                  activeCall.isVideoOff ? 'bg-[#EF4444] text-white' : 'bg-white/10 hover:bg-white/20 text-white'
-                }`}
+                className={`w-12 h-12 rounded-full grid place-items-center transition-all ${activeCall.isVideoOff ? 'bg-[#EF4444] text-white' : 'bg-white/10 hover:bg-white/20 text-white'
+                  }`}
                 title="Toggle Camera"
               >
                 {activeCall.isVideoOff ? <VideoOff className="w-5 h-5" /> : <Camera className="w-5 h-5" />}
@@ -3663,8 +3739,12 @@ export default function Home() {
             <div className="relative mb-3">
               <div className="w-24 h-24 rounded-full overflow-hidden bg-[#161C28] p-1 border-2 border-indigo-500/50 shadow-xl">
                 <img
-                  src={viewingProfile.avatar}
+                  src={viewingProfile.avatar || DEFAULT_AVATAR_DATA_URL}
                   alt={viewingProfile.name}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
+                  }}
                   className="w-full h-full object-cover rounded-full"
                 />
               </div>
@@ -3922,11 +4002,10 @@ export default function Home() {
                           setProfileAvatarSelected(pDataUrl);
                           setAvatarStudioConfig(p.config);
                         }}
-                        className={`relative aspect-square rounded-full p-0.5 transition-all overflow-hidden bg-[#161C28] border-2 ${
-                          isSelected
+                        className={`relative aspect-square rounded-full p-0.5 transition-all overflow-hidden bg-[#161C28] border-2 ${isSelected
                             ? 'border-indigo-500 ring-2 ring-indigo-500/50 scale-105 shadow-md'
                             : 'border-transparent hover:border-white/30 opacity-85 hover:opacity-100'
-                        }`}
+                          }`}
                         title={p.name + ' - ' + p.tag}
                       >
                         <img src={pDataUrl} alt={p.name} className="w-full h-full object-cover rounded-full" />
@@ -3977,13 +4056,12 @@ export default function Home() {
                     )
                   }
                   placeholder="your_handle"
-                  className={`w-full bg-[#0D1017] border rounded-xl pl-8 pr-3.5 py-2.5 text-sm text-white placeholder-[#5A6376] outline-none transition-colors ${
-                    profileUsernameInput
+                  className={`w-full bg-[#0D1017] border rounded-xl pl-8 pr-3.5 py-2.5 text-sm text-white placeholder-[#5A6376] outline-none transition-colors ${profileUsernameInput
                       ? usernameAvailability.available
                         ? 'border-emerald-500/60 focus:border-emerald-500'
                         : 'border-rose-500/60 focus:border-rose-500'
                       : 'border-[#232B3E] focus:border-[#6366F1]'
-                  }`}
+                    }`}
                   required
                 />
               </div>
@@ -3991,9 +4069,8 @@ export default function Home() {
               {/* Real-time uniqueness badge */}
               {profileUsernameInput && (
                 <p
-                  className={`text-[11px] font-semibold flex items-center gap-1 mt-1.5 px-1 ${
-                    usernameAvailability.available ? 'text-emerald-400' : 'text-rose-400'
-                  }`}
+                  className={`text-[11px] font-semibold flex items-center gap-1 mt-1.5 px-1 ${usernameAvailability.available ? 'text-emerald-400' : 'text-rose-400'
+                    }`}
                 >
                   {usernameAvailability.available ? (
                     <Check className="w-3 h-3 text-emerald-400" />
@@ -4020,11 +4097,10 @@ export default function Home() {
             <button
               type="submit"
               disabled={!profileUsernameInput || !usernameAvailability.available}
-              className={`w-full font-semibold py-3 rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 ${
-                profileUsernameInput && usernameAvailability.available
+              className={`w-full font-semibold py-3 rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 ${profileUsernameInput && usernameAvailability.available
                   ? 'bg-[#6366F1] hover:bg-[#5457E5] active:scale-[0.98] text-white shadow-[#6366F1]/25'
                   : 'bg-[#1C2230] text-[#5A6376] cursor-not-allowed'
-              }`}
+                }`}
             >
               Save Profile & ID <Send className="w-4 h-4" />
             </button>
@@ -4179,18 +4255,16 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setNewGroupIsPrivate(false)}
-                className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                  !newGroupIsPrivate ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
-                }`}
+                className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${!newGroupIsPrivate ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
+                  }`}
               >
                 <Globe className="w-3.5 h-3.5" /> Public
               </button>
               <button
                 type="button"
                 onClick={() => setNewGroupIsPrivate(true)}
-                className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                  newGroupIsPrivate ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
-                }`}
+                className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${newGroupIsPrivate ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
+                  }`}
               >
                 <Lock className="w-3.5 h-3.5" /> Private 🔒
               </button>
@@ -4250,11 +4324,10 @@ export default function Home() {
 
       {/* 1. WHATSAPP & TELEGRAM CHAT CONVERSATIONS LIST (Primary screen on mobile when !activeGroupId, Left panel on desktop) */}
       <div
-        className={`h-full shrink-0 transition-all select-none relative z-30 ${
-          !activeGroupId
+        className={`h-full shrink-0 transition-all select-none relative z-30 ${!activeGroupId
             ? 'w-full md:w-[360px] lg:w-[400px]'
             : 'hidden md:block md:w-[360px] lg:w-[400px]'
-        }`}
+          }`}
       >
         <WhatsAppChatsList
           currentUser={user}
@@ -4301,6 +4374,10 @@ export default function Home() {
                 <img
                   src={user.avatar || DEFAULT_AVATAR_DATA_URL}
                   alt="avatar"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
+                  }}
                   className="w-full h-full object-cover rounded-full"
                 />
               </div>
@@ -4469,9 +4546,8 @@ export default function Home() {
 
       {/* 2. MAIN CONVERSATION COLUMN (WhatsApp Web / Telegram Desktop 2-column or mobile conversation view) */}
       <main
-        className={`flex-1 flex flex-col min-w-0 h-full relative bg-[#0B0E17] ${
-          !activeGroupId ? 'hidden md:flex' : 'flex'
-        }`}
+        className={`flex-1 flex flex-col min-w-0 h-full relative bg-[#0B0E17] ${!activeGroupId ? 'hidden md:flex' : 'flex'
+          }`}
       >
         {!activeGroup ? (
           /* WhatsApp Web / Telegram Desktop Welcome Screen */
@@ -4514,1405 +4590,1403 @@ export default function Home() {
         ) : (
           <>
             {/* Chat Header */}
-        <header className="h-16 px-2.5 sm:px-5 flex items-center justify-between border-b border-[#1B212E] bg-[#0B0E17]/95 backdrop-blur-md z-10 shrink-0 relative">
-          {mobileSearchOpen ? (
-            /* Full-width Mobile Search Bar Overlay */
-            <div className="flex-1 flex items-center gap-2 animate-msg-in">
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileSearchOpen(false);
-                  setSearchQuery('');
-                  setShowUserSearchDropdown(false);
-                }}
-                className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white shrink-0 active:scale-95 transition-all"
-                title="Back"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-[#7A8396] absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  autoFocus
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onFocus={() => setShowUserSearchDropdown(true)}
-                  placeholder="Search @username, ID, messages..."
-                  className="w-full bg-[#131722] border border-[#232B3E] focus:border-[#6366F1] rounded-xl pl-9 pr-8 py-2 text-xs text-[#E9ECF4] placeholder-[#5A6376] outline-none"
-                />
-                {searchQuery && (
+            <header className="h-16 px-2.5 sm:px-5 flex items-center justify-between border-b border-[#1B212E] bg-[#0B0E17]/95 backdrop-blur-md z-10 shrink-0 relative">
+              {mobileSearchOpen ? (
+                /* Full-width Mobile Search Bar Overlay */
+                <div className="flex-1 flex items-center gap-2 animate-msg-in">
                   <button
                     type="button"
                     onClick={() => {
+                      setMobileSearchOpen(false);
                       setSearchQuery('');
                       setShowUserSearchDropdown(false);
                     }}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#7A8396] hover:text-white"
+                    className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white shrink-0 active:scale-95 transition-all"
+                    title="Back"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <ArrowLeft className="w-4 h-4" />
                   </button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                {/* Mobile Back Button (ArrowLeft) -> Returns to WhatsApp Chats list! */}
-                <button
-                  onClick={() => setActiveGroupId('')}
-                  className="md:hidden w-9 h-9 rounded-xl grid place-items-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 active:scale-95 shrink-0"
-                  title="Back to Chats"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-
-                {/* Clickable Channel Header to view Group Details */}
-                <div
-                  onClick={() => setInfoOpen(!infoOpen)}
-                  className="flex items-center gap-2 sm:gap-2.5 cursor-pointer hover:opacity-85 transition-opacity min-w-0"
-                  title="View Channel Details & Members"
-                >
-                  <div className="relative shrink-0">
-                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden bg-transparent border border-white/10 shadow-sm">
-                      <img src={activeGroup.avatar || '/logo.png'} alt={activeGroup.name} className="w-full h-full object-cover rounded-full" />
-                    </div>
-                    {activeGroup.is_private && (
-                      <span className="absolute -bottom-0.5 -right-0.5 bg-black/90 p-0.5 rounded-full text-[#F59E0B]">
-                        <Lock className="w-2.5 h-2.5" />
-                      </span>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <h1 className="text-xs sm:text-base font-bold text-white flex items-center gap-1.5 truncate">
-                      <span>{activeGroup.name}</span>
-                      {!isJoinedToActiveGroup && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleJoinGroup(activeGroup.id);
-                          }}
-                          className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-[10px] shadow-sm flex items-center gap-1 active:scale-95 transition-all shrink-0"
-                          title="Join this channel"
-                        >
-                          <Plus className="w-2.5 h-2.5" />
-                          <span>Join</span>
-                        </button>
-                      )}
-                    </h1>
-                    {activeTypers.length > 0 ? (
-                      <p className="text-[10px] sm:text-[11px] text-indigo-400 font-semibold flex items-center gap-1.5 truncate animate-pulse">
-                        <span className="flex gap-0.5 items-center">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-                        </span>
-                        <span>
-                          {activeTypers.length === 1
-                            ? `${activeTypers[0].name} is typing...`
-                            : `${activeTypers[0].name} and ${activeTypers.length - 1} other${activeTypers.length > 2 ? 's' : ''} are typing...`}
-                        </span>
-                      </p>
-                    ) : activeGroupId.startsWith('dm_') ? (
-                      (() => {
-                        const dmPartnerHandle = activeGroupId
-                          .replace('dm_', '')
-                          .split('_')
-                          .find((u) => u.toLowerCase() !== (user.username || user.name || '').toLowerCase());
-                        const dmPresence = dmPartnerHandle ? presenceMap[dmPartnerHandle.toLowerCase()] : null;
-                        const partner = registeredUsers.find(
-                          (u) => u.username.toLowerCase() === (dmPartnerHandle || '').toLowerCase()
-                        );
-                        const partnerId = partner?.id || (dmPartnerHandle ? `usr_${dmPartnerHandle}` : '');
-
-                        return (
-                          <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] truncate">
-                            {dmPresence?.is_online ? (
-                              <span className="text-emerald-400 font-semibold flex items-center gap-1 shrink-0">
-                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                                <span>Online</span>
-                              </span>
-                            ) : (
-                              <span className="text-[#7A8396] flex items-center gap-1 shrink-0">
-                                <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-                                <span>{dmPresence?.last_seen_text || 'Offline'}</span>
-                              </span>
-                            )}
-                            {dmPartnerHandle && (
-                              <>
-                                <span className="text-[#5A6376]">•</span>
-                                <span className="text-indigo-400 font-mono font-medium truncate">@{dmPartnerHandle}</span>
-                              </>
-                            )}
-                            {partnerId && (
-                              <>
-                                <span className="text-[#5A6376]">•</span>
-                                <span className="text-[#A8B2C7] font-mono text-[9px] bg-white/5 px-1.5 py-0.2 rounded shrink-0">
-                                  ID: {partnerId}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })()
-                    ) : (
-                      (() => {
-                        const grpMembers = (activeGroup.members || []).map((m: string) => m.toLowerCase());
-                        const onlineInGrp = Object.entries(presenceMap).filter(
-                          ([h, p]) => p.is_online && grpMembers.includes(h)
-                        ).length;
-                        return (
-                          <p className="text-[10px] sm:text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
-                            <span>{(activeGroup.members || []).length} members</span>
-                            <span>•</span>
-                            <span className="flex items-center gap-1 text-emerald-400 font-medium">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                              {Math.max(1, onlineInGrp)} online
-                            </span>
-                          </p>
-                        );
-                      })()
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-[#7A8396] absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      autoFocus
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onFocus={() => setShowUserSearchDropdown(true)}
+                      placeholder="Search @username, ID, messages..."
+                      className="w-full bg-[#131722] border border-[#232B3E] focus:border-[#6366F1] rounded-xl pl-9 pr-8 py-2 text-xs text-[#E9ECF4] placeholder-[#5A6376] outline-none"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery('');
+                          setShowUserSearchDropdown(false);
+                        }}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#7A8396] hover:text-white"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     )}
                   </div>
                 </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    {/* Mobile Back Button (ArrowLeft) -> Returns to WhatsApp Chats list! */}
+                    <button
+                      onClick={() => setActiveGroupId('')}
+                      className="md:hidden w-9 h-9 rounded-xl grid place-items-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 active:scale-95 shrink-0"
+                      title="Back to Chats"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </button>
+
+                    {/* Clickable Channel Header to view Group Details */}
+                    <div
+                      onClick={() => setInfoOpen(!infoOpen)}
+                      className="flex items-center gap-2 sm:gap-2.5 cursor-pointer hover:opacity-85 transition-opacity min-w-0"
+                      title="View Channel Details & Members"
+                    >
+                      <div className="relative shrink-0">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden bg-transparent border border-white/10 shadow-sm">
+                          <img src={activeGroup.avatar || '/logo.png'} alt={activeGroup.name} className="w-full h-full object-cover rounded-full" />
+                        </div>
+                        {activeGroup.is_private && (
+                          <span className="absolute -bottom-0.5 -right-0.5 bg-black/90 p-0.5 rounded-full text-[#F59E0B]">
+                            <Lock className="w-2.5 h-2.5" />
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <h1 className="text-xs sm:text-base font-bold text-white flex items-center gap-1.5 truncate">
+                          <span>{activeGroup.name}</span>
+                          {!isJoinedToActiveGroup && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleJoinGroup(activeGroup.id);
+                              }}
+                              className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-[10px] shadow-sm flex items-center gap-1 active:scale-95 transition-all shrink-0"
+                              title="Join this channel"
+                            >
+                              <Plus className="w-2.5 h-2.5" />
+                              <span>Join</span>
+                            </button>
+                          )}
+                        </h1>
+                        {activeTypers.length > 0 ? (
+                          <p className="text-[10px] sm:text-[11px] text-indigo-400 font-semibold flex items-center gap-1.5 truncate animate-pulse">
+                            <span className="flex gap-0.5 items-center">
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </span>
+                            <span>
+                              {activeTypers.length === 1
+                                ? `${activeTypers[0].name} is typing...`
+                                : `${activeTypers[0].name} and ${activeTypers.length - 1} other${activeTypers.length > 2 ? 's' : ''} are typing...`}
+                            </span>
+                          </p>
+                        ) : activeGroupId.startsWith('dm_') ? (
+                          (() => {
+                            const dmPartnerHandle = activeGroupId
+                              .replace('dm_', '')
+                              .split('_')
+                              .find((u) => u.toLowerCase() !== (user.username || user.name || '').toLowerCase());
+                            const dmPresence = dmPartnerHandle ? presenceMap[dmPartnerHandle.toLowerCase()] : null;
+                            const partner = registeredUsers.find(
+                              (u) => u.username.toLowerCase() === (dmPartnerHandle || '').toLowerCase()
+                            );
+                            const partnerId = partner?.id || (dmPartnerHandle ? `usr_${dmPartnerHandle}` : '');
+
+                            return (
+                              <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] truncate">
+                                {dmPresence?.is_online ? (
+                                  <span className="text-emerald-400 font-semibold flex items-center gap-1 shrink-0">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                    <span>Online</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-[#7A8396] flex items-center gap-1 shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                                    <span>{dmPresence?.last_seen_text || 'Offline'}</span>
+                                  </span>
+                                )}
+                                {dmPartnerHandle && (
+                                  <>
+                                    <span className="text-[#5A6376]">•</span>
+                                    <span className="text-indigo-400 font-mono font-medium truncate">@{dmPartnerHandle}</span>
+                                  </>
+                                )}
+                                {partnerId && (
+                                  <>
+                                    <span className="text-[#5A6376]">•</span>
+                                    <span className="text-[#A8B2C7] font-mono text-[9px] bg-white/5 px-1.5 py-0.2 rounded shrink-0">
+                                      ID: {partnerId}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          (() => {
+                            const uniqueGrpMembers = Array.from(
+                              new Set(
+                                (activeGroup.members || [])
+                                  .map((m: string) => (m || '').toLowerCase().trim().replace(/^@/, ''))
+                                  .filter((m) => m && !FAKE_MEMBERS_SET.has(m))
+                              )
+                            );
+                            const onlineInGrp = Object.entries(presenceMap).filter(
+                              ([h, p]) => p.is_online && uniqueGrpMembers.includes(h)
+                            ).length;
+                            return (
+                              <p className="text-[10px] sm:text-[11px] text-[#7A8396] flex items-center gap-1.5 truncate">
+                                <span>{Math.max(1, uniqueGrpMembers.length)} members</span>
+                                <span>•</span>
+                                <span className="flex items-center gap-1 text-emerald-400 font-medium">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                                  {Math.max(1, onlineInGrp)} online
+                                </span>
+                              </p>
+                            );
+                          })()
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Header Actions - Sleek & Lightweight */}
+                  <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 relative">
+                    {/* Theme & Wallpaper Button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowChatThemeModal(true)}
+                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 active:scale-90 transition-all shrink-0"
+                      title="Chat Wallpaper & Bubble Themes"
+                    >
+                      <Palette className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
+                    </button>
+
+                    {/* Search Button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowInstagramSearch(true)}
+                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-pink-400 hover:text-pink-300 hover:bg-pink-500/10 active:scale-90 transition-all shrink-0"
+                      title="Search Users & Channels"
+                    >
+                      <Search className="w-4 h-4" />
+                    </button>
+
+                    {/* Voice Call Button */}
+                    <button
+                      onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
+                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 active:scale-90 transition-all shrink-0"
+                      title="Start Voice Call"
+                    >
+                      <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#22C55E]" />
+                    </button>
+
+                    {/* Channel Info Button */}
+                    <button
+                      onClick={() => setInfoOpen(!infoOpen)}
+                      className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center transition-all shrink-0 ${infoOpen ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
+                        }`}
+                      title="Chat Details & Members"
+                    >
+                      <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    </button>
+
+                    {/* Unified 3-Dots More Menu (Desktop & Mobile) */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setMobileHeaderMenuOpen(!mobileHeaderMenuOpen)}
+                        className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center transition-all shrink-0 ${mobileHeaderMenuOpen ? 'bg-white/10 text-white' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
+                          }`}
+                        title="More actions"
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+
+                      {/* 3-Dots Dropdown */}
+                      {mobileHeaderMenuOpen && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-40 bg-black/30"
+                            onClick={() => setMobileHeaderMenuOpen(false)}
+                          />
+                          <div className="absolute right-0 top-full mt-2 w-56 bg-[#131722]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-1.5 z-50 animate-msg-in flex flex-col gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png');
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <Video className="w-4 h-4 text-indigo-400" />
+                              <span>Start Video Call</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                setShowChatThemeModal(true);
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <Palette className="w-4 h-4 text-purple-400" />
+                              <span>Wallpaper & Bubble Colors</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                setShowMusicBotModal(true);
+                              }}
+                              className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <span className="flex items-center gap-2.5">
+                                <Bot className="w-4 h-4 text-purple-400" />
+                                <span>Music Bot & Player</span>
+                              </span>
+                              {roomPlayback?.isPlaying && (
+                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                              )}
+                            </button>
+
+                            {/* Push Notification Toggle */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                handleToggleSoundOrNotification();
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              {!soundMuted && notificationPermission === 'granted' ? (
+                                <>
+                                  <Bell className="w-4 h-4 text-emerald-400" />
+                                  <span>Sound Alerts: On</span>
+                                </>
+                              ) : (
+                                <>
+                                  <BellOff className="w-4 h-4 text-[#7A8396]" />
+                                  <span>{soundMuted ? 'Sound: Muted' : 'Enable Notifications'}</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                setShowPWAInstallModal(true);
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-emerald-400 hover:bg-white/5 transition-all text-left"
+                            >
+                              <Download className="w-4 h-4 text-emerald-400" />
+                              <span>Install App (PWA)</span>
+                            </button>
+
+                            {!isDmMode && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMobileHeaderMenuOpen(false);
+                                    setShowAddMemberModal(true);
+                                  }}
+                                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                                >
+                                  <UserPlus className="w-4 h-4 text-emerald-400" />
+                                  <span>Add Members</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMobileHeaderMenuOpen(false);
+                                    setNewGroupIsPrivate(false);
+                                    setShowNewGroupModal(true);
+                                  }}
+                                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                                >
+                                  <Plus className="w-4 h-4 text-indigo-400" />
+                                  <span>Create New Channel</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMobileHeaderMenuOpen(false);
+                                    setShowDiscoverChannels(true);
+                                  }}
+                                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                                >
+                                  <Compass className="w-4 h-4 text-purple-400" />
+                                  <span>Discover Channels</span>
+                                </button>
+                              </>
+                            )}
+
+                            {isAdminOfActiveGroup && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMobileHeaderMenuOpen(false);
+                                  setShowAdminModal(true);
+                                }}
+                                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:bg-amber-500/10 transition-all text-left border-t border-white/5 mt-1 pt-2"
+                              >
+                                <Crown className="w-4 h-4 text-amber-400" />
+                                <span>Admin Moderation</span>
+                              </button>
+                            )}
+
+                            {isAdminOfActiveGroup && !isDmMode && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMobileHeaderMenuOpen(false);
+                                  if (window.confirm(`Permanently delete #${activeGroup.name}?`)) {
+                                    handleDeleteChannel();
+                                  }
+                                }}
+                                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition-all text-left"
+                              >
+                                <Trash2 className="w-4 h-4 text-rose-400" />
+                                <span>Delete Channel</span>
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Live Search Results Dropdown for @username and User IDs */}
+              {showUserSearchDropdown && searchQuery.trim().length > 0 && (
+                <div className="absolute left-2.5 right-2.5 sm:left-auto sm:right-4 top-full mt-2 sm:w-80 bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 z-50 animate-msg-in">
+                  <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#7A8396] flex items-center justify-between border-b border-white/10 mb-1">
+                    <span>User Search (@username / ID)</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowUserSearchDropdown(false);
+                        setMobileSearchOpen(false);
+                      }}
+                      className="text-white hover:opacity-75"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto scroll space-y-1">
+                    {matchingUsers.length > 0 ? (
+                      matchingUsers.map((u) => (
+                        <div
+                          key={u.id || u.username}
+                          className="flex items-center justify-between p-2 rounded-xl bg-white/[0.02] hover:bg-white/[0.08] transition-colors"
+                        >
+                          <div
+                            onClick={() => {
+                              setViewingProfile({
+                                id: u.id,
+                                username: u.username,
+                                name: u.name,
+                                avatar: u.avatar,
+                                bio: u.bio,
+                                status: u.status,
+                              });
+                              setShowUserSearchDropdown(false);
+                              setMobileSearchOpen(false);
+                            }}
+                            className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
+                          >
+                            <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/10" />
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-white truncate">{u.name}</p>
+                              <p className="text-[10px] text-indigo-400 font-mono truncate">@{u.username}</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleAddMemberToChannel(u);
+                              setShowUserSearchDropdown(false);
+                              setMobileSearchOpen(false);
+                            }}
+                            className="text-[10px] font-semibold text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-600 px-2 py-1 rounded-lg transition-colors ml-2 shrink-0 flex items-center gap-1"
+                            title={`Add @${u.username} to #${activeGroup.name}`}
+                          >
+                            <UserPlus className="w-3 h-3" />
+                            <span>Add</span>
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-3 text-center text-xs text-[#7A8396]">
+                        No user found matching "{searchQuery}"
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </header>
+
+            {/* Telegram-style Pinned Audio Player Bar */}
+            {roomPlayback && (
+              <TelegramMusicPlayer
+                playbackState={roomPlayback}
+                currentUserId={user.name}
+                onTogglePlay={handleTogglePlayMusic}
+                onNextTrack={handleNextTrack}
+                onPrevTrack={handlePrevTrack}
+                onSeek={handleSeekMusic}
+                onOpenLounge={() => setShowMusicBotModal(true)}
+                onClosePlayer={handleClosePlayer}
+              />
+            )}
+
+            {/* Join Channel Banner if user is viewing as guest */}
+            {!isJoinedToActiveGroup && (
+              <div className="bg-gradient-to-r from-indigo-950/90 via-purple-950/70 to-indigo-950/90 border-b border-indigo-500/30 px-3.5 py-2.5 flex items-center justify-between gap-2 shrink-0 animate-msg-in">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping shrink-0" />
+                  <p className="text-xs text-indigo-200 truncate">
+                    Viewing <span className="font-bold text-white">#{activeGroup.name}</span>. Join to chat & react!
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleJoinGroup(activeGroup.id)}
+                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 active:scale-95 transition-all shrink-0 flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Join Channel</span>
+                </button>
+              </div>
+            )}
+
+            {/* Message Stream */}
+            <div
+              className="flex-1 overflow-y-auto scroll p-3 sm:p-6 space-y-4 transition-all duration-300 relative"
+              style={getWallpaperStyle(wallpaperPreset, customWallpaperImage)}
+            >
+              <div className="flex items-center justify-center my-2">
+                <span className="text-[10px] font-semibold text-[#7A8396] bg-white/5 px-3 py-1 rounded-full">
+                  Today
+                </span>
               </div>
 
-              {/* Right Header Actions - Sleek & Lightweight */}
-              <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 relative">
-                {/* Theme & Wallpaper Button */}
-                <button
-                  type="button"
-                  onClick={() => setShowChatThemeModal(true)}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 active:scale-90 transition-all shrink-0"
-                  title="Chat Wallpaper & Bubble Themes"
-                >
-                  <Palette className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
-                </button>
-
-                {/* Search Button */}
-                <button
-                  type="button"
-                  onClick={() => setShowInstagramSearch(true)}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-pink-400 hover:text-pink-300 hover:bg-pink-500/10 active:scale-90 transition-all shrink-0"
-                  title="Search Users & Channels"
-                >
-                  <Search className="w-4 h-4" />
-                </button>
-
-                {/* Voice Call Button */}
-                <button
-                  onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 active:scale-90 transition-all shrink-0"
-                  title="Start Voice Call"
-                >
-                  <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#22C55E]" />
-                </button>
-
-                {/* Channel Info Button */}
-                <button
-                  onClick={() => setInfoOpen(!infoOpen)}
-                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center transition-all shrink-0 ${
-                    infoOpen ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
-                  }`}
-                  title="Chat Details & Members"
-                >
-                  <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
-
-                {/* Unified 3-Dots More Menu (Desktop & Mobile) */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setMobileHeaderMenuOpen(!mobileHeaderMenuOpen)}
-                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center transition-all shrink-0 ${
-                      mobileHeaderMenuOpen ? 'bg-white/10 text-white' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
-                    }`}
-                    title="More actions"
+              {displayedMessages.map((msg) => {
+                const isMe = Boolean(user.name && msg.sender_name.toLowerCase() === user.name.toLowerCase());
+                return (
+                  <div
+                    key={msg.id}
+                    id={`msg-${msg.id}`}
+                    className={`flex gap-2.5 sm:gap-3 group relative animate-msg-in transition-colors rounded-2xl p-1 ${isMe ? 'flex-row-reverse' : 'flex-row'
+                      }`}
                   >
-                    <MoreVertical className="w-4 h-4" />
-                  </button>
-
-                  {/* 3-Dots Dropdown */}
-                  {mobileHeaderMenuOpen && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-40 bg-black/30"
-                        onClick={() => setMobileHeaderMenuOpen(false)}
-                      />
-                      <div className="absolute right-0 top-full mt-2 w-56 bg-[#131722]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-1.5 z-50 animate-msg-in flex flex-col gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMobileHeaderMenuOpen(false);
-                            startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png');
+                    {!isMe && (
+                      <button
+                        onClick={() => {
+                          const matched = registeredUsers.find(
+                            (u) =>
+                              (msg.sender_username && u.username.toLowerCase() === msg.sender_username.toLowerCase()) ||
+                              u.name.toLowerCase() === msg.sender_name.toLowerCase()
+                          );
+                          setViewingProfile({
+                            id: matched?.id || `usr_${msg.sender_name.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+                            name: msg.sender_name,
+                            username: msg.sender_username || matched?.username,
+                            avatar: msg.sender_avatar,
+                            bio: msg.sender_bio || matched?.bio,
+                            status: matched?.status || 'online',
+                          });
+                        }}
+                        className="w-8 h-8 rounded-full overflow-hidden bg-[#161C28] p-0.5 shrink-0 mt-1 border border-white/10 hover:scale-105 transition-transform"
+                        title={`View @${msg.sender_username || msg.sender_name}'s profile`}
+                      >
+                        <img
+                          src={msg.sender_avatar || DEFAULT_AVATAR_DATA_URL}
+                          alt={msg.sender_name}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
                           }}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                        >
-                          <Video className="w-4 h-4 text-indigo-400" />
-                          <span>Start Video Call</span>
-                        </button>
+                          className="w-full h-full object-cover rounded-full"
+                        />
+                      </button>
+                    )}
 
+                    <div className={`flex flex-col max-w-[85%] sm:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
+                      {!isMe && (
                         <button
-                          type="button"
                           onClick={() => {
-                            setMobileHeaderMenuOpen(false);
-                            setShowChatThemeModal(true);
+                            const matched = registeredUsers.find(
+                              (u) =>
+                                (msg.sender_username && u.username.toLowerCase() === msg.sender_username.toLowerCase()) ||
+                                u.name.toLowerCase() === msg.sender_name.toLowerCase()
+                            );
+                            setViewingProfile({
+                              id: matched?.id || `usr_${msg.sender_name.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+                              name: msg.sender_name,
+                              username: msg.sender_username || matched?.username,
+                              avatar: msg.sender_avatar,
+                              bio: msg.sender_bio || matched?.bio,
+                              status: matched?.status || 'online',
+                            });
                           }}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                          className="flex items-center gap-1.5 mb-1 px-1 hover:underline text-left group"
                         >
-                          <Palette className="w-4 h-4 text-purple-400" />
-                          <span>Wallpaper & Bubble Colors</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMobileHeaderMenuOpen(false);
-                            setShowMusicBotModal(true);
-                          }}
-                          className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                        >
-                          <span className="flex items-center gap-2.5">
-                            <Bot className="w-4 h-4 text-purple-400" />
-                            <span>Music Bot & Player</span>
-                          </span>
-                          {roomPlayback?.isPlaying && (
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                          <span className="text-xs font-bold text-[#DDE2EE] group-hover:text-white">{msg.sender_name}</span>
+                          {msg.sender_username && (
+                            <span className="text-[11px] text-[#818CF8] font-mono">@{msg.sender_username}</span>
                           )}
+                          <time className="text-[10px] text-[#7A8396]">
+                            {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </time>
                         </button>
+                      )}
 
-                        {/* Push Notification Toggle */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMobileHeaderMenuOpen(false);
-                            handleToggleSoundOrNotification();
+                      {/* Quoted Message Reply Context */}
+                      {msg.reply_to && (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const el = document.getElementById(`msg-${msg.reply_to?.id}`);
+                            if (el) {
+                              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              el.classList.add('ring-2', 'ring-indigo-400', 'bg-indigo-500/10');
+                              setTimeout(() => {
+                                el.classList.remove('ring-2', 'ring-indigo-400', 'bg-indigo-500/10');
+                              }, 2000);
+                            }
                           }}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                          className={`mb-1 p-2 rounded-xl text-left cursor-pointer border-l-2 transition-all max-w-full shadow-sm ${isMe
+                              ? 'bg-indigo-950/70 border-indigo-300 text-white hover:bg-indigo-900/80'
+                              : 'bg-[#181E2E] border-indigo-400 text-[#E9ECF4] hover:bg-[#20273B]'
+                            }`}
+                          title="Click to jump to quoted message"
                         >
-                          {!soundMuted && notificationPermission === 'granted' ? (
-                            <>
-                              <Bell className="w-4 h-4 text-emerald-400" />
-                              <span>Sound Alerts: On</span>
-                            </>
-                          ) : (
-                            <>
-                              <BellOff className="w-4 h-4 text-[#7A8396]" />
-                              <span>{soundMuted ? 'Sound: Muted' : 'Enable Notifications'}</span>
-                            </>
+                          <p className="text-[10px] font-bold text-indigo-300 truncate flex items-center gap-1">
+                            <Reply className="w-2.5 h-2.5" />
+                            <span>{msg.reply_to.sender_name}</span>
+                          </p>
+                          <p className="text-[11px] text-[#A8B2C7] truncate mt-0.5 max-w-xs">
+                            {msg.reply_to.content || (msg.reply_to.msg_type === 'audio' ? '🎙️ Voice Note' : msg.reply_to.msg_type === 'image' ? '📷 Photo' : '📎 Attachment')}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Message Content */}
+                      {msg.msg_type === 'text' && (
+                        <div
+                          className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed break-words shadow-md select-text ${msg.burn_after_read
+                              ? isMe
+                                ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white border border-amber-400/40 shadow-amber-500/20 rounded-tr-sm'
+                                : 'bg-[#18131B] text-[#F3E8FF] border border-amber-500/40 shadow-amber-500/10 rounded-tl-sm'
+                              : isMe
+                                ? `${getBubbleClass(bubbleTheme)} rounded-tr-sm transition-colors`
+                                : 'bg-[#141824] text-[#E9ECF4] border border-[#232B3E] rounded-tl-sm'
+                            }`}
+                        >
+                          {msg.content}
+                          {msg.burn_after_read && (
+                            <GhostBurnTimer
+                              messageId={msg.id}
+                              totalSeconds={msg.burn_seconds || 10}
+                              onBurn={handleBurnMessage}
+                            />
                           )}
-                        </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMobileHeaderMenuOpen(false);
-                            setShowPWAInstallModal(true);
-                          }}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-emerald-400 hover:bg-white/5 transition-all text-left"
-                        >
-                          <Download className="w-4 h-4 text-emerald-400" />
-                          <span>Install App (PWA)</span>
-                        </button>
+                          {/* WhatsApp & Telegram Double Ticks + Time */}
+                          <div className={`flex items-center gap-1 mt-1 text-[10px] select-none ${isMe ? 'justify-end text-white/70' : 'justify-end text-[#7A8396]'}`}>
+                            <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            {isMe && (() => {
+                              const isDm = activeGroupId.startsWith('dm_');
+                              const otherUser = isDm
+                                ? activeGroupId.replace('dm_', '').split('_').find((u) => u.toLowerCase() !== (user.username || user.name || '').toLowerCase())
+                                : null;
+                              const isSeen = otherUser
+                                ? (msg.read_by || []).some((r) => r.toLowerCase() === otherUser.toLowerCase())
+                                : (msg.read_by || []).length > 1;
 
-                        {!isDmMode && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileHeaderMenuOpen(false);
-                                setShowAddMemberModal(true);
-                              }}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                            >
-                              <UserPlus className="w-4 h-4 text-emerald-400" />
-                              <span>Add Members</span>
-                            </button>
+                              if (isSeen) {
+                                return (
+                                  <span title={isDm ? "Seen" : "Read by members"} className="inline-flex items-center">
+                                    <CheckCheck className="w-3.5 h-3.5 text-[#38BDF8] shrink-0" />
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span title="Delivered" className="inline-flex items-center">
+                                  <CheckCheck className="w-3.5 h-3.5 text-white/60 shrink-0" />
+                                </span>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      )}
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileHeaderMenuOpen(false);
-                                setNewGroupIsPrivate(false);
-                                setShowNewGroupModal(true);
-                              }}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                            >
-                              <Plus className="w-4 h-4 text-indigo-400" />
-                              <span>Create New Channel</span>
-                            </button>
+                      {/* Voice Note Audio Memo */}
+                      {msg.msg_type === 'audio' && msg.media_url && (
+                        <div className="space-y-1">
+                          <VoiceNotePlayer audioUrl={msg.media_url} isMe={isMe} />
+                          <div className={`flex items-center gap-1 text-[10px] px-1 select-none ${isMe ? 'justify-end text-[#7A8396]' : 'justify-start text-[#7A8396]'}`}>
+                            <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            {isMe && (
+                              <span title="Delivered" className="inline-flex items-center">
+                                <CheckCheck className="w-3.5 h-3.5 text-[#38BDF8] shrink-0" />
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileHeaderMenuOpen(false);
-                                setShowDiscoverChannels(true);
-                              }}
-                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
-                            >
-                              <Compass className="w-4 h-4 text-purple-400" />
-                              <span>Discover Channels</span>
-                            </button>
-                          </>
-                        )}
-
-                        {isAdminOfActiveGroup && (
+                      {/* Telegram Music Bot Announcement Card */}
+                      {msg.msg_type === 'music_bot' && (
+                        <div className="p-3 bg-gradient-to-br from-indigo-950/60 via-[#131726] to-[#0E121E] border border-indigo-500/30 rounded-2xl max-w-sm shadow-xl space-y-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-white/10 shadow-md">
+                              <img
+                                src={msg.media_url || '/logo.png'}
+                                alt="Music Cover"
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                                <Disc className="w-5 h-5 text-white animate-spin" style={{ animationDuration: '4s' }} />
+                              </div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-white leading-snug">{msg.content}</p>
+                              <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1 mt-1">
+                                <Bot className="w-3 h-3" /> @LMC Music Bot
+                              </span>
+                            </div>
+                          </div>
                           <button
                             type="button"
-                            onClick={() => {
-                              setMobileHeaderMenuOpen(false);
-                              setShowAdminModal(true);
-                            }}
-                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:bg-amber-500/10 transition-all text-left border-t border-white/5 mt-1 pt-2"
+                            onClick={() => setShowMusicBotModal(true)}
+                            className="w-full bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 text-xs font-semibold py-1.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-colors"
                           >
-                            <Crown className="w-4 h-4 text-amber-400" />
-                            <span>Admin Moderation</span>
+                            <Music className="w-3.5 h-3.5 text-indigo-300" />
+                            <span>Open Music Lounge / Change Song</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {msg.msg_type === 'sticker' && (
+                        <div className="p-1">
+                          <img
+                            src={msg.media_url}
+                            alt="Sticker"
+                            className="w-32 h-32 sm:w-36 sm:h-36 object-contain hover:scale-105 transition-transform"
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
+
+                      {msg.msg_type === 'gif' && (
+                        <div className="rounded-2xl overflow-hidden border border-white/10 shadow-lg max-w-xs">
+                          <img
+                            src={msg.media_url}
+                            alt="GIF"
+                            className="w-full h-auto object-cover max-h-60"
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
+
+                      {msg.msg_type === 'image' && (
+                        <div className="rounded-2xl overflow-hidden border border-white/10 shadow-lg max-w-sm">
+                          <img
+                            src={msg.media_url}
+                            alt="Image"
+                            className="w-full h-auto object-cover max-h-72"
+                            loading="lazy"
+                          />
+                        </div>
+                      )}
+
+                      {/* LMC Bot Interactive Cards (Polls, Bunks, Confessions, Whispers, Roasts, Decisions) */}
+                      {msg.msg_type === 'poll' && (
+                        <PollCard
+                          message={msg}
+                          currentUsername={user.username || user.name}
+                          onUpdateMetadata={handleUpdateMessageMetadata}
+                          triggerToast={triggerToast}
+                        />
+                      )}
+
+                      {msg.msg_type === 'bunk_meter' && (
+                        <BunkMeterCard
+                          message={msg}
+                          currentUsername={user.username || user.name}
+                          onUpdateMetadata={handleUpdateMessageMetadata}
+                          triggerToast={triggerToast}
+                        />
+                      )}
+
+                      {msg.msg_type === 'confession' && (
+                        <ConfessionCard message={msg} />
+                      )}
+
+                      {msg.msg_type === 'whisper' && (
+                        <WhisperCard
+                          message={msg}
+                          currentUsername={user.username || user.name}
+                          triggerToast={triggerToast}
+                        />
+                      )}
+
+                      {msg.msg_type === 'roast' && (
+                        <RoastCard message={msg} />
+                      )}
+
+                      {msg.msg_type === 'decision' && (
+                        <DecisionCard message={msg} />
+                      )}
+
+                      {/* Reactions Bar */}
+                      <div className="flex flex-wrap items-center gap-1 mt-1.5 px-0.5">
+                        {Object.entries(msg.reactions || {}).map(([emoji, count]) => {
+                          if (count <= 0) return null;
+                          return (
+                            <button
+                              key={emoji}
+                              onClick={() => handleToggleReaction(msg.id, emoji)}
+                              className="flex items-center gap-1 bg-[#141824] hover:bg-[#1E2538] border border-[#232B3E] px-2 py-0.5 rounded-full text-xs transition-all active:scale-95"
+                            >
+                              <span>{emoji}</span>
+                              <span className="text-[10px] text-[#A8B2C7] font-semibold">{count}</span>
+                            </button>
+                          );
+                        })}
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const screenW = typeof window !== 'undefined' ? window.innerWidth : 360;
+                            const screenH = typeof window !== 'undefined' ? window.innerHeight : 640;
+                            const popWidth = Math.min(screenW - 16, 296);
+                            const pad = 8;
+                            // On mobile: center horizontally relative to clicked button, clamped within viewport
+                            let left = rect.left - 100;
+                            if (screenW < 640) {
+                              left = Math.max(pad, Math.min(screenW - popWidth - pad, rect.left + rect.width / 2 - popWidth / 2));
+                            } else {
+                              left = Math.max(pad, Math.min(screenW - popWidth - pad, left));
+                            }
+                            // Vertical placement: show above if space permits, else below
+                            let top = rect.top - 46;
+                            if (top < 65) {
+                              top = rect.bottom + 8;
+                            }
+                            if (top > screenH - 60) {
+                              top = Math.max(70, screenH - 70);
+                            }
+                            setReactionPopCoords({ x: left, y: top });
+                            setReactionPopForMsg(reactionPopForMsg === msg.id ? null : msg.id);
+                          }}
+                          className="opacity-75 sm:opacity-0 sm:group-hover:opacity-100 hover:opacity-100 p-1.5 rounded-full text-[#7A8396] hover:text-white transition-all text-xs touch-manipulation active:scale-110"
+                          title="Add Reaction"
+                        >
+                          <SmilePlus className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Reply to message */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReplyingToMessage(msg);
+                            if (textareaRef.current) {
+                              textareaRef.current.focus();
+                            }
+                          }}
+                          className="opacity-75 sm:opacity-0 sm:group-hover:opacity-100 hover:opacity-100 p-1.5 rounded-full text-[#7A8396] hover:text-indigo-400 transition-all text-xs touch-manipulation active:scale-110"
+                          title="Reply to message"
+                        >
+                          <Reply className="w-3.5 h-3.5" />
+                        </button>
+
+                        {(isAdminOfActiveGroup || isMe) && (
+                          <button
+                            onClick={() => handleDeleteMessage(msg.id)}
+                            className="opacity-75 sm:opacity-0 sm:group-hover:opacity-100 hover:opacity-100 p-1.5 rounded-full text-[#7A8396] hover:text-rose-400 transition-all text-xs touch-manipulation active:scale-110"
+                            title={isAdminOfActiveGroup ? "Delete Message (Admin)" : "Delete Message"}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {/* Real-time Floating Typing Indicator Bubble */}
+              {activeTypers.length > 0 && (
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-[#141826]/90 border border-indigo-500/30 text-indigo-300 text-xs w-fit shadow-lg animate-msg-in mb-2">
+                  <span className="flex gap-1 items-center">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </span>
+                  <span className="text-[11px] font-semibold">
+                    {activeTypers.length === 1
+                      ? `${activeTypers[0].name} is typing...`
+                      : `${activeTypers.map((t) => t.name).join(', ')} are typing...`}
+                  </span>
+                </div>
+              )}
+              <div ref={streamEndRef} />
+            </div>
 
-                        {isAdminOfActiveGroup && !isDmMode && (
+            {/* Reaction Quick Bar Popover */}
+            {reactionPopForMsg && (
+              <>
+                {/* Backdrop to easily dismiss reaction bar on touch or click */}
+                <div
+                  className="fixed inset-0 z-40 bg-black/20 sm:bg-transparent"
+                  onClick={() => setReactionPopForMsg(null)}
+                  onTouchStart={() => setReactionPopForMsg(null)}
+                />
+                <div
+                  style={{
+                    top: `${reactionPopCoords.y}px`,
+                    left: `${reactionPopCoords.x}px`,
+                    maxWidth: 'calc(100vw - 16px)',
+                  }}
+                  className="fixed z-50 flex items-center gap-1 sm:gap-1.5 bg-[#141824]/95 backdrop-blur-xl border border-white/15 p-1.5 rounded-2xl shadow-2xl animate-pop-in touch-manipulation select-none overflow-x-auto no-scrollbar"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {['🔥', '😂', '❤️', '👍', '🎉', '👀', '💯', '🚀'].map((em) => (
+                    <button
+                      key={em}
+                      onClick={() => {
+                        handleToggleReaction(reactionPopForMsg, em);
+                        setReactionPopForMsg(null);
+                      }}
+                      className="w-8 h-8 shrink-0 rounded-xl hover:bg-white/10 active:bg-white/25 active:scale-125 grid place-items-center text-lg sm:text-base transition-transform select-none touch-manipulation"
+                    >
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* COMPOSER DOCK */}
+            <div className="p-2 sm:p-4 bg-[#0B0E17] border-t border-[#1B212E] relative pb-[max(0.625rem,env(safe-area-inset-bottom))]">
+              {/* Mobile Backdrop for Trays */}
+              {showEmojiPicker && (
+                <div
+                  className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px] md:hidden"
+                  onClick={() => {
+                    setShowEmojiPicker(false);
+                  }}
+                  onTouchStart={() => {
+                    setShowEmojiPicker(false);
+                  }}
+                />
+              )}
+
+              {/* UNIFIED EMOJI, GIF & STICKER DRAWER */}
+              {showEmojiPicker && (
+                <div className="absolute bottom-full mb-3 right-2.5 sm:right-16 left-2.5 sm:left-auto w-[calc(100vw-20px)] sm:w-[380px] max-h-[60vh] bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3.5 shadow-2xl z-50 animate-msg-in flex flex-col">
+                  {/* Top Navigation Tabs */}
+                  <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/10">
+                    <div className="flex gap-1 bg-black/40 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setPickerTab('emojis')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${pickerTab === 'emojis' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
+                          }`}
+                      >
+                        Emojis
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPickerTab('gifs')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${pickerTab === 'gifs' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
+                          }`}
+                      >
+                        GIFs
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPickerTab('stickers')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${pickerTab === 'stickers' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
+                          }`}
+                      >
+                        Stickers
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowEmojiPicker(false)}
+                      className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* 1. EMOJIS TAB */}
+                  {pickerTab === 'emojis' && (
+                    <div className="flex flex-col flex-1 min-h-0">
+                      <div className="relative mb-2">
+                        <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={emojiSearch}
+                          onChange={(e) => setEmojiSearch(e.target.value)}
+                          placeholder="Search emojis..."
+                          className="w-full bg-[#0D1017] border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#5A6376] outline-none focus:border-[#6366F1]"
+                        />
+                      </div>
+
+                      {!emojiSearch && (
+                        <div className="flex gap-1 pb-2 border-b border-white/10 mb-2 overflow-x-auto scroll">
+                          {EMOJI_CATEGORIES.map((cat, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setActiveEmojiCat(idx)}
+                              className={`px-2.5 py-1 rounded-xl text-sm transition-all ${activeEmojiCat === idx ? 'bg-[#6366F1]/30 text-white' : 'hover:bg-white/5 opacity-70'
+                                }`}
+                            >
+                              {cat.icon}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-7 gap-1 max-h-52 overflow-y-auto scroll pr-1">
+                        {displayedEmojis.map((em, i) => (
                           <button
+                            key={i}
                             type="button"
                             onClick={() => {
-                              setMobileHeaderMenuOpen(false);
-                              if (window.confirm(`Permanently delete #${activeGroup.name}?`)) {
-                                handleDeleteChannel();
-                              }
+                              setInputText((prev) => prev + em);
+                              textareaRef.current?.focus();
                             }}
-                            className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition-all text-left"
+                            className="w-8 h-8 rounded-lg hover:bg-white/10 grid place-items-center text-lg transition-transform hover:scale-125"
                           >
-                            <Trash2 className="w-4 h-4 text-rose-400" />
-                            <span>Delete Channel</span>
+                            {em}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 2. GIFS TAB */}
+                  {pickerTab === 'gifs' && (
+                    <div className="space-y-2 flex flex-col flex-1 min-h-0">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={gifSearch}
+                          onChange={(e) => setGifSearch(e.target.value)}
+                          placeholder="Search Tenor & Giphy..."
+                          className="w-full bg-[#0D1017] border border-white/10 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-[#5A6376] outline-none focus:border-[#6366F1]"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto scroll pr-1">
+                        {gifResults.map((gif) => (
+                          <button
+                            key={gif.id}
+                            type="button"
+                            onClick={() => {
+                              handleSendMessage('', 'gif', gif.url);
+                              setShowEmojiPicker(false);
+                            }}
+                            className="relative rounded-xl overflow-hidden aspect-video bg-[#0D1017] border border-white/5 hover:border-[#6366F1] hover:scale-[1.02] transition-all"
+                          >
+                            <img src={gif.url} alt={gif.title} className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 3. STICKERS TAB */}
+                  {pickerTab === 'stickers' && (
+                    <div className="space-y-3 flex flex-col flex-1 min-h-0">
+                      <div className="flex gap-2">
+                        <label className="flex-1 bg-[#6366F1]/15 hover:bg-[#6366F1]/25 border border-[#6366F1]/30 rounded-2xl p-2.5 text-center cursor-pointer transition-all">
+                          <span className="text-xs font-bold text-white flex items-center justify-center gap-1.5">
+                            <Upload className="w-3.5 h-3.5 text-[#818CF8]" /> Create from Photo
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleCreateCustomSticker(file);
+                            }}
+                          />
+                        </label>
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-2 max-h-52 overflow-y-auto scroll pr-1">
+                        {STICKERS.map((st) => (
+                          <button
+                            key={st.id}
+                            type="button"
+                            onClick={() => {
+                              handleSendMessage('', 'sticker', st.url);
+                              setShowEmojiPicker(false);
+                            }}
+                            className="p-1.5 rounded-2xl bg-black/20 hover:bg-[#6366F1]/20 border border-transparent hover:border-[#6366F1] flex items-center justify-center transition-all hover:scale-110"
+                            title={st.name}
+                          >
+                            <img src={st.url} alt={st.name} className="w-14 h-14 object-contain" />
+                          </button>
+                        ))}
+                        {userStickers.map((stUrl, i) => (
+                          <button
+                            key={`custom-${i}`}
+                            type="button"
+                            onClick={() => {
+                              handleSendMessage('', 'sticker', stUrl);
+                              setShowEmojiPicker(false);
+                            }}
+                            className="p-1.5 rounded-2xl bg-black/30 hover:bg-[#6366F1]/20 border border-white/5 hover:border-[#6366F1] flex items-center justify-center transition-all hover:scale-110"
+                          >
+                            <img src={stUrl} alt="Custom Sticker" className="w-14 h-14 object-contain" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Banned User Warning Banner */}
+              {isCurrentUserBanned && (
+                <div className="max-w-4xl mx-auto mb-2 px-3.5 py-2.5 bg-rose-950/80 border border-rose-500/50 rounded-2xl flex items-center gap-2.5 text-xs text-rose-300 font-bold animate-msg-in">
+                  <UserX className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>You have been banned from sending messages in this channel by the admin.</span>
+                </div>
+              )}
+
+              {/* Read Only Channel Banner */}
+              {activeGroup.is_read_only && !isAdminOfActiveGroup && (
+                <div className="max-w-4xl mx-auto mb-2 px-3.5 py-2.5 bg-indigo-950/80 border border-indigo-500/40 rounded-2xl flex items-center gap-2.5 text-xs text-indigo-300 font-semibold animate-msg-in">
+                  <Lock className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span>This channel is in Admin Read-Only mode. Only channel admins can post.</span>
+                </div>
+              )}
+
+              {/* Ghost Mode Active Banner */}
+              {ghostModeActive && (
+                <div className="max-w-4xl mx-auto mb-2 px-3 py-1.5 bg-gradient-to-r from-amber-950/70 via-orange-950/50 to-amber-950/70 border border-amber-500/40 rounded-xl flex items-center justify-between text-xs text-amber-300 font-semibold animate-msg-in shadow-md">
+                  <span className="flex items-center gap-1.5">
+                    <Flame className="w-3.5 h-3.5 text-amber-400 animate-bounce" />
+                    <span>Ghost Mode (Burn-on-Read): Message burns from screen & database 10s after read</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setGhostModeActive(false)}
+                    className="text-[10px] text-amber-300 hover:text-white px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 transition-colors"
+                  >
+                    Disable
+                  </button>
+                </div>
+              )}
+
+              {/* Replying Banner Above Input */}
+              {replyingToMessage && (
+                <div className="max-w-4xl mx-auto flex items-center justify-between px-3.5 py-2 bg-[#131724] border border-white/10 rounded-2xl mb-1.5 animate-msg-in shadow-md">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-1 h-8 rounded-full bg-indigo-500 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold text-indigo-400 truncate flex items-center gap-1">
+                        <Reply className="w-3 h-3 text-indigo-400" />
+                        <span>Replying to {replyingToMessage.sender_name}</span>
+                      </p>
+                      <p className="text-xs text-[#A8B2C7] truncate mt-0.5 max-w-sm">
+                        {replyingToMessage.content || (replyingToMessage.msg_type === 'audio' ? '🎙️ Voice Note' : replyingToMessage.msg_type === 'image' ? '📷 Photo' : '📎 Attachment')}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplyingToMessage(null)}
+                    className="w-6 h-6 rounded-full hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white transition-colors shrink-0"
+                    title="Cancel reply"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Composer Input Bar or Join Channel CTA */}
+              {!isJoinedToActiveGroup ? (
+                <div className="max-w-4xl mx-auto flex items-center justify-between p-3.5 rounded-2xl bg-[#131722] border border-[#232B3E] shadow-xl animate-msg-in">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 grid place-items-center text-indigo-400 shrink-0">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm font-bold text-white truncate">
+                        Join #{activeGroup.name} to send messages
+                      </p>
+                      <p className="text-[10px] sm:text-xs text-[#7A8396] truncate">
+                        Tap join to chat with members, share photos, and send voice notes
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleJoinGroup(activeGroup.id)}
+                    className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 text-white font-bold text-xs sm:text-sm shadow-md active:scale-95 transition-all shrink-0 flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Join Channel</span>
+                  </button>
+                </div>
+              ) : (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (isCurrentUserBanned) {
+                      triggerToast('🚫 You are banned from sending messages in this channel');
+                      return;
+                    }
+                    if (activeGroup?.is_read_only && !isAdminOfActiveGroup) {
+                      triggerToast('🔒 Channel is in Admin Read-Only mode');
+                      return;
+                    }
+                    if (!inputText.trim()) return;
+                    handleSendMessage(inputText, 'text');
+                  }}
+                  className="relative max-w-4xl mx-auto flex items-end gap-1.5 sm:gap-2 bg-[#121622]/90 backdrop-blur-md border border-white/10 focus-within:border-[#6366F1]/50 rounded-2xl p-1.5 sm:p-2 transition-all shadow-lg"
+                >
+                  {/* Telegram-style Slash Autocomplete Menu ("LMC Bot 🤖") */}
+                  <SlashCommandMenu
+                    isOpen={isSlashMenuOpen}
+                    commands={matchingSlashCommands}
+                    selectedIndex={slashSelectedIndex}
+                    onSelectCommand={handleSelectSlashCommand}
+                    onClose={() => setIsSlashMenuOpen(false)}
+                  />
+
+                  {isVoiceRecording ? (
+                    /* LIVE VOICE RECORDING STUDIO */
+                    <div className="flex-1 flex items-center justify-between gap-3 px-2 py-1.5 select-none animate-msg-in">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping shrink-0" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+                        <span className="text-xs font-mono font-bold text-rose-400">
+                          {Math.floor(voiceRecordingDuration / 60)}:{(voiceRecordingDuration % 60).toString().padStart(2, '0')}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {[12, 24, 38, 20, 45, 30, 16, 40, 25, 35].map((h, i) => (
+                            <span
+                              key={i}
+                              style={{ height: `${h}px` }}
+                              className="w-[2.5px] rounded-full bg-rose-400/80 animate-pulse"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleCancelVoiceRecording}
+                          className="p-2 rounded-xl text-[#7A8396] hover:text-rose-400 hover:bg-rose-500/10 active:scale-95 transition-all text-xs font-semibold flex items-center gap-1"
+                          title="Discard recording"
+                        >
+                          <Trash2 className="w-4 h-4 text-rose-400" />
+                          <span className="hidden sm:inline">Cancel</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleFinishVoiceRecording}
+                          className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition-all"
+                          title="Send voice note"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Send</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Upload Image button with Compression */}
+                      <label
+                        className="p-1.5 sm:p-2 rounded-xl text-[#A8B2C7] hover:text-white hover:bg-white/5 cursor-pointer shrink-0 active:scale-95 transition-all"
+                        title="Upload Image"
+                      >
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const compressedDataUrl = await compressImage(file);
+                              handleSendMessage('', 'image', compressedDataUrl);
+                            } catch (err) {
+                              const reader = new FileReader();
+                              reader.onload = () => {
+                                if (typeof reader.result === 'string') {
+                                  handleSendMessage('', 'image', reader.result);
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            } finally {
+                              e.target.value = '';
+                            }
+                          }}
+                        />
+                        <Upload className="w-4 h-4" />
+                      </label>
+
+                      {/* Input Textarea with Enter key, slash command autocomplete & typing indicator */}
+                      <textarea
+                        ref={textareaRef}
+                        rows={1}
+                        value={inputText}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setInputText(val);
+                          notifyTyping(Boolean(val.trim()));
+                          e.target.style.height = 'auto';
+                          e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+
+                          if (val.startsWith('/')) {
+                            const matches = getMatchingCommands(val);
+                            setIsSlashMenuOpen(matches.length > 0);
+                            setSlashSelectedIndex(0);
+                          } else {
+                            setIsSlashMenuOpen(false);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (isSlashMenuOpen && matchingSlashCommands.length > 0) {
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              setSlashSelectedIndex((prev) => (prev + 1) % matchingSlashCommands.length);
+                              return;
+                            }
+                            if (e.key === 'ArrowUp') {
+                              e.preventDefault();
+                              setSlashSelectedIndex(
+                                (prev) => (prev - 1 + matchingSlashCommands.length) % matchingSlashCommands.length
+                              );
+                              return;
+                            }
+                            if (
+                              e.key === 'Tab' ||
+                              (e.key === 'Enter' && !e.shiftKey && !inputText.includes(' '))
+                            ) {
+                              e.preventDefault();
+                              handleSelectSlashCommand(matchingSlashCommands[slashSelectedIndex]);
+                              return;
+                            }
+                            if (e.key === 'Escape') {
+                              e.preventDefault();
+                              setIsSlashMenuOpen(false);
+                              return;
+                            }
+                          }
+
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (!inputText.trim()) return;
+                            setIsSlashMenuOpen(false);
+                            handleSendMessage(inputText, 'text');
+                          }
+                        }}
+                        placeholder={
+                          ghostModeActive
+                            ? 'Ghost Mode: Burns in 10s...'
+                            : `Message #${activeGroup.name}... (type / for bot commands)`
+                        }
+                        className="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 text-base sm:text-sm text-[#E9ECF4] placeholder-[#5A6376] max-h-32 leading-relaxed no-scrollbar"
+                      />
+
+                      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+                        {/* Ghost Mode (Burn-on-Read) Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextState = !ghostModeActive;
+                            setGhostModeActive(nextState);
+                            triggerToast(
+                              nextState
+                                ? '🔥 Ghost Mode ON: Messages burn 10s after read!'
+                                : 'Ghost Mode OFF'
+                            );
+                          }}
+                          className={`p-1.5 sm:p-2 rounded-xl transition-all ${ghostModeActive
+                              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-md shadow-amber-500/20 animate-pulse'
+                              : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
+                            }`}
+                          title="Burn-on-Read Ghost Mode (Auto self-destruct in 10s)"
+                        >
+                          <Flame className={`w-4 h-4 ${ghostModeActive ? 'text-amber-400' : ''}`} />
+                        </button>
+
+                        {/* Emoji, GIF & Sticker Picker toggle */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowEmojiPicker(!showEmojiPicker);
+                          }}
+                          className={`p-1.5 sm:p-2 rounded-xl transition-all ${showEmojiPicker ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
+                            }`}
+                          title="Emojis, GIFs & Stickers"
+                        >
+                          <Smile className="w-4 h-4" />
+                        </button>
+
+                        {/* Send Button or Mic Button (WhatsApp style: Mic when empty, Send when text typed) */}
+                        {inputText.trim() ? (
+                          <button
+                            type="submit"
+                            disabled={isSending}
+                            className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl grid place-items-center text-white transition-all shadow-md ml-0.5 sm:ml-1 ${ghostModeActive
+                                ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 active:scale-95 shadow-amber-500/30'
+                                : 'bg-[#6366F1] hover:bg-[#5457E5] active:scale-95 shadow-[#6366F1]/30'
+                              }`}
+                            title="Send message"
+                          >
+                            <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleStartVoiceRecording}
+                            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl grid place-items-center bg-[#181E2E] hover:bg-indigo-600/30 text-indigo-400 hover:text-indigo-200 border border-white/5 hover:border-indigo-500/40 active:scale-95 transition-all shadow-md ml-0.5 sm:ml-1"
+                            title="Record Voice Note (Audio Memo)"
+                          >
+                            <Mic className="w-4 h-4" />
                           </button>
                         )}
                       </div>
                     </>
                   )}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Live Search Results Dropdown for @username and User IDs */}
-          {showUserSearchDropdown && searchQuery.trim().length > 0 && (
-            <div className="absolute left-2.5 right-2.5 sm:left-auto sm:right-4 top-full mt-2 sm:w-80 bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 z-50 animate-msg-in">
-              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#7A8396] flex items-center justify-between border-b border-white/10 mb-1">
-                <span>User Search (@username / ID)</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowUserSearchDropdown(false);
-                    setMobileSearchOpen(false);
-                  }}
-                  className="text-white hover:opacity-75"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-              <div className="max-h-60 overflow-y-auto scroll space-y-1">
-                {matchingUsers.length > 0 ? (
-                  matchingUsers.map((u) => (
-                    <div
-                      key={u.id || u.username}
-                      className="flex items-center justify-between p-2 rounded-xl bg-white/[0.02] hover:bg-white/[0.08] transition-colors"
-                    >
-                      <div
-                        onClick={() => {
-                          setViewingProfile({
-                            id: u.id,
-                            username: u.username,
-                            name: u.name,
-                            avatar: u.avatar,
-                            bio: u.bio,
-                            status: u.status,
-                          });
-                          setShowUserSearchDropdown(false);
-                          setMobileSearchOpen(false);
-                        }}
-                        className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
-                      >
-                        <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/10" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-white truncate">{u.name}</p>
-                          <p className="text-[10px] text-indigo-400 font-mono truncate">@{u.username}</p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleAddMemberToChannel(u);
-                          setShowUserSearchDropdown(false);
-                          setMobileSearchOpen(false);
-                        }}
-                        className="text-[10px] font-semibold text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-600 px-2 py-1 rounded-lg transition-colors ml-2 shrink-0 flex items-center gap-1"
-                        title={`Add @${u.username} to #${activeGroup.name}`}
-                      >
-                        <UserPlus className="w-3 h-3" />
-                        <span>Add</span>
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-3 text-center text-xs text-[#7A8396]">
-                    No user found matching "{searchQuery}"
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </header>
-
-        {/* Telegram-style Pinned Audio Player Bar */}
-        {roomPlayback && (
-          <TelegramMusicPlayer
-            playbackState={roomPlayback}
-            currentUserId={user.name}
-            onTogglePlay={handleTogglePlayMusic}
-            onNextTrack={handleNextTrack}
-            onPrevTrack={handlePrevTrack}
-            onSeek={handleSeekMusic}
-            onOpenLounge={() => setShowMusicBotModal(true)}
-            onClosePlayer={handleClosePlayer}
-          />
-        )}
-
-        {/* Join Channel Banner if user is viewing as guest */}
-        {!isJoinedToActiveGroup && (
-          <div className="bg-gradient-to-r from-indigo-950/90 via-purple-950/70 to-indigo-950/90 border-b border-indigo-500/30 px-3.5 py-2.5 flex items-center justify-between gap-2 shrink-0 animate-msg-in">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping shrink-0" />
-              <p className="text-xs text-indigo-200 truncate">
-                Viewing <span className="font-bold text-white">#{activeGroup.name}</span>. Join to chat & react!
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => handleJoinGroup(activeGroup.id)}
-              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 active:scale-95 transition-all shrink-0 flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Join Channel</span>
-            </button>
-          </div>
-        )}
-
-        {/* Message Stream */}
-        <div
-          className="flex-1 overflow-y-auto scroll p-3 sm:p-6 space-y-4 transition-all duration-300 relative"
-          style={getWallpaperStyle(wallpaperPreset, customWallpaperImage)}
-        >
-          <div className="flex items-center justify-center my-2">
-            <span className="text-[10px] font-semibold text-[#7A8396] bg-white/5 px-3 py-1 rounded-full">
-              Today
-            </span>
-          </div>
-
-          {displayedMessages.map((msg) => {
-            const isMe = Boolean(user.name && msg.sender_name.toLowerCase() === user.name.toLowerCase());
-            return (
-              <div
-                key={msg.id}
-                id={`msg-${msg.id}`}
-                className={`flex gap-2.5 sm:gap-3 group relative animate-msg-in transition-colors rounded-2xl p-1 ${
-                  isMe ? 'flex-row-reverse' : 'flex-row'
-                }`}
-              >
-                {!isMe && (
-                  <button
-                    onClick={() => {
-                      const matched = registeredUsers.find(
-                        (u) =>
-                          (msg.sender_username && u.username.toLowerCase() === msg.sender_username.toLowerCase()) ||
-                          u.name.toLowerCase() === msg.sender_name.toLowerCase()
-                      );
-                      setViewingProfile({
-                        id: matched?.id || `usr_${msg.sender_name.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
-                        name: msg.sender_name,
-                        username: msg.sender_username || matched?.username,
-                        avatar: msg.sender_avatar,
-                        bio: msg.sender_bio || matched?.bio,
-                        status: matched?.status || 'online',
-                      });
-                    }}
-                    className="w-8 h-8 rounded-full overflow-hidden bg-[#161C28] p-0.5 shrink-0 mt-1 border border-white/10 hover:scale-105 transition-transform"
-                    title={`View @${msg.sender_username || msg.sender_name}'s profile`}
-                  >
-                    <img
-                      src={msg.sender_avatar}
-                      alt={msg.sender_name}
-                      className="w-full h-full object-cover rounded-full"
-                    />
-                  </button>
-                )}
-
-                <div className={`flex flex-col max-w-[85%] sm:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
-                  {!isMe && (
-                    <button
-                      onClick={() => {
-                        const matched = registeredUsers.find(
-                          (u) =>
-                            (msg.sender_username && u.username.toLowerCase() === msg.sender_username.toLowerCase()) ||
-                            u.name.toLowerCase() === msg.sender_name.toLowerCase()
-                        );
-                        setViewingProfile({
-                          id: matched?.id || `usr_${msg.sender_name.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
-                          name: msg.sender_name,
-                          username: msg.sender_username || matched?.username,
-                          avatar: msg.sender_avatar,
-                          bio: msg.sender_bio || matched?.bio,
-                          status: matched?.status || 'online',
-                        });
-                      }}
-                      className="flex items-center gap-1.5 mb-1 px-1 hover:underline text-left group"
-                    >
-                      <span className="text-xs font-bold text-[#DDE2EE] group-hover:text-white">{msg.sender_name}</span>
-                      {msg.sender_username && (
-                        <span className="text-[11px] text-[#818CF8] font-mono">@{msg.sender_username}</span>
-                      )}
-                      <time className="text-[10px] text-[#7A8396]">
-                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </time>
-                    </button>
-                  )}
-
-                  {/* Quoted Message Reply Context */}
-                  {msg.reply_to && (
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const el = document.getElementById(`msg-${msg.reply_to?.id}`);
-                        if (el) {
-                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          el.classList.add('ring-2', 'ring-indigo-400', 'bg-indigo-500/10');
-                          setTimeout(() => {
-                            el.classList.remove('ring-2', 'ring-indigo-400', 'bg-indigo-500/10');
-                          }, 2000);
-                        }
-                      }}
-                      className={`mb-1 p-2 rounded-xl text-left cursor-pointer border-l-2 transition-all max-w-full shadow-sm ${
-                        isMe
-                          ? 'bg-indigo-950/70 border-indigo-300 text-white hover:bg-indigo-900/80'
-                          : 'bg-[#181E2E] border-indigo-400 text-[#E9ECF4] hover:bg-[#20273B]'
-                      }`}
-                      title="Click to jump to quoted message"
-                    >
-                      <p className="text-[10px] font-bold text-indigo-300 truncate flex items-center gap-1">
-                        <Reply className="w-2.5 h-2.5" />
-                        <span>{msg.reply_to.sender_name}</span>
-                      </p>
-                      <p className="text-[11px] text-[#A8B2C7] truncate mt-0.5 max-w-xs">
-                        {msg.reply_to.content || (msg.reply_to.msg_type === 'audio' ? '🎙️ Voice Note' : msg.reply_to.msg_type === 'image' ? '📷 Photo' : '📎 Attachment')}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Message Content */}
-                  {msg.msg_type === 'text' && (
-                    <div
-                      className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed break-words shadow-md select-text ${
-                        msg.burn_after_read
-                          ? isMe
-                            ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white border border-amber-400/40 shadow-amber-500/20 rounded-tr-sm'
-                            : 'bg-[#18131B] text-[#F3E8FF] border border-amber-500/40 shadow-amber-500/10 rounded-tl-sm'
-                          : isMe
-                          ? `${getBubbleClass(bubbleTheme)} rounded-tr-sm transition-colors`
-                          : 'bg-[#141824] text-[#E9ECF4] border border-[#232B3E] rounded-tl-sm'
-                      }`}
-                    >
-                      {msg.content}
-                      {msg.burn_after_read && (
-                        <GhostBurnTimer
-                          messageId={msg.id}
-                          totalSeconds={msg.burn_seconds || 10}
-                          onBurn={handleBurnMessage}
-                        />
-                      )}
-
-                      {/* WhatsApp & Telegram Double Ticks + Time */}
-                      <div className={`flex items-center gap-1 mt-1 text-[10px] select-none ${isMe ? 'justify-end text-white/70' : 'justify-end text-[#7A8396]'}`}>
-                        <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        {isMe && (() => {
-                          const isDm = activeGroupId.startsWith('dm_');
-                          const otherUser = isDm
-                            ? activeGroupId.replace('dm_', '').split('_').find((u) => u.toLowerCase() !== (user.username || user.name || '').toLowerCase())
-                            : null;
-                          const isSeen = otherUser
-                            ? (msg.read_by || []).some((r) => r.toLowerCase() === otherUser.toLowerCase())
-                            : (msg.read_by || []).length > 1;
-
-                          if (isSeen) {
-                            return (
-                              <span title={isDm ? "Seen" : "Read by members"} className="inline-flex items-center">
-                                <CheckCheck className="w-3.5 h-3.5 text-[#38BDF8] shrink-0" />
-                              </span>
-                            );
-                          }
-                          return (
-                            <span title="Delivered" className="inline-flex items-center">
-                              <CheckCheck className="w-3.5 h-3.5 text-white/60 shrink-0" />
-                            </span>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Voice Note Audio Memo */}
-                  {msg.msg_type === 'audio' && msg.media_url && (
-                    <div className="space-y-1">
-                      <VoiceNotePlayer audioUrl={msg.media_url} isMe={isMe} />
-                      <div className={`flex items-center gap-1 text-[10px] px-1 select-none ${isMe ? 'justify-end text-[#7A8396]' : 'justify-start text-[#7A8396]'}`}>
-                        <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        {isMe && (
-                          <span title="Delivered" className="inline-flex items-center">
-                            <CheckCheck className="w-3.5 h-3.5 text-[#38BDF8] shrink-0" />
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Telegram Music Bot Announcement Card */}
-                  {msg.msg_type === 'music_bot' && (
-                    <div className="p-3 bg-gradient-to-br from-indigo-950/60 via-[#131726] to-[#0E121E] border border-indigo-500/30 rounded-2xl max-w-sm shadow-xl space-y-2.5">
-                      <div className="flex items-center gap-2.5">
-                        <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-white/10 shadow-md">
-                          <img
-                            src={msg.media_url || '/logo.png'}
-                            alt="Music Cover"
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                            <Disc className="w-5 h-5 text-white animate-spin" style={{ animationDuration: '4s' }} />
-                          </div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-white leading-snug">{msg.content}</p>
-                          <span className="text-[10px] text-indigo-400 font-semibold flex items-center gap-1 mt-1">
-                            <Bot className="w-3 h-3" /> @LMC Music Bot
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowMusicBotModal(true)}
-                        className="w-full bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/40 text-indigo-200 text-xs font-semibold py-1.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-colors"
-                      >
-                        <Music className="w-3.5 h-3.5 text-indigo-300" />
-                        <span>Open Music Lounge / Change Song</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {msg.msg_type === 'sticker' && (
-                    <div className="p-1">
-                      <img
-                        src={msg.media_url}
-                        alt="Sticker"
-                        className="w-32 h-32 sm:w-36 sm:h-36 object-contain hover:scale-105 transition-transform"
-                        loading="lazy"
-                      />
-                    </div>
-                  )}
-
-                  {msg.msg_type === 'gif' && (
-                    <div className="rounded-2xl overflow-hidden border border-white/10 shadow-lg max-w-xs">
-                      <img
-                        src={msg.media_url}
-                        alt="GIF"
-                        className="w-full h-auto object-cover max-h-60"
-                        loading="lazy"
-                      />
-                    </div>
-                  )}
-
-                  {msg.msg_type === 'image' && (
-                    <div className="rounded-2xl overflow-hidden border border-white/10 shadow-lg max-w-sm">
-                      <img
-                        src={msg.media_url}
-                        alt="Image"
-                        className="w-full h-auto object-cover max-h-72"
-                        loading="lazy"
-                      />
-                    </div>
-                  )}
-
-                  {/* LMC Bot Interactive Cards (Polls, Bunks, Confessions, Whispers, Roasts, Decisions) */}
-                  {msg.msg_type === 'poll' && (
-                    <PollCard
-                      message={msg}
-                      currentUsername={user.username || user.name}
-                      onUpdateMetadata={handleUpdateMessageMetadata}
-                      triggerToast={triggerToast}
-                    />
-                  )}
-
-                  {msg.msg_type === 'bunk_meter' && (
-                    <BunkMeterCard
-                      message={msg}
-                      currentUsername={user.username || user.name}
-                      onUpdateMetadata={handleUpdateMessageMetadata}
-                      triggerToast={triggerToast}
-                    />
-                  )}
-
-                  {msg.msg_type === 'confession' && (
-                    <ConfessionCard message={msg} />
-                  )}
-
-                  {msg.msg_type === 'whisper' && (
-                    <WhisperCard
-                      message={msg}
-                      currentUsername={user.username || user.name}
-                      triggerToast={triggerToast}
-                    />
-                  )}
-
-                  {msg.msg_type === 'roast' && (
-                    <RoastCard message={msg} />
-                  )}
-
-                  {msg.msg_type === 'decision' && (
-                    <DecisionCard message={msg} />
-                  )}
-
-                  {/* Reactions Bar */}
-                  <div className="flex flex-wrap items-center gap-1 mt-1.5 px-0.5">
-                    {Object.entries(msg.reactions || {}).map(([emoji, count]) => {
-                      if (count <= 0) return null;
-                      return (
-                        <button
-                          key={emoji}
-                          onClick={() => handleToggleReaction(msg.id, emoji)}
-                          className="flex items-center gap-1 bg-[#141824] hover:bg-[#1E2538] border border-[#232B3E] px-2 py-0.5 rounded-full text-xs transition-all active:scale-95"
-                        >
-                          <span>{emoji}</span>
-                          <span className="text-[10px] text-[#A8B2C7] font-semibold">{count}</span>
-                        </button>
-                      );
-                    })}
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const screenW = typeof window !== 'undefined' ? window.innerWidth : 360;
-                        const screenH = typeof window !== 'undefined' ? window.innerHeight : 640;
-                        const popWidth = Math.min(screenW - 16, 296);
-                        const pad = 8;
-                        // On mobile: center horizontally relative to clicked button, clamped within viewport
-                        let left = rect.left - 100;
-                        if (screenW < 640) {
-                          left = Math.max(pad, Math.min(screenW - popWidth - pad, rect.left + rect.width / 2 - popWidth / 2));
-                        } else {
-                          left = Math.max(pad, Math.min(screenW - popWidth - pad, left));
-                        }
-                        // Vertical placement: show above if space permits, else below
-                        let top = rect.top - 46;
-                        if (top < 65) {
-                          top = rect.bottom + 8;
-                        }
-                        if (top > screenH - 60) {
-                          top = Math.max(70, screenH - 70);
-                        }
-                        setReactionPopCoords({ x: left, y: top });
-                        setReactionPopForMsg(reactionPopForMsg === msg.id ? null : msg.id);
-                      }}
-                      className="opacity-75 sm:opacity-0 sm:group-hover:opacity-100 hover:opacity-100 p-1.5 rounded-full text-[#7A8396] hover:text-white transition-all text-xs touch-manipulation active:scale-110"
-                      title="Add Reaction"
-                    >
-                      <SmilePlus className="w-3.5 h-3.5" />
-                    </button>
-
-                    {/* Reply to message */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setReplyingToMessage(msg);
-                        if (textareaRef.current) {
-                          textareaRef.current.focus();
-                        }
-                      }}
-                      className="opacity-75 sm:opacity-0 sm:group-hover:opacity-100 hover:opacity-100 p-1.5 rounded-full text-[#7A8396] hover:text-indigo-400 transition-all text-xs touch-manipulation active:scale-110"
-                      title="Reply to message"
-                    >
-                      <Reply className="w-3.5 h-3.5" />
-                    </button>
-
-                    {(isAdminOfActiveGroup || isMe) && (
-                      <button
-                        onClick={() => handleDeleteMessage(msg.id)}
-                        className="opacity-75 sm:opacity-0 sm:group-hover:opacity-100 hover:opacity-100 p-1.5 rounded-full text-[#7A8396] hover:text-rose-400 transition-all text-xs touch-manipulation active:scale-110"
-                        title={isAdminOfActiveGroup ? "Delete Message (Admin)" : "Delete Message"}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          {/* Real-time Floating Typing Indicator Bubble */}
-          {activeTypers.length > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-[#141826]/90 border border-indigo-500/30 text-indigo-300 text-xs w-fit shadow-lg animate-msg-in mb-2">
-              <span className="flex gap-1 items-center">
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-              </span>
-              <span className="text-[11px] font-semibold">
-                {activeTypers.length === 1
-                  ? `${activeTypers[0].name} is typing...`
-                  : `${activeTypers.map((t) => t.name).join(', ')} are typing...`}
-              </span>
-            </div>
-          )}
-          <div ref={streamEndRef} />
-        </div>
-
-        {/* Reaction Quick Bar Popover */}
-        {reactionPopForMsg && (
-          <>
-            {/* Backdrop to easily dismiss reaction bar on touch or click */}
-            <div
-              className="fixed inset-0 z-40 bg-black/20 sm:bg-transparent"
-              onClick={() => setReactionPopForMsg(null)}
-              onTouchStart={() => setReactionPopForMsg(null)}
-            />
-            <div
-              style={{
-                top: `${reactionPopCoords.y}px`,
-                left: `${reactionPopCoords.x}px`,
-                maxWidth: 'calc(100vw - 16px)',
-              }}
-              className="fixed z-50 flex items-center gap-1 sm:gap-1.5 bg-[#141824]/95 backdrop-blur-xl border border-white/15 p-1.5 rounded-2xl shadow-2xl animate-pop-in touch-manipulation select-none overflow-x-auto no-scrollbar"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {['🔥', '😂', '❤️', '👍', '🎉', '👀', '💯', '🚀'].map((em) => (
-                <button
-                  key={em}
-                  onClick={() => {
-                    handleToggleReaction(reactionPopForMsg, em);
-                    setReactionPopForMsg(null);
-                  }}
-                  className="w-8 h-8 shrink-0 rounded-xl hover:bg-white/10 active:bg-white/25 active:scale-125 grid place-items-center text-lg sm:text-base transition-transform select-none touch-manipulation"
-                >
-                  {em}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* COMPOSER DOCK */}
-        <div className="p-2 sm:p-4 bg-[#0B0E17] border-t border-[#1B212E] relative pb-[max(0.625rem,env(safe-area-inset-bottom))]">
-          {/* Mobile Backdrop for Trays */}
-          {showEmojiPicker && (
-            <div
-              className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px] md:hidden"
-              onClick={() => {
-                setShowEmojiPicker(false);
-              }}
-              onTouchStart={() => {
-                setShowEmojiPicker(false);
-              }}
-            />
-          )}
-
-          {/* UNIFIED EMOJI, GIF & STICKER DRAWER */}
-          {showEmojiPicker && (
-            <div className="absolute bottom-full mb-3 right-2.5 sm:right-16 left-2.5 sm:left-auto w-[calc(100vw-20px)] sm:w-[380px] max-h-[60vh] bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3.5 shadow-2xl z-50 animate-msg-in flex flex-col">
-              {/* Top Navigation Tabs */}
-              <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/10">
-                <div className="flex gap-1 bg-black/40 p-1 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setPickerTab('emojis')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                      pickerTab === 'emojis' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
-                    }`}
-                  >
-                    Emojis
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPickerTab('gifs')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                      pickerTab === 'gifs' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
-                    }`}
-                  >
-                    GIFs
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPickerTab('stickers')}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                      pickerTab === 'stickers' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
-                    }`}
-                  >
-                    Stickers
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowEmojiPicker(false)}
-                  className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* 1. EMOJIS TAB */}
-              {pickerTab === 'emojis' && (
-                <div className="flex flex-col flex-1 min-h-0">
-                  <div className="relative mb-2">
-                    <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-2.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={emojiSearch}
-                      onChange={(e) => setEmojiSearch(e.target.value)}
-                      placeholder="Search emojis..."
-                      className="w-full bg-[#0D1017] border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#5A6376] outline-none focus:border-[#6366F1]"
-                    />
-                  </div>
-
-                  {!emojiSearch && (
-                    <div className="flex gap-1 pb-2 border-b border-white/10 mb-2 overflow-x-auto scroll">
-                      {EMOJI_CATEGORIES.map((cat, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => setActiveEmojiCat(idx)}
-                          className={`px-2.5 py-1 rounded-xl text-sm transition-all ${
-                            activeEmojiCat === idx ? 'bg-[#6366F1]/30 text-white' : 'hover:bg-white/5 opacity-70'
-                          }`}
-                        >
-                          {cat.icon}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-7 gap-1 max-h-52 overflow-y-auto scroll pr-1">
-                    {displayedEmojis.map((em, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => {
-                          setInputText((prev) => prev + em);
-                          textareaRef.current?.focus();
-                        }}
-                        className="w-8 h-8 rounded-lg hover:bg-white/10 grid place-items-center text-lg transition-transform hover:scale-125"
-                      >
-                        {em}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 2. GIFS TAB */}
-              {pickerTab === 'gifs' && (
-                <div className="space-y-2 flex flex-col flex-1 min-h-0">
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-[#7A8396] absolute left-2.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={gifSearch}
-                      onChange={(e) => setGifSearch(e.target.value)}
-                      placeholder="Search Tenor & Giphy..."
-                      className="w-full bg-[#0D1017] border border-white/10 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-[#5A6376] outline-none focus:border-[#6366F1]"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto scroll pr-1">
-                    {gifResults.map((gif) => (
-                      <button
-                        key={gif.id}
-                        type="button"
-                        onClick={() => {
-                          handleSendMessage('', 'gif', gif.url);
-                          setShowEmojiPicker(false);
-                        }}
-                        className="relative rounded-xl overflow-hidden aspect-video bg-[#0D1017] border border-white/5 hover:border-[#6366F1] hover:scale-[1.02] transition-all"
-                      >
-                        <img src={gif.url} alt={gif.title} className="w-full h-full object-cover" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 3. STICKERS TAB */}
-              {pickerTab === 'stickers' && (
-                <div className="space-y-3 flex flex-col flex-1 min-h-0">
-                  <div className="flex gap-2">
-                    <label className="flex-1 bg-[#6366F1]/15 hover:bg-[#6366F1]/25 border border-[#6366F1]/30 rounded-2xl p-2.5 text-center cursor-pointer transition-all">
-                      <span className="text-xs font-bold text-white flex items-center justify-center gap-1.5">
-                        <Upload className="w-3.5 h-3.5 text-[#818CF8]" /> Create from Photo
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleCreateCustomSticker(file);
-                        }}
-                      />
-                    </label>
-                  </div>
-
-                  <div className="grid grid-cols-4 gap-2 max-h-52 overflow-y-auto scroll pr-1">
-                    {STICKERS.map((st) => (
-                      <button
-                        key={st.id}
-                        type="button"
-                        onClick={() => {
-                          handleSendMessage('', 'sticker', st.url);
-                          setShowEmojiPicker(false);
-                        }}
-                        className="p-1.5 rounded-2xl bg-black/20 hover:bg-[#6366F1]/20 border border-transparent hover:border-[#6366F1] flex items-center justify-center transition-all hover:scale-110"
-                        title={st.name}
-                      >
-                        <img src={st.url} alt={st.name} className="w-14 h-14 object-contain" />
-                      </button>
-                    ))}
-                    {userStickers.map((stUrl, i) => (
-                      <button
-                        key={`custom-${i}`}
-                        type="button"
-                        onClick={() => {
-                          handleSendMessage('', 'sticker', stUrl);
-                          setShowEmojiPicker(false);
-                        }}
-                        className="p-1.5 rounded-2xl bg-black/30 hover:bg-[#6366F1]/20 border border-white/5 hover:border-[#6366F1] flex items-center justify-center transition-all hover:scale-110"
-                      >
-                        <img src={stUrl} alt="Custom Sticker" className="w-14 h-14 object-contain" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                </form>
               )}
             </div>
-          )}
-
-          {/* Banned User Warning Banner */}
-          {isCurrentUserBanned && (
-            <div className="max-w-4xl mx-auto mb-2 px-3.5 py-2.5 bg-rose-950/80 border border-rose-500/50 rounded-2xl flex items-center gap-2.5 text-xs text-rose-300 font-bold animate-msg-in">
-              <UserX className="w-4 h-4 text-rose-400 shrink-0" />
-              <span>You have been banned from sending messages in this channel by the admin.</span>
-            </div>
-          )}
-
-          {/* Read Only Channel Banner */}
-          {activeGroup.is_read_only && !isAdminOfActiveGroup && (
-            <div className="max-w-4xl mx-auto mb-2 px-3.5 py-2.5 bg-indigo-950/80 border border-indigo-500/40 rounded-2xl flex items-center gap-2.5 text-xs text-indigo-300 font-semibold animate-msg-in">
-              <Lock className="w-4 h-4 text-indigo-400 shrink-0" />
-              <span>This channel is in Admin Read-Only mode. Only channel admins can post.</span>
-            </div>
-          )}
-
-          {/* Ghost Mode Active Banner */}
-          {ghostModeActive && (
-            <div className="max-w-4xl mx-auto mb-2 px-3 py-1.5 bg-gradient-to-r from-amber-950/70 via-orange-950/50 to-amber-950/70 border border-amber-500/40 rounded-xl flex items-center justify-between text-xs text-amber-300 font-semibold animate-msg-in shadow-md">
-              <span className="flex items-center gap-1.5">
-                <Flame className="w-3.5 h-3.5 text-amber-400 animate-bounce" />
-                <span>Ghost Mode (Burn-on-Read): Message burns from screen & database 10s after read</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => setGhostModeActive(false)}
-                className="text-[10px] text-amber-300 hover:text-white px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 transition-colors"
-              >
-                Disable
-              </button>
-            </div>
-          )}
-
-          {/* Replying Banner Above Input */}
-          {replyingToMessage && (
-            <div className="max-w-4xl mx-auto flex items-center justify-between px-3.5 py-2 bg-[#131724] border border-white/10 rounded-2xl mb-1.5 animate-msg-in shadow-md">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-1 h-8 rounded-full bg-indigo-500 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-[11px] font-bold text-indigo-400 truncate flex items-center gap-1">
-                    <Reply className="w-3 h-3 text-indigo-400" />
-                    <span>Replying to {replyingToMessage.sender_name}</span>
-                  </p>
-                  <p className="text-xs text-[#A8B2C7] truncate mt-0.5 max-w-sm">
-                    {replyingToMessage.content || (replyingToMessage.msg_type === 'audio' ? '🎙️ Voice Note' : replyingToMessage.msg_type === 'image' ? '📷 Photo' : '📎 Attachment')}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setReplyingToMessage(null)}
-                className="w-6 h-6 rounded-full hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white transition-colors shrink-0"
-                title="Cancel reply"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-
-          {/* Composer Input Bar or Join Channel CTA */}
-          {!isJoinedToActiveGroup ? (
-            <div className="max-w-4xl mx-auto flex items-center justify-between p-3.5 rounded-2xl bg-[#131722] border border-[#232B3E] shadow-xl animate-msg-in">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 grid place-items-center text-indigo-400 shrink-0">
-                  <Users className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs sm:text-sm font-bold text-white truncate">
-                    Join #{activeGroup.name} to send messages
-                  </p>
-                  <p className="text-[10px] sm:text-xs text-[#7A8396] truncate">
-                    Tap join to chat with members, share photos, and send voice notes
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleJoinGroup(activeGroup.id)}
-                className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 text-white font-bold text-xs sm:text-sm shadow-md active:scale-95 transition-all shrink-0 flex items-center gap-1.5"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Join Channel</span>
-              </button>
-            </div>
-          ) : (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (isCurrentUserBanned) {
-                  triggerToast('🚫 You are banned from sending messages in this channel');
-                  return;
-                }
-                if (activeGroup?.is_read_only && !isAdminOfActiveGroup) {
-                  triggerToast('🔒 Channel is in Admin Read-Only mode');
-                  return;
-                }
-                if (!inputText.trim()) return;
-                handleSendMessage(inputText, 'text');
-              }}
-              className="relative max-w-4xl mx-auto flex items-end gap-1.5 sm:gap-2 bg-[#121622]/90 backdrop-blur-md border border-white/10 focus-within:border-[#6366F1]/50 rounded-2xl p-1.5 sm:p-2 transition-all shadow-lg"
-            >
-              {/* Telegram-style Slash Autocomplete Menu ("LMC Bot 🤖") */}
-              <SlashCommandMenu
-                isOpen={isSlashMenuOpen}
-                commands={matchingSlashCommands}
-                selectedIndex={slashSelectedIndex}
-                onSelectCommand={handleSelectSlashCommand}
-                onClose={() => setIsSlashMenuOpen(false)}
-              />
-
-              {isVoiceRecording ? (
-                /* LIVE VOICE RECORDING STUDIO */
-                <div className="flex-1 flex items-center justify-between gap-3 px-2 py-1.5 select-none animate-msg-in">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping shrink-0" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
-                    <span className="text-xs font-mono font-bold text-rose-400">
-                      {Math.floor(voiceRecordingDuration / 60)}:{(voiceRecordingDuration % 60).toString().padStart(2, '0')}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      {[12, 24, 38, 20, 45, 30, 16, 40, 25, 35].map((h, i) => (
-                        <span
-                          key={i}
-                          style={{ height: `${h}px` }}
-                          className="w-[2.5px] rounded-full bg-rose-400/80 animate-pulse"
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleCancelVoiceRecording}
-                      className="p-2 rounded-xl text-[#7A8396] hover:text-rose-400 hover:bg-rose-500/10 active:scale-95 transition-all text-xs font-semibold flex items-center gap-1"
-                      title="Discard recording"
-                    >
-                      <Trash2 className="w-4 h-4 text-rose-400" />
-                      <span className="hidden sm:inline">Cancel</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleFinishVoiceRecording}
-                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition-all"
-                      title="Send voice note"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Send</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* Upload Image button with Compression */}
-                  <label
-                    className="p-1.5 sm:p-2 rounded-xl text-[#A8B2C7] hover:text-white hover:bg-white/5 cursor-pointer shrink-0 active:scale-95 transition-all"
-                    title="Upload Image"
-                  >
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        try {
-                          const compressedDataUrl = await compressImage(file);
-                          handleSendMessage('', 'image', compressedDataUrl);
-                        } catch (err) {
-                          const reader = new FileReader();
-                          reader.onload = () => {
-                            if (typeof reader.result === 'string') {
-                              handleSendMessage('', 'image', reader.result);
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        } finally {
-                          e.target.value = '';
-                        }
-                      }}
-                    />
-                    <Upload className="w-4 h-4" />
-                  </label>
-
-                  {/* Input Textarea with Enter key, slash command autocomplete & typing indicator */}
-                  <textarea
-                    ref={textareaRef}
-                    rows={1}
-                    value={inputText}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setInputText(val);
-                      notifyTyping(Boolean(val.trim()));
-                      e.target.style.height = 'auto';
-                      e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
-
-                      if (val.startsWith('/')) {
-                        const matches = getMatchingCommands(val);
-                        setIsSlashMenuOpen(matches.length > 0);
-                        setSlashSelectedIndex(0);
-                      } else {
-                        setIsSlashMenuOpen(false);
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (isSlashMenuOpen && matchingSlashCommands.length > 0) {
-                        if (e.key === 'ArrowDown') {
-                          e.preventDefault();
-                          setSlashSelectedIndex((prev) => (prev + 1) % matchingSlashCommands.length);
-                          return;
-                        }
-                        if (e.key === 'ArrowUp') {
-                          e.preventDefault();
-                          setSlashSelectedIndex(
-                            (prev) => (prev - 1 + matchingSlashCommands.length) % matchingSlashCommands.length
-                          );
-                          return;
-                        }
-                        if (
-                          e.key === 'Tab' ||
-                          (e.key === 'Enter' && !e.shiftKey && !inputText.includes(' '))
-                        ) {
-                          e.preventDefault();
-                          handleSelectSlashCommand(matchingSlashCommands[slashSelectedIndex]);
-                          return;
-                        }
-                        if (e.key === 'Escape') {
-                          e.preventDefault();
-                          setIsSlashMenuOpen(false);
-                          return;
-                        }
-                      }
-
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (!inputText.trim()) return;
-                        setIsSlashMenuOpen(false);
-                        handleSendMessage(inputText, 'text');
-                      }
-                    }}
-                    placeholder={
-                      ghostModeActive
-                        ? 'Ghost Mode: Burns in 10s...'
-                        : `Message #${activeGroup.name}... (type / for bot commands)`
-                    }
-                    className="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 text-base sm:text-sm text-[#E9ECF4] placeholder-[#5A6376] max-h-32 leading-relaxed no-scrollbar"
-                  />
-
-                  <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-                    {/* Ghost Mode (Burn-on-Read) Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextState = !ghostModeActive;
-                        setGhostModeActive(nextState);
-                        triggerToast(
-                          nextState
-                            ? '🔥 Ghost Mode ON: Messages burn 10s after read!'
-                            : 'Ghost Mode OFF'
-                        );
-                      }}
-                      className={`p-1.5 sm:p-2 rounded-xl transition-all ${
-                        ghostModeActive
-                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-md shadow-amber-500/20 animate-pulse'
-                          : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
-                      }`}
-                      title="Burn-on-Read Ghost Mode (Auto self-destruct in 10s)"
-                    >
-                      <Flame className={`w-4 h-4 ${ghostModeActive ? 'text-amber-400' : ''}`} />
-                    </button>
-
-                    {/* Emoji, GIF & Sticker Picker toggle */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowEmojiPicker(!showEmojiPicker);
-                      }}
-                      className={`p-1.5 sm:p-2 rounded-xl transition-all ${
-                        showEmojiPicker ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
-                      }`}
-                      title="Emojis, GIFs & Stickers"
-                    >
-                      <Smile className="w-4 h-4" />
-                    </button>
-
-                    {/* Send Button or Mic Button (WhatsApp style: Mic when empty, Send when text typed) */}
-                    {inputText.trim() ? (
-                      <button
-                        type="submit"
-                        disabled={isSending}
-                        className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl grid place-items-center text-white transition-all shadow-md ml-0.5 sm:ml-1 ${
-                          ghostModeActive
-                            ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 active:scale-95 shadow-amber-500/30'
-                            : 'bg-[#6366F1] hover:bg-[#5457E5] active:scale-95 shadow-[#6366F1]/30'
-                        }`}
-                        title="Send message"
-                      >
-                        <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleStartVoiceRecording}
-                        className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl grid place-items-center bg-[#181E2E] hover:bg-indigo-600/30 text-indigo-400 hover:text-indigo-200 border border-white/5 hover:border-indigo-500/40 active:scale-95 transition-all shadow-md ml-0.5 sm:ml-1"
-                        title="Record Voice Note (Audio Memo)"
-                      >
-                        <Mic className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
-            </form>
-          )}
-        </div>
           </>
         )}
       </main>
@@ -5920,328 +5994,358 @@ export default function Home() {
       {/* RIGHT SIDEBAR (Instagram-style Group Details & Members) */}
       {activeGroup && (
         <aside
-        className={`fixed md:relative top-0 bottom-0 right-0 z-40 bg-[#0E121B] border-l border-[#1B212E] w-[300px] min-w-[300px] flex flex-col transition-transform duration-300 ease-out ${
-          infoOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full md:hidden'
-        }`}
-      >
-        <div className="p-4 border-b border-[#1B212E] flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-wider text-[#A8B2C7] flex items-center gap-1.5">
-            {isDmMode ? (
-              <>
-                <User className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Direct Chat Info</span>
-              </>
-            ) : activeGroup.is_private ? (
-              <>
-                <Lock className="w-3.5 h-3.5 text-[#F59E0B]" />
-                <span>Group Info</span>
-              </>
-            ) : (
-              <>
-                <Globe className="w-3.5 h-3.5 text-[#22C55E]" />
-                <span>Group Info</span>
-              </>
-            )}
-          </span>
-          <button
-            onClick={() => setInfoOpen(false)}
-            className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto scroll p-4 space-y-5">
-          {/* Group / User Mascot & Info */}
-          <div className="flex flex-col items-center text-center">
-            <div className="w-20 h-20 rounded-full overflow-hidden bg-transparent border-2 border-[#6366F1]/40 shadow-lg mb-3">
-              <img
-                src={activeGroup.avatar || '/logo.png'}
-                alt={activeGroup.name}
-                className="w-full h-full object-cover rounded-full"
-              />
-            </div>
-            <h2 className="text-base font-bold text-white flex items-center gap-1.5">
-              {activeGroup.name}
-              {!isDmMode && activeGroup.is_private && <Lock className="w-3.5 h-3.5 text-[#F59E0B]" />}
-            </h2>
-            <p className="text-xs text-[#7A8396] mt-1">{activeGroup.description}</p>
-            {!isDmMode && (
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[#A8B2C7]">
-                  {activeGroup.is_private ? '🔒 Private' : '🌐 Public'}
-                </span>
-                {isAdminOfActiveGroup && (
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#6366F1]/20 text-[#818CF8] flex items-center gap-1">
-                    <Crown className="w-2.5 h-2.5 text-[#F59E0B]" /> Admin
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Join Group Button if not a member yet (Groups only) */}
-          {!isJoinedToActiveGroup && !isDmMode && (
+          className={`fixed md:relative top-0 bottom-0 right-0 z-40 bg-[#0E121B] border-l border-[#1B212E] w-[300px] min-w-[300px] flex flex-col transition-transform duration-300 ease-out ${infoOpen ? 'translate-x-0 shadow-2xl' : 'translate-x-full md:hidden'
+            }`}
+        >
+          <div className="p-4 border-b border-[#1B212E] flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#A8B2C7] flex items-center gap-1.5">
+              {isDmMode ? (
+                <>
+                  <User className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Direct Chat Info</span>
+                </>
+              ) : activeGroup.is_private ? (
+                <>
+                  <Lock className="w-3.5 h-3.5 text-[#F59E0B]" />
+                  <span>Group Info</span>
+                </>
+              ) : (
+                <>
+                  <Globe className="w-3.5 h-3.5 text-[#22C55E]" />
+                  <span>Group Info</span>
+                </>
+              )}
+            </span>
             <button
-              onClick={() => handleJoinGroup(activeGroup.id)}
-              className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 text-white font-bold text-xs py-2.5 rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+              onClick={() => setInfoOpen(false)}
+              className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white"
             >
-              <Plus className="w-4 h-4" />
-              <span>Join #{activeGroup.name}</span>
-            </button>
-          )}
-
-          {/* Quick Call Actions in Group */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
-              className="flex-1 bg-[#141824] hover:bg-[#1E2538] border border-[#232B3E] py-2 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-all"
-            >
-              <Phone className="w-3.5 h-3.5 text-[#22C55E]" /> Call
-            </button>
-            <button
-              onClick={() => startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png')}
-              className="flex-1 bg-[#6366F1] hover:bg-[#5457E5] py-2 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-all shadow"
-            >
-              <Video className="w-3.5 h-3.5" /> Video
+              <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* ADMIN: Direct Add Member Input */}
-          {isAdminOfActiveGroup && !isDmMode && (
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-[#7A8396] block mb-1.5">
-                Add Member
-              </label>
-              <form onSubmit={handleAdminAddMember} className="flex gap-1.5">
-                <input
-                  type="text"
-                  value={adminAddMemberInput}
-                  onChange={(e) => setAdminAddMemberInput(e.target.value)}
-                  placeholder="Username to add..."
-                  className="flex-1 bg-[#131722] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3 py-1.5 text-xs text-white placeholder-[#5A6376] outline-none"
+          <div className="flex-1 overflow-y-auto scroll p-4 space-y-5">
+            {/* Group / User Mascot & Info */}
+            <div className="flex flex-col items-center text-center">
+              <div className="w-20 h-20 rounded-full overflow-hidden bg-transparent border-2 border-[#6366F1]/40 shadow-lg mb-3">
+                <img
+                  src={activeGroup.avatar || '/logo.png'}
+                  alt={activeGroup.name}
+                  className="w-full h-full object-cover rounded-full"
                 />
-                <button
-                  type="submit"
-                  className="bg-[#6366F1] hover:bg-[#5457E5] text-white px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0"
-                >
-                  Add
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* Admin Moderation Panel Button */}
-          {isAdminOfActiveGroup && (
-            <button
-              onClick={() => setShowAdminModal(true)}
-              className="w-full bg-gradient-to-r from-amber-500/20 to-rose-500/20 hover:from-amber-500/30 hover:to-rose-500/30 text-amber-300 border border-amber-500/30 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98]"
-            >
-              <Crown className="w-4 h-4 text-amber-400" />
-              <span>Admin Ban & Moderation</span>
-            </button>
-          )}
-
-          {/* Admin Direct Delete Channel Button */}
-          {isAdminOfActiveGroup && !isDmMode && (
-            <button
-              type="button"
-              onClick={() => {
-                const confirmed = window.confirm(
-                  `Are you sure you want to permanently delete #${activeGroup.name}? All messages will be wiped.`
-                );
-                if (confirmed) {
-                  handleDeleteChannel();
-                }
-              }}
-              className="w-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 border border-rose-500/30 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98]"
-              title={`Permanently delete #${activeGroup.name}`}
-            >
-              <Trash2 className="w-4 h-4 text-rose-400" />
-              <span>Delete Channel (#{activeGroup.name})</span>
-            </button>
-          )}
-
-          {/* Members List with Click to View Profile (Groups Only) */}
-          {!isDmMode && (
-            <div>
-              <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[#7A8396] mb-2.5">
-                <span>Members ({activeGroup.members?.length || 0})</span>
-                <button
-                  onClick={() => setShowAddMemberModal(true)}
-                  className="text-[11px] font-semibold text-[#818CF8] hover:text-white transition-colors flex items-center gap-1 normal-case bg-[#6366F1]/10 hover:bg-[#6366F1]/20 px-2 py-0.5 rounded-lg border border-[#6366F1]/20"
-                  title="Add member from registered directory"
-                >
-                  + Add Member
-                </button>
               </div>
-              <div className="space-y-1.5">
-                {(activeGroup.members || []).map((mName, idx) => {
-                  const isCreator = activeGroup.created_by?.toLowerCase() === mName.toLowerCase();
-                  const isCurrent = user.name && user.name.toLowerCase() === mName.toLowerCase();
-                  const matchedUser = registeredUsers.find(
-                    (u) =>
-                      u.name.toLowerCase() === mName.toLowerCase() ||
-                      u.username.toLowerCase() === mName.toLowerCase() ||
-                      u.id === mName
+              <h2 className="text-base font-bold text-white flex items-center gap-1.5">
+                {activeGroup.name}
+                {!isDmMode && activeGroup.is_private && <Lock className="w-3.5 h-3.5 text-[#F59E0B]" />}
+              </h2>
+              <p className="text-xs text-[#7A8396] mt-1">{activeGroup.description}</p>
+              {!isDmMode && (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[#A8B2C7]">
+                    {activeGroup.is_private ? '🔒 Private' : '🌐 Public'}
+                  </span>
+                  {isAdminOfActiveGroup && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#6366F1]/20 text-[#818CF8] flex items-center gap-1">
+                      <Crown className="w-2.5 h-2.5 text-[#F59E0B]" /> Admin
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Join Group Button if not a member yet (Groups only) */}
+            {!isJoinedToActiveGroup && !isDmMode && (
+              <button
+                onClick={() => handleJoinGroup(activeGroup.id)}
+                className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 text-white font-bold text-xs py-2.5 rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Join #{activeGroup.name}</span>
+              </button>
+            )}
+
+            {/* Quick Call Actions in Group */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
+                className="flex-1 bg-[#141824] hover:bg-[#1E2538] border border-[#232B3E] py-2 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-all"
+              >
+                <Phone className="w-3.5 h-3.5 text-[#22C55E]" /> Call
+              </button>
+              <button
+                onClick={() => startCall('video', activeGroup.name, activeGroup.avatar || '/logo.png')}
+                className="flex-1 bg-[#6366F1] hover:bg-[#5457E5] py-2 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-all shadow"
+              >
+                <Video className="w-3.5 h-3.5" /> Video
+              </button>
+            </div>
+
+            {/* ADMIN: Direct Add Member Input */}
+            {isAdminOfActiveGroup && !isDmMode && (
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-[#7A8396] block mb-1.5">
+                  Add Member
+                </label>
+                <form onSubmit={handleAdminAddMember} className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={adminAddMemberInput}
+                    onChange={(e) => setAdminAddMemberInput(e.target.value)}
+                    placeholder="Username to add..."
+                    className="flex-1 bg-[#131722] border border-[#232B3E] focus:border-[#6366F1] rounded-xl px-3 py-1.5 text-xs text-white placeholder-[#5A6376] outline-none"
+                  />
+                  <button
+                    type="submit"
+                    className="bg-[#6366F1] hover:bg-[#5457E5] text-white px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0"
+                  >
+                    Add
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* Admin Moderation Panel Button */}
+            {isAdminOfActiveGroup && (
+              <button
+                onClick={() => setShowAdminModal(true)}
+                className="w-full bg-gradient-to-r from-amber-500/20 to-rose-500/20 hover:from-amber-500/30 hover:to-rose-500/30 text-amber-300 border border-amber-500/30 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98]"
+              >
+                <Crown className="w-4 h-4 text-amber-400" />
+                <span>Admin Ban & Moderation</span>
+              </button>
+            )}
+
+            {/* Admin Direct Delete Channel Button */}
+            {isAdminOfActiveGroup && !isDmMode && (
+              <button
+                type="button"
+                onClick={() => {
+                  const confirmed = window.confirm(
+                    `Are you sure you want to permanently delete #${activeGroup.name}? All messages will be wiped.`
                   );
-                  const displayName = matchedUser?.name || mName;
-                  const displayUsername = matchedUser?.username
-                    ? `@${matchedUser.username}`
-                    : isCurrent && user.username
-                    ? `@${user.username}`
-                    : null;
-                  const memberAvatar =
-                    isCurrent && user.avatar
-                      ? user.avatar
-                      : matchedUser?.avatar ||
-                        svgToDataUrl(renderAvatarSvgString(PRESET_AVATARS[idx % PRESET_AVATARS.length].config));
-                  const memberBio = matchedUser?.bio || (isCreator ? 'Squad Admin & Creator' : 'Squad Member');
-                  const memberId =
-                    matchedUser?.id ||
-                    (isCurrent ? user.id : `usr_${mName.toLowerCase().replace(/[^a-z0-9]/g, '')}`);
-                  const memberHandle = (matchedUser?.username || (isCurrent ? user.username : mName) || '').toLowerCase();
-                  const memberPresence = presenceMap[memberHandle];
-                  const isMemberOnline = isCurrent || memberPresence?.is_online;
+                  if (confirmed) {
+                    handleDeleteChannel();
+                  }
+                }}
+                className="w-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 border border-rose-500/30 py-2.5 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98]"
+                title={`Permanently delete #${activeGroup.name}`}
+              >
+                <Trash2 className="w-4 h-4 text-rose-400" />
+                <span>Delete Channel (#{activeGroup.name})</span>
+              </button>
+            )}
+
+            {/* Members List with Click to View Profile (Groups Only) */}
+            {!isDmMode && (
+              <div>
+                {(() => {
+                  const seen = new Set<string>();
+                  const uniqueMemberList: string[] = [];
+                  for (const m of activeGroup.members || []) {
+                    if (!m) continue;
+                    const clean = m.trim().replace(/^@/, '').toLowerCase();
+                    if (!clean || FAKE_MEMBERS_SET.has(clean)) continue;
+                    if (!seen.has(clean)) {
+                      seen.add(clean);
+                      uniqueMemberList.push(clean);
+                    }
+                  }
+
+                  const creatorClean = (activeGroup.created_by || '').trim().replace(/^@/, '').toLowerCase();
+                  if (creatorClean && !seen.has(creatorClean) && !FAKE_MEMBERS_SET.has(creatorClean)) {
+                    seen.add(creatorClean);
+                    uniqueMemberList.unshift(creatorClean);
+                  }
+
+                  const myHandle = (user.username || user.name || '').trim().replace(/^@/, '').toLowerCase();
+                  const myName = (user.name || '').trim().toLowerCase();
 
                   return (
-                    <button
-                      key={mName}
-                      onClick={() =>
-                        setViewingProfile({
-                          id: memberId,
-                          name: displayName,
-                          username: matchedUser?.username || (isCurrent ? user.username : undefined),
-                          avatar: memberAvatar,
-                          bio: memberBio,
-                          status: matchedUser?.status || 'online',
-                        })
-                      }
-                      className="w-full flex items-center gap-2.5 p-2 rounded-xl bg-[#141824] border border-[#232B3E] hover:border-white/20 transition-all text-left group"
-                    >
-                      <div className="relative shrink-0">
-                        <div className="w-8 h-8 rounded-full overflow-hidden bg-[#F5F6F8] p-0.5 border border-white/5">
-                          <img
-                            src={memberAvatar}
-                            alt={displayName}
-                            className="w-full h-full object-contain"
-                          />
-                        </div>
-                        {isMemberOnline ? (
-                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-[#141824] animate-pulse" />
-                        ) : (
-                          <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-slate-500 border border-[#141824]" />
-                        )}
+                    <>
+                      <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[#7A8396] mb-2.5">
+                        <span>Members ({uniqueMemberList.length})</span>
+                        <button
+                          onClick={() => setShowAddMemberModal(true)}
+                          className="text-[11px] font-semibold text-[#818CF8] hover:text-white transition-colors flex items-center gap-1 normal-case bg-[#6366F1]/10 hover:bg-[#6366F1]/20 px-2 py-0.5 rounded-lg border border-[#6366F1]/20"
+                          title="Add member from registered directory"
+                        >
+                          + Add Member
+                        </button>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs font-semibold text-white truncate">
-                            {displayName} {isCurrent && '(You)'}
-                          </p>
-                        </div>
-                        <p className="text-[10px] text-[#7A8396] flex items-center gap-1 truncate">
-                          {displayUsername ? (
-                            <span className="text-[#818CF8] font-mono mr-0.5">{displayUsername}</span>
-                          ) : null}
-                          <span>•</span>
-                          {isMemberOnline ? (
-                            <span className="text-emerald-400 font-medium">Online</span>
-                          ) : (
-                            <span>{memberPresence?.last_seen_text || 'Offline'}</span>
-                          )}
-                          <span>•</span>
-                          <span>{isCreator ? 'Admin 👑' : 'Member'}</span>
-                        </p>
+                      <div className="space-y-1.5">
+                        {uniqueMemberList.map((cleanHandle, idx) => {
+                          const isCreator = creatorClean === cleanHandle;
+                          const isCurrent = (myHandle && myHandle === cleanHandle) || (myName && myName === cleanHandle);
+                          const matchedUser = registeredUsers.find(
+                            (u) =>
+                              (u.username && u.username.toLowerCase() === cleanHandle) ||
+                              (u.name && u.name.toLowerCase() === cleanHandle) ||
+                              u.id === cleanHandle
+                          );
+
+                          const displayName = isCurrent
+                            ? (user.name || user.username || cleanHandle)
+                            : (matchedUser?.name || cleanHandle);
+
+                          const displayUsername = matchedUser?.username
+                            ? `@${matchedUser.username}`
+                            : isCurrent && user.username
+                            ? `@${user.username}`
+                            : `@${cleanHandle}`;
+
+                          const fallbackAvatar = svgToDataUrl(renderAvatarSvgString(PRESET_AVATARS[idx % PRESET_AVATARS.length].config));
+                          const memberAvatar = isCurrent && user.avatar
+                            ? user.avatar
+                            : matchedUser?.avatar || fallbackAvatar;
+
+                          const memberBio = matchedUser?.bio || (isCreator ? 'Squad Admin & Creator' : 'Squad Member');
+                          const memberId = matchedUser?.id || (isCurrent ? user.id : `usr_${cleanHandle}`);
+                          const memberPresence = presenceMap[cleanHandle];
+                          const isMemberOnline = isCurrent || memberPresence?.is_online;
+
+                          return (
+                            <button
+                              key={cleanHandle}
+                              onClick={() =>
+                                setViewingProfile({
+                                  id: memberId,
+                                  name: displayName,
+                                  username: matchedUser?.username || (isCurrent ? user.username : cleanHandle),
+                                  avatar: memberAvatar,
+                                  bio: memberBio,
+                                  status: matchedUser?.status || 'online',
+                                })
+                              }
+                              className="w-full flex items-center gap-2.5 p-2 rounded-xl bg-[#141824] border border-[#232B3E] hover:border-white/20 transition-all text-left group"
+                            >
+                              <div className="relative shrink-0">
+                                <div className="w-8 h-8 rounded-full overflow-hidden bg-[#1D2436] p-0.5 border border-white/5">
+                                  <img
+                                    src={memberAvatar || DEFAULT_AVATAR_DATA_URL}
+                                    alt={displayName}
+                                    onError={(e) => {
+                                      e.currentTarget.onerror = null;
+                                      e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
+                                    }}
+                                    className="w-full h-full object-cover rounded-full"
+                                  />
+                                </div>
+                                {isMemberOnline ? (
+                                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-[#141824] animate-pulse" />
+                                ) : (
+                                  <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-slate-500 border border-[#141824]" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-xs font-semibold text-white truncate">
+                                    {displayName} {isCurrent && '(You)'}
+                                  </p>
+                                </div>
+                                <p className="text-[10px] text-[#7A8396] flex items-center gap-1 truncate">
+                                  {displayUsername ? (
+                                    <span className="text-[#818CF8] font-mono mr-0.5">{displayUsername}</span>
+                                  ) : null}
+                                  <span>•</span>
+                                  {isMemberOnline ? (
+                                    <span className="text-emerald-400 font-medium">Online</span>
+                                  ) : (
+                                    <span>{memberPresence?.last_seen_text || 'Offline'}</span>
+                                  )}
+                                  <span>•</span>
+                                  <span>{isCreator ? 'Admin 👑' : 'Member'}</span>
+                                </p>
+                              </div>
+                              {isCreator && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#F59E0B]/20 text-[#F59E0B]">
+                                  Admin
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
-                      {isCreator && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#F59E0B]/20 text-[#F59E0B]">
-                          Admin
-                        </span>
-                      )}
-                    </button>
+                    </>
                   );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Shared Assets */}
-          <div>
-            <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[#7A8396] mb-2">
-              <span>Shared Files</span>
-              <span>{sharedMedia.length}</span>
-            </div>
-
-            <div className="flex gap-1 bg-[#131722] p-1 rounded-xl mb-3 border border-[#232B3E]">
-              <button
-                onClick={() => setInfoMediaTab('media')}
-                className={`flex-1 py-1 rounded-lg text-xs font-semibold transition-all ${
-                  infoMediaTab === 'media' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
-                }`}
-              >
-                Media & GIFs
-              </button>
-              <button
-                onClick={() => setInfoMediaTab('links')}
-                className={`flex-1 py-1 rounded-lg text-xs font-semibold transition-all ${
-                  infoMediaTab === 'links' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
-                }`}
-              >
-                Links
-              </button>
-            </div>
-
-            {infoMediaTab === 'media' && (
-              <div className="grid grid-cols-3 gap-1.5">
-                {sharedMedia.length > 0 ? (
-                  sharedMedia.map((m) => (
-                    <div
-                      key={m.id}
-                      className="aspect-square rounded-xl overflow-hidden bg-black/40 border border-white/5 relative group cursor-pointer"
-                      onClick={() => triggerToast(`Opened media by ${m.sender_name}`)}
-                    >
-                      <img
-                        src={m.media_url}
-                        alt="Shared"
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                      />
-                      <span className="absolute bottom-1 right-1 text-[8px] font-bold bg-black/80 px-1 rounded uppercase text-white">
-                        {m.msg_type}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <p className="col-span-3 text-xs text-[#7A8396] text-center py-4">No media shared yet</p>
-                )}
+                })()}
               </div>
             )}
 
-            {infoMediaTab === 'links' && (
-              <div className="space-y-1.5">
-                {sharedLinks.length > 0 ? (
-                  sharedLinks.map((l, idx) => (
-                    <a
-                      key={idx}
-                      href={l.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 p-2 rounded-xl bg-[#141824] border border-[#232B3E] hover:border-[#6366F1] transition-all text-xs"
-                    >
-                      <LinkIcon className="w-3.5 h-3.5 text-[#818CF8] shrink-0" />
-                      <div className="flex-1 truncate">
-                        <p className="text-white font-medium truncate">{l.url}</p>
-                        <p className="text-[10px] text-[#7A8396]">Shared by {l.sender}</p>
+            {/* Shared Assets */}
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-[#7A8396] mb-2">
+                <span>Shared Files</span>
+                <span>{sharedMedia.length}</span>
+              </div>
+
+              <div className="flex gap-1 bg-[#131722] p-1 rounded-xl mb-3 border border-[#232B3E]">
+                <button
+                  onClick={() => setInfoMediaTab('media')}
+                  className={`flex-1 py-1 rounded-lg text-xs font-semibold transition-all ${infoMediaTab === 'media' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
+                    }`}
+                >
+                  Media & GIFs
+                </button>
+                <button
+                  onClick={() => setInfoMediaTab('links')}
+                  className={`flex-1 py-1 rounded-lg text-xs font-semibold transition-all ${infoMediaTab === 'links' ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
+                    }`}
+                >
+                  Links
+                </button>
+              </div>
+
+              {infoMediaTab === 'media' && (
+                <div className="grid grid-cols-3 gap-1.5">
+                  {sharedMedia.length > 0 ? (
+                    sharedMedia.map((m) => (
+                      <div
+                        key={m.id}
+                        className="aspect-square rounded-xl overflow-hidden bg-black/40 border border-white/5 relative group cursor-pointer"
+                        onClick={() => triggerToast(`Opened media by ${m.sender_name}`)}
+                      >
+                        <img
+                          src={m.media_url}
+                          alt="Shared"
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                        />
+                        <span className="absolute bottom-1 right-1 text-[8px] font-bold bg-black/80 px-1 rounded uppercase text-white">
+                          {m.msg_type}
+                        </span>
                       </div>
-                    </a>
-                  ))
-                ) : (
-                  <p className="text-xs text-[#7A8396] text-center py-4">No links shared yet</p>
-                )}
-              </div>
-            )}
+                    ))
+                  ) : (
+                    <p className="col-span-3 text-xs text-[#7A8396] text-center py-4">No media shared yet</p>
+                  )}
+                </div>
+              )}
+
+              {infoMediaTab === 'links' && (
+                <div className="space-y-1.5">
+                  {sharedLinks.length > 0 ? (
+                    sharedLinks.map((l, idx) => (
+                      <a
+                        key={idx}
+                        href={l.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 p-2 rounded-xl bg-[#141824] border border-[#232B3E] hover:border-[#6366F1] transition-all text-xs"
+                      >
+                        <LinkIcon className="w-3.5 h-3.5 text-[#818CF8] shrink-0" />
+                        <div className="flex-1 truncate">
+                          <p className="text-white font-medium truncate">{l.url}</p>
+                          <p className="text-[10px] text-[#7A8396]">Shared by {l.sender}</p>
+                        </div>
+                      </a>
+                    ))
+                  ) : (
+                    <p className="text-xs text-[#7A8396] text-center py-4">No links shared yet</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </aside>
+        </aside>
       )}
 
       {/* NEW CHAT MODAL (WhatsApp Style Contact Picker) */}

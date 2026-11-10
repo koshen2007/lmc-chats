@@ -46,6 +46,22 @@ function getStoragePath(): string {
   }
 }
 
+function sanitizeMembersList(members: string[]): string[] {
+  const FAKE_MEMBERS = new Set(['alex', 'sam', 'kira', 'harshita', 'pryanshu', 'priyanshu']);
+  const seen = new Set<string>();
+  const cleanList: string[] = [];
+  for (const m of members || []) {
+    if (!m) continue;
+    const clean = m.trim().replace(/^@/, '').toLowerCase();
+    if (!clean || FAKE_MEMBERS.has(clean)) continue;
+    if (!seen.has(clean)) {
+      seen.add(clean);
+      cleanList.push(`@${clean}`);
+    }
+  }
+  return cleanList;
+}
+
 function getGroups(): ApiGroup[] {
   if (globalThis.__LMC_GROUPS_CACHE__) {
     return globalThis.__LMC_GROUPS_CACHE__;
@@ -59,17 +75,22 @@ function getGroups(): ApiGroup[] {
       const data = fs.readFileSync(filePath, 'utf-8');
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed)) {
-        // Filter out legacy fake squad groups and gang wars
-        groups = parsed.filter(
-          (g) =>
-            g &&
-            g.id !== 'lmc-squad' &&
-            g.id !== 'lmc-main-lounge' &&
-            g.name !== 'LMC Squad' &&
-            g.name !== 'LMC Main Lounge' &&
-            !g.name.toLowerCase().includes('gang war') &&
-            !g.id.toLowerCase().includes('gang')
-        );
+        // Filter out legacy fake squad groups and gang wars, and sanitize members
+        groups = parsed
+          .filter(
+            (g) =>
+              g &&
+              g.id !== 'lmc-squad' &&
+              g.id !== 'lmc-main-lounge' &&
+              g.name !== 'LMC Squad' &&
+              g.name !== 'LMC Main Lounge' &&
+              !g.name.toLowerCase().includes('gang war') &&
+              !g.id.toLowerCase().includes('gang')
+          )
+          .map((g) => ({
+            ...g,
+            members: sanitizeMembersList(g.members || []),
+          }));
       }
     } catch (e) {
       console.error('Error loading groups file:', e);
@@ -81,10 +102,14 @@ function getGroups(): ApiGroup[] {
 }
 
 function saveGroups(groups: ApiGroup[]): void {
-  globalThis.__LMC_GROUPS_CACHE__ = groups;
+  const sanitized = groups.map((g) => ({
+    ...g,
+    members: sanitizeMembersList(g.members || []),
+  }));
+  globalThis.__LMC_GROUPS_CACHE__ = sanitized;
   try {
     const filePath = getStoragePath();
-    fs.writeFileSync(filePath, JSON.stringify(groups, null, 2), 'utf-8');
+    fs.writeFileSync(filePath, JSON.stringify(sanitized, null, 2), 'utf-8');
   } catch (e) {
     console.error('Error saving groups:', e);
   }
