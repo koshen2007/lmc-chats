@@ -87,6 +87,7 @@ import {
   BubbleThemeId,
   getWallpaperStyle,
   getBubbleClass,
+  getBubbleStyle,
 } from '@/lib/theme';
 import {
   playWebAudioChime,
@@ -551,7 +552,7 @@ export default function Home() {
             id: parsed.id || `usr_${rawUsername}`,
             username: rawUsername,
             name: parsed.name || rawUsername,
-            avatar: parsed.avatar || DEFAULT_AVATAR_DATA_URL,
+            avatar: (parsed.avatar && !parsed.avatar.includes('dicebear.com')) ? parsed.avatar : DEFAULT_AVATAR_DATA_URL,
             bio: parsed.bio || '',
             status: parsed.status || 'online',
             provider: parsed.provider || 'custom',
@@ -1992,6 +1993,28 @@ export default function Home() {
         avatar: dataUrl,
       };
       saveUserSession(updatedUser);
+
+      // Also sync to registeredUsers directory and broadcast
+      const rawUsername = (updatedUser.username || updatedUser.name || '').toLowerCase();
+      const updatedDirectory = registeredUsers.filter(
+        (u) => u.id !== updatedUser.id && (u.username || '').toLowerCase() !== rawUsername
+      );
+      updatedDirectory.push(updatedUser);
+      setRegisteredUsers(updatedDirectory);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('lmc_registered_users', JSON.stringify(updatedDirectory));
+        try {
+          const bc = new BroadcastChannel('lmc_local_sync');
+          bc.postMessage({ type: 'user_registered', payload: updatedUser });
+          bc.close();
+        } catch { }
+      }
+
+      fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedUser),
+      }).catch(() => { });
     }
     setShowAvatarStudio(false);
     triggerToast('Bitmoji Avatar saved & applied!');
@@ -3740,7 +3763,7 @@ export default function Home() {
               <div className="w-24 h-24 rounded-full overflow-hidden bg-[#161C28] p-1 border-2 border-indigo-500/50 shadow-xl">
                 <img
                   src={viewingProfile.avatar || DEFAULT_AVATAR_DATA_URL}
-                  alt={viewingProfile.name}
+                  alt=""
                   onError={(e) => {
                     e.currentTarget.onerror = null;
                     e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
@@ -4373,7 +4396,7 @@ export default function Home() {
               <div className="w-8 h-8 rounded-full overflow-hidden bg-[#161C28] shrink-0 border border-white/10">
                 <img
                   src={user.avatar || DEFAULT_AVATAR_DATA_URL}
-                  alt="avatar"
+                  alt=""
                   onError={(e) => {
                     e.currentTarget.onerror = null;
                     e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
@@ -5089,7 +5112,11 @@ export default function Home() {
               </div>
 
               {displayedMessages.map((msg) => {
-                const isMe = Boolean(user.name && msg.sender_name.toLowerCase() === user.name.toLowerCase());
+                const isMe = Boolean(
+                  (user.name && msg.sender_name && msg.sender_name.toLowerCase() === user.name.toLowerCase()) ||
+                  (user.username && msg.sender_username && msg.sender_username.toLowerCase() === user.username.toLowerCase()) ||
+                  (user.id && (msg.user_id === user.id || msg.sender_id === user.id))
+                );
                 return (
                   <div
                     key={msg.id}
@@ -5119,7 +5146,7 @@ export default function Home() {
                       >
                         <img
                           src={msg.sender_avatar || DEFAULT_AVATAR_DATA_URL}
-                          alt={msg.sender_name}
+                          alt=""
                           onError={(e) => {
                             e.currentTarget.onerror = null;
                             e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
@@ -5192,6 +5219,7 @@ export default function Home() {
                       {/* Message Content */}
                       {msg.msg_type === 'text' && (
                         <div
+                          style={getBubbleStyle(bubbleTheme, isMe)}
                           className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed break-words shadow-md select-text ${msg.burn_after_read
                               ? isMe
                                 ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white border border-amber-400/40 shadow-amber-500/20 rounded-tr-sm'
@@ -6193,10 +6221,10 @@ export default function Home() {
                             ? `@${user.username}`
                             : `@${cleanHandle}`;
 
+                          const isDicebear = (url?: string) => Boolean(url && url.includes('dicebear.com'));
+                          const cleanUserAvatar = isDicebear(user.avatar) ? DEFAULT_AVATAR_DATA_URL : (user.avatar || DEFAULT_AVATAR_DATA_URL);
                           const fallbackAvatar = svgToDataUrl(renderAvatarSvgString(PRESET_AVATARS[idx % PRESET_AVATARS.length].config));
-                          const memberAvatar = isCurrent && user.avatar
-                            ? user.avatar
-                            : matchedUser?.avatar || fallbackAvatar;
+                          const memberAvatar = isCurrent ? cleanUserAvatar : (isDicebear(matchedUser?.avatar) ? fallbackAvatar : (matchedUser?.avatar || fallbackAvatar));
 
                           const memberBio = matchedUser?.bio || (isCreator ? 'Squad Admin & Creator' : 'Squad Member');
                           const memberId = matchedUser?.id || (isCurrent ? user.id : `usr_${cleanHandle}`);
@@ -6222,7 +6250,7 @@ export default function Home() {
                                 <div className="w-8 h-8 rounded-full overflow-hidden bg-[#1D2436] p-0.5 border border-white/5">
                                   <img
                                     src={memberAvatar || DEFAULT_AVATAR_DATA_URL}
-                                    alt={displayName}
+                                    alt=""
                                     onError={(e) => {
                                       e.currentTarget.onerror = null;
                                       e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;

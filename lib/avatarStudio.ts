@@ -295,29 +295,32 @@ export function generateRandomAvatar(): AvatarConfig {
  * Builds pure standalone SVG markup for an AvatarConfig
  * ViewBox: 0 0 240 240
  */
-export function renderAvatarSvgString(config: AvatarConfig): string {
-  const {
-    skinColor,
-    headShape,
-    hairStyle,
-    hairColor,
-    eyeStyle,
-    eyeColor,
-    eyebrows,
-    nose,
-    mouth,
-    lipColor,
-    beard,
-    clothing,
-    clothingColor,
-    glasses,
-    glassesColor,
-    accessory,
-    backdrop,
-  } = config;
+export function renderAvatarSvgString(rawConfig?: Partial<AvatarConfig> | null): string {
+  const config: AvatarConfig = {
+    ...DEFAULT_AVATAR,
+    ...(rawConfig || {}),
+  };
+
+  const skinColor = config.skinColor || DEFAULT_AVATAR.skinColor;
+  const headShape = config.headShape || DEFAULT_AVATAR.headShape;
+  const hairStyle = config.hairStyle || DEFAULT_AVATAR.hairStyle;
+  const hairColor = config.hairColor || DEFAULT_AVATAR.hairColor;
+  const eyeStyle = config.eyeStyle || DEFAULT_AVATAR.eyeStyle;
+  const eyeColor = config.eyeColor || DEFAULT_AVATAR.eyeColor;
+  const eyebrows = config.eyebrows || DEFAULT_AVATAR.eyebrows;
+  const nose = config.nose || DEFAULT_AVATAR.nose;
+  const mouth = config.mouth || DEFAULT_AVATAR.mouth;
+  const lipColor = config.lipColor || DEFAULT_AVATAR.lipColor;
+  const beard = config.beard || DEFAULT_AVATAR.beard;
+  const clothing = config.clothing || DEFAULT_AVATAR.clothing;
+  const clothingColor = config.clothingColor || DEFAULT_AVATAR.clothingColor;
+  const glasses = config.glasses || DEFAULT_AVATAR.glasses;
+  const glassesColor = config.glassesColor || DEFAULT_AVATAR.glassesColor;
+  const accessory = config.accessory || DEFAULT_AVATAR.accessory;
+  const backdrop = config.backdrop || DEFAULT_AVATAR.backdrop;
 
   // Skin tone shadow
-  const matchedSkin = SKIN_TONES.find((s) => s.color.toLowerCase() === skinColor.toLowerCase());
+  const matchedSkin = SKIN_TONES.find((s) => s.color.toLowerCase() === (skinColor || '').toLowerCase());
   const skinShadow = matchedSkin ? matchedSkin.shadow : '#C68359';
 
   // Hair Back (for long hairstyles)
@@ -747,8 +750,8 @@ export function renderAvatarSvgString(config: AvatarConfig): string {
       <circle cx="120" cy="120" r="116" />
     </clipPath>
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="${config.backdrop.includes('#') ? config.backdrop.split('#')[1]?.split(' ')[0] ? '#' + config.backdrop.split('#')[1].split(' ')[0] : '#1E1B4B' : '#1E1B4B'}" />
-      <stop offset="100%" stop-color="${config.backdrop.includes('#') ? config.backdrop.split('#')[2]?.split(' ')[0] ? '#' + config.backdrop.split('#')[2].split(' ')[0] : '#312E81' : '#312E81'}" />
+      <stop offset="0%" stop-color="${backdrop && backdrop.includes('#') ? backdrop.split('#')[1]?.split(' ')[0] ? '#' + backdrop.split('#')[1].split(' ')[0] : '#1E1B4B' : '#1E1B4B'}" />
+      <stop offset="100%" stop-color="${backdrop && backdrop.includes('#') ? backdrop.split('#')[2]?.split(' ')[0] ? '#' + backdrop.split('#')[2].split(' ')[0] : '#312E81' : '#312E81'}" />
     </linearGradient>
   </defs>
 
@@ -806,9 +809,24 @@ export function renderAvatarSvgString(config: AvatarConfig): string {
 }
 
 /**
- * Converts raw SVG markup string into a browser data URL
+ * Converts raw SVG markup string into a browser data URL (Base64)
  */
 export function svgToDataUrl(svgString: string): string {
+  try {
+    if (typeof Buffer !== 'undefined') {
+      return `data:image/svg+xml;base64,${Buffer.from(svgString, 'utf-8').toString('base64')}`;
+    }
+    if (typeof window !== 'undefined' && typeof window.btoa === 'function') {
+      const base64 = window.btoa(
+        encodeURIComponent(svgString).replace(/%([0-9A-F]{2})/g, (_, p1) =>
+          String.fromCharCode(parseInt(p1, 16))
+        )
+      );
+      return `data:image/svg+xml;base64,${base64}`;
+    }
+  } catch (err) {
+    console.error('Base64 encoding fallback:', err);
+  }
   return `data:image/svg+xml;utf8,${encodeURIComponent(svgString)}`;
 }
 

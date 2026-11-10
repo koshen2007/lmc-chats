@@ -158,3 +158,55 @@ export function getBubbleClass(bubbleThemeId: BubbleThemeId): string {
   return found ? found.className : BUBBLE_THEMES[0].className;
 }
 
+export function getBubbleStyle(
+  bubbleThemeId: BubbleThemeId = 'emerald',
+  isMe: boolean = true
+): React.CSSProperties {
+  if (!isMe) {
+    return {
+      backgroundColor: '#141824',
+      borderColor: '#232B3E',
+      color: '#E9ECF4',
+    };
+  }
+
+  switch (bubbleThemeId) {
+    case 'emerald':
+      return {
+        background: 'linear-gradient(135deg, #005C4B 0%, #007A64 100%)',
+        color: '#E9F5EE',
+      };
+    case 'indigo':
+      return {
+        background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
+        color: '#FFFFFF',
+      };
+    case 'sunset':
+      return {
+        background: 'linear-gradient(135deg, #E11D48 0%, #BE123C 100%)',
+        color: '#FFFFFF',
+      };
+    case 'cyber':
+      return {
+        background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
+        color: '#FFFFFF',
+      };
+    case 'violet':
+      return {
+        background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
+        color: '#FFFFFF',
+      };
+    case 'graphite':
+      return {
+        background: 'linear-gradient(135deg, #334155 0%, #1E293B 100%)',
+        color: '#F1F5F9',
+      };
+    default:
+      return {
+        background: 'linear-gradient(135deg, #005C4B 0%, #007A64 100%)',
+        color: '#E9F5EE',
+      };
+  }
+}
+
+

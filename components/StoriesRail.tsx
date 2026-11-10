@@ -3,6 +3,7 @@
 import React from 'react';
 import { Plus, Sparkles } from 'lucide-react';
 import { UserStory } from '@/types/story';
+import { DEFAULT_AVATAR_DATA_URL } from '@/lib/avatarStudio';
 
 interface StoriesRailProps {
   currentUser: {
@@ -59,8 +60,12 @@ export default function StoriesRail({
             >
               <div className="w-full h-full rounded-full overflow-hidden bg-[#161C28] border-2 border-[#0A0D14]">
                 <img
-                  src={currentUser.avatar || 'https://api.dicebear.com/7.x/notionists/svg?seed=me'}
-                  alt={currentUser.name || 'Me'}
+                  src={currentUser.avatar || DEFAULT_AVATAR_DATA_URL}
+                  alt=""
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
+                  }}
                   className="w-full h-full object-cover rounded-full"
                 />
               </div>
@@ -103,8 +108,12 @@ export default function StoriesRail({
                 >
                   <div className="w-full h-full rounded-full overflow-hidden bg-[#161C28] border-2 border-[#0A0D14]">
                     <img
-                      src={story.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${story.username}`}
-                      alt={story.name}
+                      src={story.avatar || DEFAULT_AVATAR_DATA_URL}
+                      alt=""
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
+                      }}
                       className="w-full h-full object-cover rounded-full"
                     />
                   </div>

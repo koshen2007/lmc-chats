@@ -25,6 +25,7 @@ import { Group, Message } from '@/lib/supabase';
 import { UserProfile } from '@/lib/users';
 import { UserStory } from '@/types/story';
 import StoriesRail from '@/components/StoriesRail';
+import { DEFAULT_AVATAR_DATA_URL } from '@/lib/avatarStudio';
 
 export interface ChatConversationItem {
   id: string; // group.id or `dm_user1_user2`
@@ -338,11 +339,11 @@ export default function WhatsAppChatsList({
           >
             <div className="w-10 h-10 rounded-full overflow-hidden bg-[#161C28] border-2 border-white/10 group-hover:border-indigo-500 transition-colors">
               <img
-                src={currentUser.avatar || 'https://api.dicebear.com/7.x/notionists/svg?seed=user'}
-                alt={currentUser.name || 'User'}
+                src={currentUser.avatar || DEFAULT_AVATAR_DATA_URL}
+                alt=""
                 onError={(e) => {
                   e.currentTarget.onerror = null;
-                  e.currentTarget.src = '/logo.png';
+                  e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
                 }}
                 className="w-full h-full object-cover rounded-full"
               />
@@ -603,10 +604,10 @@ export default function WhatsAppChatsList({
                   <div className="w-12 h-12 rounded-full overflow-hidden bg-[#161C28] border border-white/10 shadow-sm">
                     <img
                       src={chat.avatar || '/logo.png'}
-                      alt={chat.name}
+                      alt=""
                       onError={(e) => {
                         e.currentTarget.onerror = null;
-                        e.currentTarget.src = '/logo.png';
+                        e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
                       }}
                       className="w-full h-full object-cover rounded-full"
                     />

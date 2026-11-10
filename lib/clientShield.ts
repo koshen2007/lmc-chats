@@ -69,9 +69,6 @@ export function initClientShield(): void {
 
   // 1. PROTOTYPE LOCKDOWN & FREEZING (Prevents malicious monkey-patching in console)
   try {
-    if (window.fetch) {
-      Object.freeze(window.fetch);
-    }
     if (typeof WebSocket !== 'undefined' && WebSocket.prototype) {
       Object.freeze(WebSocket.prototype);
     }

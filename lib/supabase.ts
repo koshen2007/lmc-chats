@@ -44,6 +44,8 @@ export interface Message {
   sender_username?: string;
   sender_avatar: string;
   sender_bio?: string;
+  user_id?: string;
+  sender_id?: string;
   content: string;
   msg_type:
     | 'text'

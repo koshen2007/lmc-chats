@@ -4,15 +4,14 @@ const cspHeader = `
   default-src 'self';
   script-src 'self' 'unsafe-eval' 'unsafe-inline' https://apis.google.com https://accounts.google.com https://*.supabase.co https://va.vercel-scripts.com;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-  img-src 'self' data: blob: https://*.googleusercontent.com https://api.dicebear.com https://media.tenor.com https://*.giphy.com https://*.supabase.co;
+  img-src 'self' data: blob: https://*.googleusercontent.com https://api.dicebear.com https://*.dicebear.com https://media.tenor.com https://*.giphy.com https://*.supabase.co;
   media-src 'self' data: blob: https://*.supabase.co https://media.tenor.com https://*.giphy.com;
-  connect-src 'self' https://*.supabase.co wss://*.supabase.co https://accounts.google.com https://apis.google.com;
+  connect-src 'self' https://*.supabase.co wss://*.supabase.co https://accounts.google.com https://apis.google.com https://api.giphy.com;
   font-src 'self' https://fonts.gstatic.com data:;
   frame-src 'self' https://accounts.google.com;
   frame-ancestors 'none';
   object-src 'none';
   base-uri 'self';
-  require-trusted-types-for 'script';
 `.replace(/\s{2,}/g, ' ').trim();
 
 const nextConfig = {

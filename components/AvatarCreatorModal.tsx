@@ -41,7 +41,7 @@ export default function AvatarCreatorModal({
   onSave,
   onClose,
 }: AvatarCreatorModalProps) {
-  const [config, setConfig] = useState<AvatarConfig>(initialConfig || DEFAULT_AVATAR);
+  const [config, setConfig] = useState<AvatarConfig>({ ...DEFAULT_AVATAR, ...(initialConfig || {}) });
   const [activeTab, setActiveTab] = useState<TabType>('skin');
 
   // Live SVG string & Data URL
@@ -106,10 +106,11 @@ export default function AvatarCreatorModal({
               <div className="absolute -inset-2 bg-gradient-to-r from-indigo-500/20 to-purple-500/20 rounded-full blur-md opacity-75 group-hover:opacity-100 transition-opacity" />
 
               {/* 160x160 Live Circular Avatar */}
-              <div className="relative w-36 h-36 sm:w-40 sm:h-40 rounded-full overflow-hidden shadow-2xl ring-2 ring-white/15 bg-transparent">
-                <div
-                  className="w-full h-full"
-                  dangerouslySetInnerHTML={{ __html: svgMarkup }}
+              <div className="relative w-36 h-36 sm:w-40 sm:h-40 rounded-full overflow-hidden shadow-2xl ring-2 ring-white/15 bg-transparent flex items-center justify-center">
+                <img
+                  src={dataUrl}
+                  alt=""
+                  className="w-full h-full object-contain"
                 />
               </div>
             </div>
