@@ -200,29 +200,35 @@ export async function POST(request: Request) {
     const currentUsers = loadUsers();
     const userId = body.id || `usr_${rawUsername}`;
 
-    // 2. Anti-Hijacking Check: If username already exists under a DIFFERENT user ID, reject update
+    // 2. Permanent Username Enforcement & Anti-Hijacking Check
     const existingIndex = currentUsers.findIndex(
       (u) => u.username.toLowerCase() === rawUsername || u.id === userId
     );
 
+    let permanentUsername = rawUsername;
+
     if (existingIndex >= 0) {
       const existingUser = currentUsers[existingIndex];
-      // Only the same user ID is authorized to update their profile
+      // Anti-hijacking: cannot claim someone else's username
       if (existingUser.id !== userId && existingUser.username.toLowerCase() === rawUsername) {
         return NextResponse.json(
           { success: false, error: `@${rawUsername} is already registered by another account` },
           { status: 409 }
         );
       }
+      // Permanent Username Rule: If account already has a username, keep it permanently locked
+      if (existingUser.username) {
+        permanentUsername = existingUser.username.toLowerCase();
+      }
     }
 
     const newUser: ApiUserProfile = {
       id: userId,
-      username: rawUsername,
+      username: permanentUsername,
       name: cleanName,
       avatar:
         body.avatar ||
-        `https://api.dicebear.com/7.x/notionists/svg?seed=${rawUsername}&backgroundColor=b6e3f4,c0aede,d1d4f9`,
+        `https://api.dicebear.com/7.x/notionists/svg?seed=${permanentUsername}&backgroundColor=b6e3f4,c0aede,d1d4f9`,
       bio: body.bio ? sanitizeInputText(body.bio, 160) : 'LMC Chats member ⚡',
       status: body.status || 'online',
       role: body.role || 'user',
@@ -237,6 +243,7 @@ export async function POST(request: Request) {
       updatedUsers[existingIndex] = {
         ...updatedUsers[existingIndex],
         ...newUser,
+        username: permanentUsername, // Permanently preserve original username
       };
     } else {
       updatedUsers = [newUser, ...currentUsers];

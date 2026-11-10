@@ -20,6 +20,8 @@ import {
   Key,
   CheckCheck,
   Image as ImageIcon,
+  AtSign,
+  Lock,
 } from 'lucide-react';
 export interface CurrentUser {
   id: string;
@@ -314,12 +316,19 @@ export default function SettingsModal({
                 {/* Username & ID (Read-only / Locked) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-semibold text-[#8892B0] block mb-1.5">
-                      Username
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-semibold text-[#8892B0] flex items-center gap-1">
+                        <AtSign className="w-3.5 h-3.5 text-[#818CF8]" />
+                        <span>Permanent Username</span>
+                      </label>
+                      <span className="text-[10px] text-amber-400 font-medium flex items-center gap-1">
+                        <Lock className="w-2.5 h-2.5" /> Locked
+                      </span>
+                    </div>
                     <div className="flex items-center px-3.5 py-2.5 rounded-xl bg-[#111622] border border-white/5 text-xs text-[#818CF8] font-mono select-all">
                       @{currentUser.username || 'user'}
                     </div>
+                    <p className="text-[10px] text-[#5A6376] mt-1">Username is unique and permanent.</p>
                   </div>
 
                   <div>

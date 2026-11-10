@@ -1824,28 +1824,31 @@ export default function Home() {
   const handleSaveProfile = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const trimmedName = profileNameInput.trim();
-    const rawUsername = profileUsernameInput.trim().toLowerCase().replace(/^@/, '');
+    // PERMANENT USERNAME RULE: If user already has a username, it CANNOT be changed!
+    const finalUsername = (user.username || profileUsernameInput).trim().toLowerCase().replace(/^@/, '');
 
     if (!trimmedName) {
       triggerToast('Please enter your display name');
       return;
     }
 
-    const usernameCheck = validateUsernameFormat(rawUsername);
-    if (!usernameCheck.valid) {
-      triggerToast(usernameCheck.error || 'Invalid username format');
-      return;
+    if (!user.username) {
+      const usernameCheck = validateUsernameFormat(finalUsername);
+      if (!usernameCheck.valid) {
+        triggerToast(usernameCheck.error || 'Invalid username format');
+        return;
+      }
+
+      if (!isUsernameAvailable(finalUsername, registeredUsers, user.id)) {
+        triggerToast(`@${finalUsername} is already taken! Please choose another.`);
+        return;
+      }
     }
 
-    if (!isUsernameAvailable(rawUsername, registeredUsers, user.id)) {
-      triggerToast(`@${rawUsername} is already taken! Please choose another.`);
-      return;
-    }
-
-    const userId = user.id || `usr_${rawUsername}_${Math.random().toString(36).substring(2, 7)}`;
+    const userId = user.id || `usr_${finalUsername}_${Math.random().toString(36).substring(2, 7)}`;
     const updatedUser: CurrentUser = {
       id: userId,
-      username: rawUsername,
+      username: finalUsername,
       name: trimmedName,
       avatar: profileAvatarSelected,
       bio: profileBioInput.trim(),
@@ -1856,7 +1859,7 @@ export default function Home() {
 
     // Update global registered users directory
     const updatedDirectory = registeredUsers.filter(
-      (u) => u.id !== userId && u.username.toLowerCase() !== rawUsername
+      (u) => u.id !== userId && u.username.toLowerCase() !== finalUsername
     );
     updatedDirectory.push(updatedUser);
     setRegisteredUsers(updatedDirectory);
@@ -1875,18 +1878,18 @@ export default function Home() {
     const updatedGroups = groups.map((g) => {
       const hasMember = (g.members || []).some(
         (m) =>
-          m.toLowerCase() === rawUsername ||
-          m.toLowerCase() === `@${rawUsername}` ||
+          m.toLowerCase() === finalUsername ||
+          m.toLowerCase() === `@${finalUsername}` ||
           m.toLowerCase() === trimmedName.toLowerCase()
       );
       if (!g.is_private && !hasMember) {
-        return { ...g, members: [...(g.members || []), `@${rawUsername}`] };
+        return { ...g, members: [...(g.members || []), `@${finalUsername}`] };
       }
       return g;
     });
     savePersistedGroups(updatedGroups);
 
-    triggerToast(`Profile saved: @${rawUsername} (${trimmedName})!`);
+    triggerToast(`Profile saved: @${finalUsername} (${trimmedName})!`);
     setTimeout(() => {
       textareaRef.current?.focus();
     }, 150);
@@ -2312,7 +2315,7 @@ export default function Home() {
       media_url: string = ''
     ) => {
       if (!user.name) {
-        setShowProfileModal(true);
+        setShowSettingsModal(true);
         return;
       }
       if (!isMemberOfActiveGroup) {
@@ -3923,8 +3926,8 @@ export default function Home() {
         </div>
       )}
 
-      {/* EDIT PROFILE / LOGIN MODAL */}
-      {showProfileModal && (
+      {/* EDIT PROFILE / LOGIN MODAL (Deprecated - replaced by permanent SettingsModal) */}
+      {false && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <form
             onSubmit={handleSaveProfile}
@@ -4539,10 +4542,7 @@ export default function Home() {
             <button
               onClick={() => {
                 setShowStatusMenu(false);
-                setProfileNameInput(user.name);
-                setProfileBioInput(user.bio || '');
-                setProfileAvatarSelected(user.avatar || DEFAULT_AVATAR_DATA_URL);
-                setShowProfileModal(true);
+                setShowSettingsModal(true);
               }}
               className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-[#818CF8] font-medium transition-colors"
             >
