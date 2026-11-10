@@ -70,7 +70,7 @@ export default function SlashCommandMenu({
   return (
     <div
       ref={menuRef}
-      className="absolute bottom-full left-0 right-0 mb-3 z-50 max-h-72 overflow-y-auto rounded-2xl bg-[#0f172a]/95 backdrop-blur-xl border border-slate-700/70 shadow-2xl shadow-indigo-950/50 p-2 scrollbar-thin scrollbar-thumb-slate-700"
+      className="absolute bottom-full left-0 right-0 mb-2 sm:mb-3 z-50 max-h-52 sm:max-h-72 overflow-y-auto scroll rounded-2xl bg-[#0f172a]/95 backdrop-blur-xl border border-slate-700/70 shadow-2xl shadow-indigo-950/50 p-2"
     >
       <div className="flex items-center justify-between px-3 py-1.5 mb-1 border-b border-slate-800 text-[11px] font-medium text-slate-400">
         <div className="flex items-center gap-1.5 text-indigo-400">

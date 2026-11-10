@@ -58,7 +58,7 @@ export default function PWAInstallModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-msg-in">
-      <div className="relative w-full max-w-md bg-[#0F1420] border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+      <div className="relative w-full max-w-md bg-[#0F1420] border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Top Header with Glow */}
         <div className="relative p-6 bg-gradient-to-br from-[#182138] via-[#101626] to-[#0A0D15] border-b border-white/10 flex flex-col items-center text-center">
           <button
@@ -92,7 +92,7 @@ export default function PWAInstallModal({
         </div>
 
         {/* Value Prop Highlights */}
-        <div className="p-5 space-y-3 bg-[#0B0F19]">
+        <div className="p-5 space-y-3 bg-[#0B0F19] overflow-y-auto scroll flex-1 min-h-0">
           <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/5 border border-white/5">
             <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-400 grid place-items-center shrink-0">
               <Zap className="w-4 h-4" />

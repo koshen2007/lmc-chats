@@ -6060,6 +6060,14 @@ export default function Home() {
         )}
       </main>
 
+      {/* Mobile Backdrop for Group Details Drawer */}
+      {infoOpen && (
+        <div
+          onClick={() => setInfoOpen(false)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-35 md:hidden"
+        />
+      )}
+
       {/* RIGHT SIDEBAR (Instagram-style Group Details & Members) */}
       {activeGroup && (
         <aside

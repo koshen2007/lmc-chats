@@ -426,7 +426,7 @@ export default function WhatsAppChatsList({
         </div>
 
         {/* WhatsApp-Style Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
           <button
             type="button"
             onClick={() => setFilterTab('all')}

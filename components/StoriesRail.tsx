@@ -42,7 +42,7 @@ export default function StoriesRail({
 
   return (
     <div className="w-full px-3 py-2.5 border-b border-[#1A202E] bg-[#0A0D14]/70 backdrop-blur select-none">
-      <div className="flex items-center gap-3 overflow-x-auto scrollbar-none py-1">
+      <div className="flex items-center gap-3 overflow-x-auto no-scrollbar py-1">
         {/* Current User Story Item */}
         <div className="flex flex-col items-center gap-1 shrink-0">
           <button

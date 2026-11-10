@@ -78,10 +78,10 @@ export default function CreateStoryModal({
   const EMOJI_LIST = ['🔥', '✨', '❤️', '😂', '🚀', '⚡', '🎉', '💯', '🍕', '😎', '☕', '🌟'];
 
   return (
-    <div className="fixed inset-0 z-[220] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-msg-in">
-      <div className="w-full max-w-md bg-[#111520] border border-[#232B3E] rounded-3xl overflow-hidden shadow-2xl flex flex-col relative">
+    <div className="fixed inset-0 z-[220] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-msg-in">
+      <div className="w-full max-w-md bg-[#111520] border border-[#232B3E] rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] relative">
         {/* Modal Header */}
-        <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+        <div className="px-5 py-3.5 border-b border-white/10 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-pink-400" />
             <h3 className="text-sm font-bold text-white tracking-wide">Add Status / Story</h3>
@@ -96,11 +96,11 @@ export default function CreateStoryModal({
         </div>
 
         {/* Tab Selector: Text vs Photo */}
-        <div className="flex p-2 bg-[#0B0E17] border-b border-white/10 gap-2">
+        <div className="flex p-2 bg-[#0B0E17] border-b border-white/10 gap-2 shrink-0">
           <button
             type="button"
             onClick={() => setStoryType('text')}
-            className={`flex-1 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+            className={`flex-1 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
               storyType === 'text'
                 ? 'bg-indigo-600 text-white shadow-md'
                 : 'text-[#7A8396] hover:text-white hover:bg-white/5'
@@ -112,7 +112,7 @@ export default function CreateStoryModal({
           <button
             type="button"
             onClick={() => setStoryType('image')}
-            className={`flex-1 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+            className={`flex-1 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
               storyType === 'image'
                 ? 'bg-pink-600 text-white shadow-md'
                 : 'text-[#7A8396] hover:text-white hover:bg-white/5'
@@ -123,40 +123,40 @@ export default function CreateStoryModal({
           </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
+        {/* Form Body - Scrollable so it never overflows viewport */}
+        <form onSubmit={handleSubmit} className="p-4 sm:p-5 flex flex-col gap-3.5 overflow-y-auto scroll flex-1 min-h-0">
           {storyType === 'text' ? (
             <>
-              {/* Text Preview Card */}
+              {/* Text Preview Card - Compact & responsive */}
               <div
-                className={`w-full aspect-[4/3] rounded-2xl bg-gradient-to-tr ${selectedGradient} p-6 flex flex-col items-center justify-center text-center shadow-inner relative transition-all duration-300`}
+                className={`w-full h-36 sm:h-44 rounded-2xl bg-gradient-to-tr ${selectedGradient} p-4 sm:p-5 flex flex-col items-center justify-center text-center shadow-inner relative transition-all duration-300 shrink-0`}
               >
                 <textarea
                   value={textContent}
                   onChange={(e) => setTextContent(e.target.value)}
                   placeholder="Type your status here..."
                   maxLength={250}
-                  rows={4}
-                  className="w-full bg-transparent text-white font-bold text-center text-lg sm:text-xl placeholder-white/60 resize-none outline-none drop-shadow"
+                  rows={3}
+                  className="w-full bg-transparent text-white font-bold text-center text-base sm:text-lg placeholder-white/60 resize-none outline-none drop-shadow"
                   autoFocus
                 />
-                <span className="absolute bottom-3 right-4 text-[10px] text-white/70 font-mono">
+                <span className="absolute bottom-2.5 right-3.5 text-[10px] text-white/70 font-mono">
                   {textContent.length}/250
                 </span>
               </div>
 
-              {/* Gradient Color Palette */}
+              {/* Gradient Color Palette - Clean hidden scrollbar */}
               <div>
-                <label className="text-[11px] font-bold text-[#A8B2C7] uppercase tracking-wider block mb-2">
+                <label className="text-[11px] font-bold text-[#A8B2C7] uppercase tracking-wider block mb-1.5">
                   Choose Color Theme
                 </label>
-                <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
                   {STORY_GRADIENTS.map((grad) => (
                     <button
                       key={grad.name}
                       type="button"
                       onClick={() => setSelectedGradient(grad.value)}
-                      className={`w-8 h-8 rounded-full bg-gradient-to-tr ${grad.value} shrink-0 ring-2 transition-transform ${
+                      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr ${grad.value} shrink-0 ring-2 transition-transform ${
                         selectedGradient === grad.value
                           ? 'ring-white scale-110 shadow-lg'
                           : 'ring-transparent opacity-80 hover:opacity-100'
@@ -167,12 +167,12 @@ export default function CreateStoryModal({
                 </div>
               </div>
 
-              {/* Quick Emojis */}
+              {/* Quick Emojis - Clean hidden scrollbar */}
               <div>
-                <label className="text-[11px] font-bold text-[#A8B2C7] uppercase tracking-wider block mb-2">
+                <label className="text-[11px] font-bold text-[#A8B2C7] uppercase tracking-wider block mb-1.5">
                   Add Emoji
                 </label>
-                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
                   {EMOJI_LIST.map((em) => (
                     <button
                       key={em}
@@ -190,27 +190,27 @@ export default function CreateStoryModal({
             <>
               {/* Photo Upload Area */}
               {imagePreview ? (
-                <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-black border border-white/10 group">
+                <div className="relative w-full h-44 sm:h-52 rounded-2xl overflow-hidden bg-black border border-white/10 group shrink-0">
                   <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
                   <button
                     type="button"
                     onClick={() => setImagePreview(null)}
-                    className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/70 hover:bg-rose-600 text-white grid place-items-center transition-colors shadow-lg"
+                    className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/70 hover:bg-rose-600 text-white grid place-items-center transition-colors shadow-lg"
                     title="Remove Photo"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ) : (
-                <label className="w-full aspect-[4/3] rounded-2xl border-2 border-dashed border-white/20 hover:border-pink-500/50 bg-[#0B0E17] flex flex-col items-center justify-center gap-3 cursor-pointer transition-all group">
+                <label className="w-full h-44 sm:h-52 rounded-2xl border-2 border-dashed border-white/20 hover:border-pink-500/50 bg-[#0B0E17] flex flex-col items-center justify-center gap-2.5 cursor-pointer transition-all group shrink-0">
                   <input
                     type="file"
                     accept="image/*"
                     onChange={handleImageUpload}
                     className="hidden"
                   />
-                  <div className="w-12 h-12 rounded-2xl bg-pink-500/10 text-pink-400 group-hover:scale-110 grid place-items-center transition-transform">
-                    <Upload className="w-6 h-6" />
+                  <div className="w-11 h-11 rounded-2xl bg-pink-500/10 text-pink-400 group-hover:scale-110 grid place-items-center transition-transform">
+                    <Upload className="w-5 h-5" />
                   </div>
                   <div className="text-center">
                     <p className="text-xs font-semibold text-white">Upload Status Photo</p>
@@ -236,8 +236,8 @@ export default function CreateStoryModal({
             </>
           )}
 
-          {/* Submit Button */}
-          <div className="pt-2">
+          {/* Submit Button - Always visible and clean */}
+          <div className="pt-2 shrink-0">
             <button
               type="submit"
               disabled={
