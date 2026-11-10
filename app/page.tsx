@@ -4418,189 +4418,101 @@ export default function Home() {
           }}
         />
 
-        {/* Upwards / Flyout Status & Profile Menu */}
+        {/* Sleek, Minimalist Status Menu (Online/Away/DND + Settings & Log Out) */}
         {showStatusMenu && (
-          <div className="absolute top-16 left-3 z-50 w-64 bg-[#141824] border border-white/10 rounded-2xl p-2 shadow-2xl animate-msg-in">
-            <div className="px-2 py-1.5 border-b border-white/10 mb-1.5 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full overflow-hidden bg-[#161C28] shrink-0 border border-white/10">
-                <img
-                  src={user.avatar || DEFAULT_AVATAR_DATA_URL}
-                  alt=""
-                  onError={(e) => {
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
-                  }}
-                  className="w-full h-full object-cover rounded-full"
-                />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-white truncate">{user.name || 'User'}</p>
-                <div className="flex items-center justify-between gap-1 mt-0.5">
-                  <span className="text-[10px] text-indigo-400 font-mono">@{user.username || 'user'}</span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const idText = user.id || `usr_${user.username}`;
-                      if (typeof navigator !== 'undefined') {
-                        navigator.clipboard?.writeText(idText);
-                        triggerToast(`Copied your User ID: ${idText} 📋`);
-                      }
+          <>
+            <div
+              className="fixed inset-0 z-40 bg-transparent"
+              onClick={() => setShowStatusMenu(false)}
+            />
+            <div className="absolute top-16 left-3 z-50 w-60 bg-[#121622]/95 backdrop-blur-xl border border-white/10 rounded-2xl p-2.5 shadow-2xl animate-msg-in">
+              {/* User Header */}
+              <div className="px-2 py-1.5 border-b border-white/10 mb-2 flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-full overflow-hidden bg-[#161C28] shrink-0 border border-white/10">
+                  <img
+                    src={user.avatar || DEFAULT_AVATAR_DATA_URL}
+                    alt=""
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
                     }}
-                    className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 font-mono flex items-center gap-1 transition-colors"
-                    title="Click to copy your User ID"
-                  >
-                    <span>ID: {user.id || `usr_${user.username}`}</span>
-                    <Copy className="w-2.5 h-2.5" />
-                  </button>
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-white truncate">{user.name || 'User'}</p>
+                  <p className="text-[10px] text-indigo-400 font-mono truncate">@{user.username || 'user'}</p>
                 </div>
               </div>
+
+              {/* Status Picker */}
+              <div className="space-y-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    saveUserSession({ ...user, status: 'online' });
+                    setShowStatusMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left text-white transition-colors"
+                >
+                  <span className="w-2 h-2 rounded-full bg-[#22C55E]" />
+                  <span className="flex-1">Online</span>
+                  {user.status === 'online' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    saveUserSession({ ...user, status: 'idle' });
+                    setShowStatusMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left text-white transition-colors"
+                >
+                  <span className="w-2 h-2 rounded-full bg-[#F59E0B]" />
+                  <span className="flex-1">Away</span>
+                  {user.status === 'idle' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    saveUserSession({ ...user, status: 'dnd' });
+                    setShowStatusMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left text-white transition-colors"
+                >
+                  <span className="w-2 h-2 rounded-full bg-[#EF4444]" />
+                  <span className="flex-1">Do Not Disturb</span>
+                  {user.status === 'dnd' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
+                </button>
+              </div>
+
+              <div className="border-t border-white/10 my-1.5" />
+
+              {/* All Settings in Unified Modal */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStatusMenu(false);
+                  setShowSettingsModal(true);
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs hover:bg-white/5 text-white font-semibold transition-colors"
+              >
+                <Settings className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Settings & Preferences</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowStatusMenu(false);
+                  handleLogout();
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs hover:bg-rose-500/15 text-rose-400 font-medium transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Log Out</span>
+              </button>
             </div>
-
-            <div className="space-y-0.5">
-              <button
-                onClick={() => {
-                  saveUserSession({ ...user, status: 'online' });
-                  setShowStatusMenu(false);
-                }}
-                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left text-white transition-colors"
-              >
-                <span className="w-2 h-2 rounded-full bg-[#22C55E]" />
-                <span className="flex-1">Online</span>
-                {user.status === 'online' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
-              </button>
-              <button
-                onClick={() => {
-                  saveUserSession({ ...user, status: 'idle' });
-                  setShowStatusMenu(false);
-                }}
-                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left text-white transition-colors"
-              >
-                <span className="w-2 h-2 rounded-full bg-[#F59E0B]" />
-                <span className="flex-1">Away</span>
-                {user.status === 'idle' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
-              </button>
-              <button
-                onClick={() => {
-                  saveUserSession({ ...user, status: 'dnd' });
-                  setShowStatusMenu(false);
-                }}
-                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-left text-white transition-colors"
-              >
-                <span className="w-2 h-2 rounded-full bg-[#EF4444]" />
-                <span className="flex-1">Do Not Disturb</span>
-                {user.status === 'dnd' && <Check className="w-3.5 h-3.5 text-[#818CF8]" />}
-              </button>
-            </div>
-
-            <div className="border-t border-white/10 my-1.5" />
-
-            <button
-              onClick={() => {
-                setShowStatusMenu(false);
-                setShowSettingsModal(true);
-              }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-white font-semibold transition-colors"
-            >
-              <Settings className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Settings & Preferences</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setShowStatusMenu(false);
-                setShowAvatarStudio(true);
-              }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-[#A78BFA] font-medium transition-colors"
-            >
-              <Palette className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Snapchat Avatar Studio</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setShowStatusMenu(false);
-                setShowChatThemeModal(true);
-              }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-purple-300 font-medium transition-colors"
-            >
-              <Palette className="w-3.5 h-3.5 text-purple-400" />
-              <span>Chat Wallpaper & Bubble Colors</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setShowStatusMenu(false);
-                setShowPWAInstallModal(true);
-              }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-emerald-400 font-medium transition-colors"
-            >
-              <Download className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{isAppInstalled ? 'App Installed (PWA)' : 'Install App to Phone / PC'}</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setShowStatusMenu(false);
-                setShowSettingsModal(true);
-              }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-[#818CF8] font-medium transition-colors"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-              <span>Edit Profile & Status</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setShowStatusMenu(false);
-                setShowGoogleAuthModal(true);
-              }}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-slate-200 font-medium transition-colors"
-            >
-              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                />
-              </svg>
-              <span>{user.provider === 'google' ? 'Switch Google Account' : 'Sign in with Google'}</span>
-            </button>
-
-            {isAdminOfActiveGroup && (
-              <button
-                onClick={() => {
-                  setShowStatusMenu(false);
-                  setShowAdminModal(true);
-                }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-amber-500/10 text-amber-300 font-medium transition-colors"
-              >
-                <Crown className="w-3.5 h-3.5 text-amber-400" />
-                <span>Admin & Ban Panel</span>
-              </button>
-            )}
-
-            <div className="border-t border-white/10 my-1.5" />
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-rose-500/15 text-rose-400 font-medium transition-colors"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Log Out / Switch Account</span>
-            </button>
-          </div>
+          </>
         )}
       </div>
 
@@ -6524,6 +6436,9 @@ export default function Home() {
         onInstallPwa={() => {
           setShowPWAInstallModal(true);
         }}
+        onOpenGoogleAuth={() => setShowGoogleAuthModal(true)}
+        onOpenAdminModal={() => setShowAdminModal(true)}
+        isAdmin={isAdminOfActiveGroup || user.role === 'admin'}
         onLogout={handleLogout}
         triggerToast={triggerToast}
       />
