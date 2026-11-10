@@ -82,6 +82,7 @@ import StoryViewerModal from '@/components/StoryViewerModal';
 import NewChatModal from '@/components/NewChatModal';
 import PWAInstallModal from '@/components/PWAInstallModal';
 import ChatThemeModal from '@/components/ChatThemeModal';
+import SettingsModal from '@/components/SettingsModal';
 import {
   WallpaperPresetId,
   BubbleThemeId,
@@ -176,6 +177,7 @@ export default function Home() {
     status: 'online',
   });
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showAvatarStudio, setShowAvatarStudio] = useState(false);
   const [avatarStudioConfig, setAvatarStudioConfig] = useState<AvatarConfig>(DEFAULT_AVATAR);
   const [profileNameInput, setProfileNameInput] = useState('');
@@ -4377,10 +4379,7 @@ export default function Home() {
           onOpenInstagramSearch={() => setShowInstagramSearch(true)}
           onOpenStatusMenu={() => setShowStatusMenu(!showStatusMenu)}
           onOpenSettingsModal={() => {
-            setProfileNameInput(user.name);
-            setProfileBioInput(user.bio || '');
-            setProfileAvatarSelected(user.avatar || DEFAULT_AVATAR_DATA_URL);
-            setShowProfileModal(true);
+            setShowSettingsModal(true);
           }}
           onViewDmRequests={() => {
             if (pendingIncomingRequests.length > 0) {
@@ -4465,6 +4464,17 @@ export default function Home() {
             </div>
 
             <div className="border-t border-white/10 my-1.5" />
+
+            <button
+              onClick={() => {
+                setShowStatusMenu(false);
+                setShowSettingsModal(true);
+              }}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs hover:bg-white/5 text-white font-semibold transition-colors"
+            >
+              <Settings className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Settings & Preferences</span>
+            </button>
 
             <button
               onClick={() => {
@@ -4783,32 +4793,12 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Right Header Actions - Sleek & Lightweight */}
-                  <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 relative">
-                    {/* Theme & Wallpaper Button */}
-                    <button
-                      type="button"
-                      onClick={() => setShowChatThemeModal(true)}
-                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 active:scale-90 transition-all shrink-0"
-                      title="Chat Wallpaper & Bubble Themes"
-                    >
-                      <Palette className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
-                    </button>
-
-                    {/* Search Button */}
-                    <button
-                      type="button"
-                      onClick={() => setShowInstagramSearch(true)}
-                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-pink-400 hover:text-pink-300 hover:bg-pink-500/10 active:scale-90 transition-all shrink-0"
-                      title="Search Users & Channels"
-                    >
-                      <Search className="w-4 h-4" />
-                    </button>
-
+                  {/* Right Header Actions - Sleek, Minimalist & Uncluttered */}
+                  <div className="flex items-center gap-1.5 shrink-0 relative">
                     {/* Voice Call Button */}
                     <button
                       onClick={() => startCall('audio', activeGroup.name, activeGroup.avatar || '/logo.png')}
-                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 active:scale-90 transition-all shrink-0"
+                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl grid place-items-center text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 active:scale-90 transition-all shrink-0"
                       title="Start Voice Call"
                     >
                       <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#22C55E]" />
@@ -4817,7 +4807,7 @@ export default function Home() {
                     {/* Channel Info Button */}
                     <button
                       onClick={() => setInfoOpen(!infoOpen)}
-                      className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center transition-all shrink-0 ${infoOpen ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
+                      className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl grid place-items-center transition-all shrink-0 ${infoOpen ? 'bg-[#6366F1]/20 text-[#818CF8]' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
                         }`}
                       title="Chat Details & Members"
                     >
@@ -4829,7 +4819,7 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={() => setMobileHeaderMenuOpen(!mobileHeaderMenuOpen)}
-                        className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl grid place-items-center transition-all shrink-0 ${mobileHeaderMenuOpen ? 'bg-white/10 text-white' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
+                        className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl grid place-items-center transition-all shrink-0 ${mobileHeaderMenuOpen ? 'bg-white/10 text-white' : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
                           }`}
                         title="More actions"
                       >
@@ -4844,6 +4834,30 @@ export default function Home() {
                             onClick={() => setMobileHeaderMenuOpen(false)}
                           />
                           <div className="absolute right-0 top-full mt-2 w-56 bg-[#131722]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-1.5 z-50 animate-msg-in flex flex-col gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                setShowSettingsModal(true);
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <Settings className="w-4 h-4 text-emerald-400" />
+                              <span>Settings & Preferences</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMobileHeaderMenuOpen(false);
+                                setShowInstagramSearch(true);
+                              }}
+                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
+                            >
+                              <Search className="w-4 h-4 text-pink-400" />
+                              <span>Search Squad / DMs</span>
+                            </button>
+
                             <button
                               type="button"
                               onClick={() => {
@@ -6432,6 +6446,74 @@ export default function Home() {
         currentCustomImage={customWallpaperImage}
         currentBubbleTheme={bubbleTheme}
         onSaveTheme={handleSaveTheme}
+      />
+
+      {/* UNIFIED COMPREHENSIVE SETTINGS MODAL */}
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        currentUser={user}
+        onUpdateProfile={(name, bio, avatar) => {
+          setProfileNameInput(name);
+          setProfileBioInput(bio);
+          setProfileAvatarSelected(avatar);
+
+          const updatedUser: CurrentUser = {
+            ...user,
+            name,
+            bio,
+            avatar,
+          };
+          saveUserSession(updatedUser);
+
+          const rawUsername = (updatedUser.username || updatedUser.name || '').toLowerCase();
+          const updatedDirectory = registeredUsers.filter(
+            (u) => u.id !== updatedUser.id && (u.username || '').toLowerCase() !== rawUsername
+          );
+          updatedDirectory.push(updatedUser);
+          setRegisteredUsers(updatedDirectory);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('lmc_registered_users', JSON.stringify(updatedDirectory));
+            try {
+              const bc = new BroadcastChannel('lmc_local_sync');
+              bc.postMessage({ type: 'user_registered', payload: updatedUser });
+              bc.close();
+            } catch { }
+          }
+
+          fetch('/api/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatedUser),
+          }).catch(() => { });
+        }}
+        onOpenAvatarStudio={() => setShowAvatarStudio(true)}
+        wallpaperPreset={wallpaperPreset}
+        customWallpaperImage={customWallpaperImage}
+        bubbleTheme={bubbleTheme}
+        onUpdateTheme={(wp, customImg, bTheme) => {
+          setWallpaperPreset(wp);
+          setCustomWallpaperImage(customImg);
+          setBubbleTheme(bTheme);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('lmc_wallpaper_preset', wp);
+            if (customImg) {
+              localStorage.setItem('lmc_custom_wallpaper', customImg);
+            } else if (wp !== 'custom') {
+              localStorage.removeItem('lmc_custom_wallpaper');
+            }
+            localStorage.setItem('lmc_bubble_theme', bTheme);
+          }
+        }}
+        soundMuted={soundMuted}
+        notificationPermission={notificationPermission}
+        onToggleSoundOrNotification={handleToggleSoundOrNotification}
+        canInstallPwa={!isAppInstalled}
+        onInstallPwa={() => {
+          setShowPWAInstallModal(true);
+        }}
+        onLogout={handleLogout}
+        triggerToast={triggerToast}
       />
     </div>
   );

@@ -372,89 +372,24 @@ export default function WhatsAppChatsList({
           </div>
         </div>
 
-        {/* Action Buttons: PWA Install, Theme, Notification Bell, Status, Search, New Chat */}
-        <div className="flex items-center gap-1">
-          {/* PWA Install Button */}
-          {canInstallPwa && onOpenInstallPwa && (
-            <button
-              type="button"
-              onClick={onOpenInstallPwa}
-              className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 text-indigo-300 hover:text-white hover:border-indigo-400 active:scale-95 transition-all text-xs font-semibold flex items-center gap-1.5 shadow-sm"
-              title="Install LMC Chats App (PWA)"
-            >
-              <Download className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden sm:inline">Install</span>
-            </button>
-          )}
-
-          {/* Chat Theme & Wallpaper Button */}
-          {onOpenThemeModal && (
-            <button
-              type="button"
-              onClick={onOpenThemeModal}
-              className="w-8 h-8 rounded-xl grid place-items-center text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 active:scale-95 transition-all"
-              title="Chat Wallpapers & Bubble Colors"
-            >
-              <Palette className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* Sound & Push Notification Bell */}
-          {onToggleSoundOrNotification && (
-            <button
-              type="button"
-              onClick={onToggleSoundOrNotification}
-              className={`w-8 h-8 rounded-xl grid place-items-center relative active:scale-95 transition-all ${
-                soundMuted
-                  ? 'text-[#7A8396] hover:text-white hover:bg-white/5'
-                  : notificationPermission === 'granted'
-                  ? 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'
-                  : 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/10'
-              }`}
-              title={
-                soundMuted
-                  ? 'Sound alerts muted (Click to unmute)'
-                  : notificationPermission === 'granted'
-                  ? 'Push & Sound alerts active (Click to toggle)'
-                  : 'Enable Push Notifications & Sound'
-              }
-            >
-              {soundMuted ? (
-                <BellOff className="w-4 h-4" />
-              ) : (
-                <Bell className="w-4 h-4" />
-              )}
-              {notificationPermission !== 'granted' && !soundMuted && (
-                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-              )}
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={onOpenCreateStory}
-            className="w-8 h-8 rounded-xl grid place-items-center text-pink-400 hover:text-pink-300 hover:bg-pink-500/10 active:scale-95 transition-all"
-            title="Post Status / Story"
-          >
-            <Camera className="w-4 h-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={onOpenInstagramSearch}
-            className="w-8 h-8 rounded-xl grid place-items-center text-[#7A8396] hover:text-white hover:bg-white/5 active:scale-95 transition-all"
-            title="Search Users & Channels"
-          >
-            <Search className="w-4 h-4" />
-          </button>
-
+        {/* Sleek Action Buttons: Start New Chat & Unified Settings */}
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
             onClick={onOpenNewChatModal}
-            className="w-8 h-8 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 grid place-items-center active:scale-95 transition-all shadow-sm"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 grid place-items-center active:scale-95 transition-all shadow-sm"
             title="Start New Chat"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onOpenSettingsModal}
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/5 hover:bg-white/10 text-[#A8B2C7] hover:text-white grid place-items-center active:scale-95 transition-all shadow-sm"
+            title="Settings & Preferences"
+          >
+            <Settings className="w-4 h-4" />
           </button>
         </div>
       </div>
