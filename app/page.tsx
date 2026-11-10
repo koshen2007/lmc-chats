@@ -149,14 +149,18 @@ interface CurrentUser {
 const DEFAULT_GROUPS: Group[] = [];
 const INITIAL_MESSAGES: Message[] = [];
 
-const FAKE_MEMBERS_SET = new Set(['alex', 'sam', 'kira', 'harshita', 'pryanshu', 'priyanshu']);
+// Complete blocklist of fake/demo usernames that must NEVER appear as real members
+const FAKE_MEMBERS_SET = new Set([
+  'alex', 'sam', 'kira', 'harshita', 'pryanshu', 'priyanshu',
+  'kai', 'aria', 'zayn', 'rin', 'marcus', 'elena', 'koshen',
+]);
 
 function sanitizeGroupMembers(members: string[]): string[] {
   const seen = new Set<string>();
   const cleanList: string[] = [];
   for (const m of members || []) {
     if (!m) continue;
-    const clean = m.trim().replace(/^@/, '').toLowerCase();
+    const clean = m.trim().replace(/^@/, '').replace(/^usr_/, '').toLowerCase();
     if (!clean || FAKE_MEMBERS_SET.has(clean)) continue;
     if (!seen.has(clean)) {
       seen.add(clean);
@@ -491,19 +495,24 @@ export default function Home() {
     if (typeof window === 'undefined') return;
 
     // Load Registered Users Directory (Only real registered users)
-    const FAKE_USER_IDS = ['usr_harshita', 'usr_koshen', 'usr_kai', 'usr_aria', 'usr_zayn', 'usr_rin', 'usr_marcus', 'usr_elena'];
-    const FAKE_USERNAMES = ['harshita', 'koshen', 'kai', 'aria', 'zayn', 'rin', 'marcus', 'elena'];
+    // ALL fake/demo/seed usernames are blocked forever — these users do not exist
+    const FAKE_USER_IDS = ['usr_harshita', 'usr_koshen', 'usr_kai', 'usr_aria', 'usr_zayn', 'usr_rin', 'usr_marcus', 'usr_elena', 'usr_pryanshu', 'usr_priyanshu', 'usr_alex', 'usr_sam', 'usr_kira'];
+    const FAKE_USERNAMES = ['harshita', 'koshen', 'kai', 'aria', 'zayn', 'rin', 'marcus', 'elena', 'pryanshu', 'priyanshu', 'alex', 'sam', 'kira'];
     let allUsers: UserProfile[] = [];
     const storedUsers = localStorage.getItem('lmc_registered_users');
     if (storedUsers) {
       try {
         const parsed = JSON.parse(storedUsers);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          allUsers = parsed.filter(
-            (u: UserProfile) =>
+          allUsers = parsed.filter((u: UserProfile) => {
+            const un = (u.username || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+            const nm = (u.name || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+            return (
               !FAKE_USER_IDS.includes(u.id) &&
-              !FAKE_USERNAMES.includes(u.username?.toLowerCase())
-          );
+              !FAKE_USERNAMES.includes(un) &&
+              !FAKE_USERNAMES.includes(nm)
+            );
+          });
         }
       } catch { }
     }
@@ -532,7 +541,19 @@ export default function Home() {
             const map = new Map<string, UserProfile>();
             for (const su of SEED_USERS) if (su?.username) map.set(su.username.toLowerCase(), su);
             for (const u of prev) if (u?.username) map.set(u.username.toLowerCase(), u);
-            for (const u of data.users) if (u?.username) map.set(u.username.toLowerCase(), u);
+            for (const u of data.users) {
+              if (u && u.username) {
+                const un = u.username.toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+                const nm = (u.name || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+                if (
+                  !FAKE_USER_IDS.includes(u.id) &&
+                  !FAKE_USERNAMES.includes(un) &&
+                  !FAKE_USERNAMES.includes(nm)
+                ) {
+                  map.set(un, u);
+                }
+              }
+            }
             const combined = Array.from(map.values());
             localStorage.setItem('lmc_registered_users', JSON.stringify(combined));
             return combined;
@@ -1876,15 +1897,19 @@ export default function Home() {
     (targetUser: UserProfile) => {
       if (!activeGroup) return;
 
-      const cleanHandle = (targetUser.username || targetUser.name || '').toLowerCase().trim().replace(/^@/, '');
-      if (!cleanHandle) return;
+      const cleanHandle = (targetUser.username || targetUser.name || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+      if (!cleanHandle || FAKE_MEMBERS_SET.has(cleanHandle)) {
+        triggerToast(`❌ Cannot add @${cleanHandle}: user is invalid or blocked.`);
+        return;
+      }
 
       // Strictly verify user is registered on LMC Chats
       const isRegistered = registeredUsers.some(
-        (u) =>
-          u.username.toLowerCase() === cleanHandle ||
-          u.name.toLowerCase() === cleanHandle ||
-          u.id === targetUser.id
+        (u) => {
+          const un = (u.username || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+          const nm = (u.name || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+          return (un === cleanHandle || nm === cleanHandle || u.id === targetUser.id) && !FAKE_MEMBERS_SET.has(un);
+        }
       );
       if (!isRegistered) {
         triggerToast(`❌ Cannot add @${cleanHandle}: user is not registered on LMC Chats!`);
@@ -1893,8 +1918,8 @@ export default function Home() {
 
       const memberTag = `@${cleanHandle}`;
       const isAlready = (activeGroup.members || []).some((m) => {
-        const cleanM = (m || '').toLowerCase().trim().replace(/^@/, '');
-        return cleanM === cleanHandle || cleanM === (targetUser.name || '').toLowerCase();
+        const cleanM = (m || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+        return cleanM === cleanHandle || cleanM === (targetUser.name || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
       });
 
       if (isAlready) {
@@ -1903,8 +1928,8 @@ export default function Home() {
       }
 
       const currentFiltered = (activeGroup.members || []).filter((m) => {
-        const cleanM = (m || '').toLowerCase().trim().replace(/^@/, '');
-        return cleanM !== cleanHandle && cleanM !== (targetUser.name || '').toLowerCase();
+        const cleanM = (m || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+        return cleanM !== cleanHandle && cleanM !== (targetUser.name || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
       });
 
       const updatedMembers = sanitizeGroupMembers([...currentFiltered, memberTag]);
@@ -2767,14 +2792,16 @@ export default function Home() {
     if (newGroupInviteMember.trim()) {
       newGroupInviteMember
         .split(',')
-        .map((m) => m.trim().replace(/^@/, '').toLowerCase())
-        .filter(Boolean)
+        .map((m) => m.trim().replace(/^@/, '').replace(/^usr_/, '').toLowerCase())
+        .filter((cleanHandle) => cleanHandle && !FAKE_MEMBERS_SET.has(cleanHandle))
         .forEach((cleanHandle) => {
           // Strictly verify user is registered on LMC Chats
           const isRegistered = registeredUsers.some(
-            (u) =>
-              u.username.toLowerCase() === cleanHandle ||
-              u.name.toLowerCase() === cleanHandle
+            (u) => {
+              const un = (u.username || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+              const nm = (u.name || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+              return (un === cleanHandle || nm === cleanHandle) && !FAKE_MEMBERS_SET.has(un);
+            }
           );
           if (isRegistered && !initialMembers.includes(`@${cleanHandle}`)) {
             initialMembers.push(`@${cleanHandle}`);
@@ -4770,7 +4797,7 @@ export default function Home() {
                             const uniqueGrpMembers = Array.from(
                               new Set(
                                 (activeGroup.members || [])
-                                  .map((m: string) => (m || '').toLowerCase().trim().replace(/^@/, ''))
+                                  .map((m: string) => (m || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, ''))
                                   .filter((m) => m && !FAKE_MEMBERS_SET.has(m))
                               )
                             );
@@ -6185,7 +6212,7 @@ export default function Home() {
                   const uniqueMemberList: string[] = [];
                   for (const m of activeGroup.members || []) {
                     if (!m) continue;
-                    const clean = m.trim().replace(/^@/, '').toLowerCase();
+                    const clean = m.trim().replace(/^@/, '').replace(/^usr_/, '').toLowerCase();
                     if (!clean || FAKE_MEMBERS_SET.has(clean)) continue;
                     if (!seen.has(clean)) {
                       seen.add(clean);
@@ -6193,13 +6220,13 @@ export default function Home() {
                     }
                   }
 
-                  const creatorClean = (activeGroup.created_by || '').trim().replace(/^@/, '').toLowerCase();
+                  const creatorClean = (activeGroup.created_by || '').trim().replace(/^@/, '').replace(/^usr_/, '').toLowerCase();
                   if (creatorClean && !seen.has(creatorClean) && !FAKE_MEMBERS_SET.has(creatorClean)) {
                     seen.add(creatorClean);
                     uniqueMemberList.unshift(creatorClean);
                   }
 
-                  const myHandle = (user.username || user.name || '').trim().replace(/^@/, '').toLowerCase();
+                  const myHandle = (user.username || user.name || '').trim().replace(/^@/, '').replace(/^usr_/, '').toLowerCase();
                   const myName = (user.name || '').trim().toLowerCase();
 
                   return (

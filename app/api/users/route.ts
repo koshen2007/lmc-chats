@@ -106,6 +106,18 @@ export async function GET(request: Request) {
     allUsers = loadUsers();
   }
 
+  // Filter out any mock/test users permanently
+  const FAKE_BLOCKLIST = new Set([
+    'harshita', 'harshita_dev', 'pryanshu', 'priyanshu', 'alex', 'sam', 'kira',
+    'kai', 'aria', 'zayn', 'rin', 'marcus', 'elena', 'koshen'
+  ]);
+  allUsers = allUsers.filter((u) => {
+    if (!u || !u.username) return false;
+    const un = u.username.toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+    const nm = (u.name || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+    return !FAKE_BLOCKLIST.has(un) && !FAKE_BLOCKLIST.has(nm) && !FAKE_BLOCKLIST.has(u.id);
+  });
+
   if (!q) {
     return NextResponse.json({
       success: true,

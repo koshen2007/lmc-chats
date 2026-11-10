@@ -71,14 +71,21 @@ export default function AdminModerationModal({
 
   if (!isOpen) return null;
 
-  const FAKE_LIST = useMemo(() => new Set(['alex', 'sam', 'kira', 'harshita', 'pryanshu', 'priyanshu']), []);
+  const FAKE_LIST = useMemo(
+    () =>
+      new Set([
+        'alex', 'sam', 'kira', 'harshita', 'harshita_dev', 'pryanshu', 'priyanshu',
+        'kai', 'aria', 'zayn', 'rin', 'marcus', 'elena', 'koshen'
+      ]),
+    []
+  );
 
   const sanitizedMembers = useMemo(() => {
     const uniqueMemberSet = new Set<string>();
     const list: string[] = [];
     for (const m of channel.members || []) {
       if (!m) continue;
-      const clean = m.trim().replace(/^@/, '').toLowerCase();
+      const clean = m.trim().replace(/^@/, '').replace(/^usr_/, '').toLowerCase();
       if (!clean || FAKE_LIST.has(clean)) continue;
       if (!uniqueMemberSet.has(clean)) {
         uniqueMemberSet.add(clean);
@@ -86,7 +93,7 @@ export default function AdminModerationModal({
       }
     }
 
-    const creatorClean = (channel.created_by || '').trim().replace(/^@/, '').toLowerCase();
+    const creatorClean = (channel.created_by || '').trim().replace(/^@/, '').replace(/^usr_/, '').toLowerCase();
     if (creatorClean && !uniqueMemberSet.has(creatorClean) && !FAKE_LIST.has(creatorClean)) {
       uniqueMemberSet.add(creatorClean);
       list.unshift(creatorClean);

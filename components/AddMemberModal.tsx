@@ -35,30 +35,40 @@ export default function AddMemberModal({
     );
   }, [searchQuery, registeredUsers]);
 
+  const BLOCKED_FAKE_SET = new Set([
+    'harshita', 'pryanshu', 'priyanshu', 'alex', 'sam', 'kira',
+    'kai', 'aria', 'zayn', 'rin', 'marcus', 'elena', 'koshen'
+  ]);
+
   const isMember = (u: UserProfile) => {
-    const uName = (u.name || '').toLowerCase();
-    const uUsername = (u.username || '').toLowerCase();
+    const uName = (u.name || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+    const uUsername = (u.username || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
     return currentMembers.some((m) => {
-      const clean = (m || '').toLowerCase().replace(/^@/, '');
+      const clean = (m || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
       return clean === uName || clean === uUsername;
     });
   };
 
   const handleDirectAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    const raw = directInput.trim().replace(/^@/, '');
+    const raw = directInput.trim().replace(/^@/, '').replace(/^usr_/, '').toLowerCase();
     if (!raw) return;
+
+    if (BLOCKED_FAKE_SET.has(raw)) {
+      setErrorMsg(`User "@${raw}" does not exist on LMC Chats.`);
+      return;
+    }
 
     setErrorMsg(null);
     setIsChecking(true);
 
     try {
       // 1. Check in loaded registeredUsers directory first
-      let target = registeredUsers.find(
-        (u) =>
-          u.username.toLowerCase() === raw.toLowerCase() ||
-          u.name.toLowerCase() === raw.toLowerCase()
-      );
+      let target = registeredUsers.find((u) => {
+        const un = (u.username || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+        const nm = (u.name || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+        return (un === raw || nm === raw) && !BLOCKED_FAKE_SET.has(un);
+      });
 
       // 2. If not found in memory, query server API for latest registered users
       if (!target) {
@@ -67,11 +77,11 @@ export default function AddMemberModal({
           if (res.ok) {
             const data = await res.json();
             if (data.users && Array.isArray(data.users)) {
-              target = data.users.find(
-                (u: UserProfile) =>
-                  u.username.toLowerCase() === raw.toLowerCase() ||
-                  u.name.toLowerCase() === raw.toLowerCase()
-              );
+              target = data.users.find((u: UserProfile) => {
+                const un = (u.username || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+                const nm = (u.name || '').toLowerCase().trim().replace(/^@/, '').replace(/^usr_/, '');
+                return (un === raw || nm === raw) && !BLOCKED_FAKE_SET.has(un);
+              });
             }
           }
         } catch {
@@ -81,7 +91,7 @@ export default function AddMemberModal({
 
       // 3. Strictly reject non-existent users (DO NOT create fake dummy users)
       if (!target) {
-        setErrorMsg(`User "@${raw}" does not exist on LMC Chats. Only registered users can be added.`);
+        setErrorMsg(`User "@${raw}" does not exist on LMC Chats. Only real registered users can be added.`);
         setIsChecking(false);
         return;
       }

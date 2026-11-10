@@ -165,46 +165,68 @@ export function getBubbleStyle(
   if (!isMe) {
     return {
       backgroundColor: '#141824',
-      borderColor: '#232B3E',
+      border: '1px solid #232B3E',
       color: '#E9ECF4',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.35)',
     };
   }
 
   switch (bubbleThemeId) {
     case 'emerald':
       return {
-        background: 'linear-gradient(135deg, #005C4B 0%, #007A64 100%)',
+        backgroundColor: '#005C4B',
+        backgroundImage: 'linear-gradient(135deg, #005C4B 0%, #007A64 100%)',
         color: '#E9F5EE',
+        border: '1px solid rgba(0, 168, 132, 0.3)',
+        boxShadow: '0 2px 10px rgba(0, 92, 75, 0.35)',
       };
     case 'indigo':
       return {
-        background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
+        backgroundColor: '#4F46E5',
+        backgroundImage: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
         color: '#FFFFFF',
+        border: '1px solid rgba(99, 102, 241, 0.3)',
+        boxShadow: '0 2px 10px rgba(79, 70, 229, 0.35)',
       };
     case 'sunset':
       return {
-        background: 'linear-gradient(135deg, #E11D48 0%, #BE123C 100%)',
+        backgroundColor: '#BE123C',
+        backgroundImage: 'linear-gradient(135deg, #E11D48 0%, #BE123C 100%)',
         color: '#FFFFFF',
+        border: '1px solid rgba(225, 29, 72, 0.3)',
+        boxShadow: '0 2px 10px rgba(225, 29, 72, 0.35)',
       };
     case 'cyber':
       return {
-        background: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
+        backgroundColor: '#0369A1',
+        backgroundImage: 'linear-gradient(135deg, #0284C7 0%, #0369A1 100%)',
         color: '#FFFFFF',
+        border: '1px solid rgba(2, 132, 199, 0.3)',
+        boxShadow: '0 2px 10px rgba(2, 132, 199, 0.35)',
       };
     case 'violet':
       return {
-        background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
+        backgroundColor: '#7C3AED',
+        backgroundImage: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
         color: '#FFFFFF',
+        border: '1px solid rgba(139, 92, 246, 0.3)',
+        boxShadow: '0 2px 10px rgba(124, 58, 237, 0.35)',
       };
     case 'graphite':
       return {
-        background: 'linear-gradient(135deg, #334155 0%, #1E293B 100%)',
+        backgroundColor: '#1E293B',
+        backgroundImage: 'linear-gradient(135deg, #334155 0%, #1E293B 100%)',
         color: '#F1F5F9',
+        border: '1px solid rgba(148, 163, 184, 0.25)',
+        boxShadow: '0 2px 10px rgba(30, 41, 59, 0.4)',
       };
     default:
       return {
-        background: 'linear-gradient(135deg, #005C4B 0%, #007A64 100%)',
+        backgroundColor: '#005C4B',
+        backgroundImage: 'linear-gradient(135deg, #005C4B 0%, #007A64 100%)',
         color: '#E9F5EE',
+        border: '1px solid rgba(0, 168, 132, 0.3)',
+        boxShadow: '0 2px 10px rgba(0, 92, 75, 0.35)',
       };
   }
 }

@@ -47,12 +47,15 @@ function getStoragePath(): string {
 }
 
 function sanitizeMembersList(members: string[]): string[] {
-  const FAKE_MEMBERS = new Set(['alex', 'sam', 'kira', 'harshita', 'pryanshu', 'priyanshu']);
+  const FAKE_MEMBERS = new Set([
+    'alex', 'sam', 'kira', 'harshita', 'harshita_dev', 'pryanshu', 'priyanshu',
+    'kai', 'aria', 'zayn', 'rin', 'marcus', 'elena', 'koshen'
+  ]);
   const seen = new Set<string>();
   const cleanList: string[] = [];
   for (const m of members || []) {
     if (!m) continue;
-    const clean = m.trim().replace(/^@/, '').toLowerCase();
+    const clean = m.trim().replace(/^@/, '').replace(/^usr_/, '').toLowerCase();
     if (!clean || FAKE_MEMBERS.has(clean)) continue;
     if (!seen.has(clean)) {
       seen.add(clean);

@@ -87,3 +87,4 @@ jobs:
               issue_number: issueNumber,
               state: 'closed'
             });
+
