@@ -172,47 +172,47 @@ export default function InstagramSearchModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[230] flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-msg-in">
-      <div className="w-full max-w-2xl bg-[#0F131E] border border-white/10 rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-        {/* Instagram Header with Large Search Bar */}
-        <div className="p-4 sm:p-5 border-b border-white/10 bg-[#141826] space-y-3 shrink-0">
+    <div className="fixed inset-0 z-[230] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm animate-msg-in">
+      <div className="w-full max-w-2xl bg-[#111622] border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
+        {/* Header with Command Search Input */}
+        <div className="p-4 sm:p-5 border-b border-white/[0.08] bg-[#141926] space-y-3 shrink-0">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-pink-500 via-purple-500 to-indigo-500 grid place-items-center text-white shadow-md">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-indigo-600/15 border border-indigo-500/25 grid place-items-center text-indigo-400">
                 <Search className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-1.5">
-                  <span>Instagram Search</span>
-                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">
-                    ID & Users
+                <h2 className="text-sm sm:text-base font-bold text-white tracking-tight flex items-center gap-2">
+                  <span>Quick Switcher & Directory</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.06] border border-white/[0.08] text-[#8A94A6]">
+                    ⌘K
                   </span>
                 </h2>
-                <p className="text-[11px] text-[#7A8396]">Search anyone by User ID (`usr_...`), @username, or name</p>
+                <p className="text-[11px] text-[#6C7689]">Jump to people, @handles, channels, or User IDs</p>
               </div>
             </div>
 
             <button
               type="button"
               onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white transition-colors"
+              className="w-7 h-7 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] grid place-items-center text-[#8A94A6] hover:text-white transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Search Input Bar (Instagram Style) */}
+          {/* Search Input Bar */}
           <div className="relative">
-            <Search className="w-4 h-4 text-[#7A8396] absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-[#6C7689] absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by User ID (usr_...), @username, name, channel..."
-              className="w-full bg-[#0A0D14] border border-white/10 focus:border-[#6366F1] rounded-2xl pl-10 pr-9 py-2.5 text-sm text-white placeholder-[#5A6376] outline-none transition-all shadow-inner"
+              placeholder="Search people by @username, name, ID, or channel..."
+              className="w-full bg-[#0B0E14] border border-white/10 focus:border-indigo-500 rounded-xl pl-10 pr-16 py-2.5 text-sm text-white placeholder-[#5A6376] outline-none transition-colors"
             />
-            {query && (
+            {query ? (
               <button
                 type="button"
                 onClick={() => setQuery('')}
@@ -220,41 +220,45 @@ export default function InstagramSearchModal({
               >
                 <X className="w-3 h-3" />
               </button>
+            ) : (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-[#6C7689]">
+                ESC to close
+              </span>
             )}
           </div>
 
           {/* Filter Tabs */}
-          <div className="flex items-center gap-1.5 pt-1">
+          <div className="flex items-center gap-1.5 pt-0.5">
             <button
               type="button"
               onClick={() => setActiveTab('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'all'
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md'
-                  : 'bg-white/5 text-[#8892B0] hover:text-white hover:bg-white/10'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-white/[0.04] text-[#8A94A6] hover:text-white hover:bg-white/[0.08]'
               }`}
             >
-              All Results ({matchedUsers.length + matchedGroups.length})
+              All ({matchedUsers.length + matchedGroups.length})
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('accounts')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 activeTab === 'accounts'
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md'
-                  : 'bg-white/5 text-[#8892B0] hover:text-white hover:bg-white/10'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-white/[0.04] text-[#8A94A6] hover:text-white hover:bg-white/[0.08]'
               }`}
             >
               <User className="w-3 h-3" />
-              <span>Accounts ({matchedUsers.length})</span>
+              <span>People ({matchedUsers.length})</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('channels')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 activeTab === 'channels'
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md'
-                  : 'bg-white/5 text-[#8892B0] hover:text-white hover:bg-white/10'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-white/[0.04] text-[#8A94A6] hover:text-white hover:bg-white/[0.08]'
               }`}
             >
               <Hash className="w-3 h-3" />
@@ -264,22 +268,22 @@ export default function InstagramSearchModal({
         </div>
 
         {/* Search Results Body */}
-        <div className="flex-1 overflow-y-auto scroll p-3 sm:p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto scroll p-3 sm:p-5 space-y-5">
           {/* SECTION 1: USERS / ACCOUNTS */}
           {(activeTab === 'all' || activeTab === 'accounts') && (
             <div>
               <div className="flex items-center justify-between mb-2 px-1">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#7A8396] flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#6C7689] flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Squad Users & IDs</span>
+                  <span>Registered Users</span>
                 </span>
-                <span className="text-[10px] text-[#7A8396]">
+                <span className="text-[10px] text-[#6C7689]">
                   {matchedUsers.length} found
                 </span>
               </div>
 
               {matchedUsers.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {matchedUsers.map((u) => {
                     const isSelf = u.id === currentUserId || u.username === currentUserId;
                     const userId = u.id || `usr_${u.username}`;
@@ -297,13 +301,12 @@ export default function InstagramSearchModal({
                           onSelectUser(u);
                           onClose();
                         }}
-                        className="p-3 rounded-2xl bg-[#141826]/70 hover:bg-[#1A2033] border border-white/5 hover:border-indigo-500/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer group shadow-sm"
+                        className="p-3 rounded-xl bg-[#0E121B] hover:bg-[#171D2B] border border-white/[0.06] hover:border-indigo-500/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer group"
                       >
                         {/* User Avatar + Identity Info */}
                         <div className="flex items-center gap-3 min-w-0 flex-1">
-                          {/* Instagram Story Gradient Ring */}
                           <div className="relative shrink-0">
-                            <div className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-yellow-400 via-pink-500 to-indigo-500 shadow-md">
+                            <div className="w-10 h-10 rounded-full overflow-hidden bg-[#171D2B] border border-white/10">
                               <img
                                 src={u.avatar || '/logo.png'}
                                 alt={u.name}
@@ -311,23 +314,20 @@ export default function InstagramSearchModal({
                                   e.currentTarget.onerror = null;
                                   e.currentTarget.src = '/logo.png';
                                 }}
-                                className="w-full h-full object-cover rounded-full bg-[#0D1017]"
+                                className="w-full h-full object-cover rounded-full"
                               />
                             </div>
-                            <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[#141826]" />
+                            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#0E121B]" />
                           </div>
 
                           <div className="min-w-0 flex-1">
-                            {/* Display Name + Verified Badge */}
+                            {/* Display Name */}
                             <div className="flex items-center gap-1.5">
-                              <p className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors truncate">
+                              <p className="text-sm font-semibold text-white group-hover:text-indigo-300 transition-colors truncate">
                                 {u.name}
                               </p>
-                              <span className="w-3.5 h-3.5 rounded-full bg-blue-500 text-white grid place-items-center text-[8px] font-black shrink-0" title="Verified Squad Member">
-                                ✓
-                              </span>
                               {isSelf && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-white/10 text-white font-semibold">
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.08] text-slate-300 font-medium">
                                   You
                                 </span>
                               )}
@@ -335,7 +335,7 @@ export default function InstagramSearchModal({
 
                             {/* Handle & ID Pill */}
                             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                              <span className="text-xs text-indigo-400 font-mono font-semibold">
+                              <span className="text-xs text-indigo-400 font-mono">
                                 @{u.username}
                               </span>
 
@@ -343,21 +343,21 @@ export default function InstagramSearchModal({
                               <button
                                 type="button"
                                 onClick={(e) => handleCopyId(e, userId)}
-                                className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/40 hover:bg-black/60 border border-white/10 text-[10px] text-[#A8B2C7] font-mono transition-colors"
+                                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-[10px] text-[#8A94A6] font-mono transition-colors"
                                 title="Click to copy User ID"
                               >
                                 <span>{userId}</span>
                                 {copiedId === userId ? (
                                   <Check className="w-2.5 h-2.5 text-emerald-400" />
                                 ) : (
-                                  <Copy className="w-2.5 h-2.5 text-[#7A8396]" />
+                                  <Copy className="w-2.5 h-2.5 text-[#6C7689]" />
                                 )}
                               </button>
                             </div>
 
                             {/* Bio */}
                             {u.bio && (
-                              <p className="text-[11px] text-[#7A8396] truncate mt-1 max-w-sm">
+                              <p className="text-[11px] text-[#6C7689] truncate mt-0.5 max-w-sm">
                                 {u.bio}
                               </p>
                             )}
@@ -376,16 +376,16 @@ export default function InstagramSearchModal({
                               if (typeof window !== 'undefined') {
                                 const link = `${window.location.origin}/?user=${encodeURIComponent(u.username)}`;
                                 navigator.clipboard.writeText(link);
-                                triggerToast(`Copied @${u.username}'s profile link! 📋`);
+                                triggerToast(`Copied @${u.username}'s profile link`);
                               }
                             }}
-                            className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-pink-400 grid place-items-center transition-all active:scale-90"
+                            className="w-8 h-8 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] text-[#A6B0C3] hover:text-white grid place-items-center transition-all"
                             title="Copy Profile Link"
                           >
                             <LinkIcon className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Direct Message Button (Instagram style) */}
+                          {/* Direct Message Button */}
                           {!isSelf && onStartDm && (
                             <button
                               type="button"
@@ -393,7 +393,7 @@ export default function InstagramSearchModal({
                                 onStartDm(u);
                                 onClose();
                               }}
-                              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 text-white text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 shadow-md shadow-indigo-600/30"
+                              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
                               title={`Direct Message @${u.username}`}
                             >
                               <MessageSquare className="w-3.5 h-3.5" />
@@ -410,10 +410,10 @@ export default function InstagramSearchModal({
                                 triggerToast(`Added @${u.username} to #${activeGroup.name}`);
                               }}
                               disabled={isAlreadyMember}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${
                                 isAlreadyMember
-                                  ? 'bg-white/5 text-[#7A8396] cursor-default'
-                                  : 'bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 active:scale-95'
+                                  ? 'bg-white/[0.04] text-[#6C7689] cursor-default'
+                                  : 'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-300'
                               }`}
                               title={isAlreadyMember ? 'Already a member' : `Add to #${activeGroup.name}`}
                             >
@@ -430,7 +430,7 @@ export default function InstagramSearchModal({
                                 onStartCall('audio', u.name, u.avatar);
                                 onClose();
                               }}
-                              className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-emerald-400 grid place-items-center transition-all active:scale-90"
+                              className="w-8 h-8 rounded-lg bg-white/[0.04] hover:bg-emerald-500/15 text-emerald-400 grid place-items-center transition-all"
                               title={`Call ${u.name}`}
                             >
                               <Phone className="w-3.5 h-3.5" />
@@ -445,33 +445,21 @@ export default function InstagramSearchModal({
                                 onStartCall('video', u.name, u.avatar);
                                 onClose();
                               }}
-                              className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-indigo-400 grid place-items-center transition-all active:scale-90"
+                              className="w-8 h-8 rounded-lg bg-white/[0.04] hover:bg-indigo-500/15 text-indigo-400 grid place-items-center transition-all"
                               title={`Video Call ${u.name}`}
                             >
                               <Video className="w-3.5 h-3.5" />
                             </button>
                           )}
-
-                          {/* View Profile */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onSelectUser(u);
-                              onClose();
-                            }}
-                            className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all active:scale-95 shadow-md shadow-indigo-600/20"
-                          >
-                            Profile
-                          </button>
                         </div>
                       </div>
                     );
                   })}
                 </div>
               ) : (
-                <div className="p-6 text-center bg-black/20 rounded-2xl border border-white/5">
-                  <p className="text-xs text-[#7A8396]">
-                    {cleanQuery ? `No squad users found matching "${query}"` : 'No squad accounts registered yet'}
+                <div className="p-6 text-center bg-[#0E121B] rounded-xl border border-white/[0.06]">
+                  <p className="text-xs text-[#6C7689]">
+                    {cleanQuery ? `No users found matching "${query}"` : 'No accounts registered yet'}
                   </p>
                 </div>
               )}
@@ -481,18 +469,18 @@ export default function InstagramSearchModal({
           {/* SECTION 2: CHANNELS / ROOMS */}
           {(activeTab === 'all' || activeTab === 'channels') && (
             <div>
-              <div className="flex items-center justify-between mb-2 px-1 pt-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#7A8396] flex items-center gap-1.5">
+              <div className="flex items-center justify-between mb-2 px-1 pt-1">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#6C7689] flex items-center gap-1.5">
                   <Hash className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Channels & Squad Rooms</span>
+                  <span>Channels</span>
                 </span>
-                <span className="text-[10px] text-[#7A8396]">
+                <span className="text-[10px] text-[#6C7689]">
                   {matchedGroups.length} available
                 </span>
               </div>
 
               {matchedGroups.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {matchedGroups.map((g) => {
                     const isMember = (g.members || []).some(
                       (m) => m === currentUserId || m === `@${currentUserId}`
@@ -502,10 +490,10 @@ export default function InstagramSearchModal({
                     return (
                       <div
                         key={g.id}
-                        className="p-3 rounded-2xl bg-[#141826]/70 hover:bg-[#1A2033] border border-white/5 hover:border-indigo-500/40 transition-all flex items-center justify-between gap-3 shadow-sm"
+                        className="p-3 rounded-xl bg-[#0E121B] hover:bg-[#171D2B] border border-white/[0.06] hover:border-indigo-500/30 transition-all flex items-center justify-between gap-3"
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className="w-11 h-11 rounded-2xl overflow-hidden bg-black/40 border border-white/10 shrink-0">
+                          <div className="w-10 h-10 rounded-xl overflow-hidden bg-[#171D2B] border border-white/10 shrink-0">
                             <img
                               src={g.avatar || '/logo.png'}
                               alt={g.name}
@@ -513,11 +501,11 @@ export default function InstagramSearchModal({
                             />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-bold text-white flex items-center gap-1.5 truncate">
+                            <p className="text-sm font-semibold text-white flex items-center gap-1.5 truncate">
                               <span>#{g.name}</span>
-                              {g.is_private && <span className="text-xs">🔒</span>}
+                              {g.is_private && <span className="text-[10px] text-amber-400">Private</span>}
                             </p>
-                            <p className="text-[11px] text-[#7A8396] truncate">
+                            <p className="text-[11px] text-[#6C7689] truncate">
                               {(g.members || []).length} members • {g.description}
                             </p>
                           </div>
@@ -525,8 +513,8 @@ export default function InstagramSearchModal({
 
                         <div className="flex items-center gap-2 shrink-0">
                           {isCurrentActive ? (
-                            <span className="text-[11px] font-semibold text-indigo-400 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
-                              Active Room
+                            <span className="text-[11px] font-medium text-indigo-300 px-3 py-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/25">
+                              Active
                             </span>
                           ) : (
                             <button
@@ -535,9 +523,9 @@ export default function InstagramSearchModal({
                                 onJoinGroup(g.id);
                                 onClose();
                               }}
-                              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold shadow-md active:scale-95 transition-all flex items-center gap-1"
+                              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm active:scale-95 transition-all flex items-center gap-1"
                             >
-                              <span>{isMember ? 'Open Chat' : 'Join Room'}</span>
+                              <span>{isMember ? 'Open' : 'Join'}</span>
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>
                           )}
@@ -547,9 +535,9 @@ export default function InstagramSearchModal({
                   })}
                 </div>
               ) : (
-                <div className="p-6 text-center bg-black/20 rounded-2xl border border-white/5">
-                  <p className="text-xs text-[#7A8396]">
-                    {cleanQuery ? `No channels found matching "${query}"` : 'No public channels created yet. Tap + to start one!'}
+                <div className="p-6 text-center bg-[#0E121B] rounded-xl border border-white/[0.06]">
+                  <p className="text-xs text-[#6C7689]">
+                    {cleanQuery ? `No channels found matching "${query}"` : 'No public channels created yet'}
                   </p>
                 </div>
               )}

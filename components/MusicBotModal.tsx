@@ -102,29 +102,29 @@ export default function MusicBotModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[220] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-msg-in">
-      <div className="w-full max-w-lg bg-[#111522] border border-[#232B3E] rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 z-[220] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-msg-in">
+      <div className="w-full max-w-lg bg-[#111622] border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-[#141A2B]">
+        <div className="p-4 sm:p-5 border-b border-white/[0.08] flex items-center justify-between bg-[#141926]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-pink-500 grid place-items-center text-white shadow-md shadow-indigo-600/30">
+            <div className="w-9 h-9 rounded-xl bg-indigo-600/15 border border-indigo-500/25 grid place-items-center text-indigo-400">
               <Bot className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-white tracking-tight">LMC Music Lounge</h2>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Bot Online
+                <h2 className="text-sm sm:text-base font-bold text-white tracking-tight">Audio & Music Player</h2>
+                <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 font-medium flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  Synced
                 </span>
               </div>
-              <p className="text-xs text-[#7A8396]">Play any song from phone/PC or stream live to the room</p>
+              <p className="text-[11px] text-[#6C7689]">Stream audio links or upload tracks in sync with the room</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white transition-colors"
+            className="w-7 h-7 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] grid place-items-center text-[#8A94A6] hover:text-white transition-colors"
           >
             <X className="w-4 h-4" />
           </button>

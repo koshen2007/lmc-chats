@@ -41,24 +41,24 @@ export default function StoriesRail({
   const otherStories = Array.from(otherUsersMap.values());
 
   return (
-    <div className="w-full px-3 py-2.5 border-b border-[#1A202E] bg-[#0A0D14]/70 backdrop-blur select-none">
-      <div className="flex items-center gap-3 overflow-x-auto no-scrollbar py-1">
+    <div className="w-full px-3 py-2.5 border-b border-white/[0.07] bg-[#0B0E14] select-none">
+      <div className="flex items-center gap-3 overflow-x-auto no-scrollbar py-0.5">
         {/* Current User Story Item */}
         <div className="flex flex-col items-center gap-1 shrink-0">
           <button
             type="button"
             onClick={hasMyStory ? () => onViewStory(myStories[0]) : onCreateStory}
             className="relative group focus:outline-none"
-            title={hasMyStory ? 'View your status' : 'Add to status'}
+            title={hasMyStory ? 'View your status' : 'Add status'}
           >
             <div
-              className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full p-[2.5px] transition-all group-hover:scale-105 active:scale-95 ${
+              className={`w-12 h-12 rounded-full p-[2px] transition-transform group-hover:scale-105 active:scale-95 ${
                 hasMyStory
-                  ? 'bg-gradient-to-tr from-emerald-400 via-teal-500 to-indigo-500 shadow-lg shadow-emerald-500/20'
-                  : 'bg-transparent border border-dashed border-white/20'
+                  ? 'bg-gradient-to-tr from-indigo-500 to-emerald-400'
+                  : 'border border-dashed border-white/20'
               }`}
             >
-              <div className="w-full h-full rounded-full overflow-hidden bg-[#161C28] border-2 border-[#0A0D14]">
+              <div className="w-full h-full rounded-full overflow-hidden bg-[#171D2B] border-2 border-[#0B0E14]">
                 <img
                   src={currentUser.avatar || DEFAULT_AVATAR_DATA_URL}
                   alt=""
@@ -77,13 +77,13 @@ export default function StoriesRail({
                 e.stopPropagation();
                 onCreateStory();
               }}
-              className="absolute bottom-0 right-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-indigo-500 hover:bg-indigo-400 text-white grid place-items-center border-2 border-[#0A0D14] shadow-md transition-transform group-hover:scale-110"
+              className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white grid place-items-center border-2 border-[#0B0E14] shadow-sm transition-transform group-hover:scale-110"
               title="Add status"
             >
-              <Plus className="w-3 h-3 stroke-[3]" />
+              <Plus className="w-2.5 h-2.5 stroke-[3]" />
             </div>
           </button>
-          <span className="text-[10px] text-[#A8B2C7] font-medium truncate max-w-[60px] text-center">
+          <span className="text-[10px] text-[#A6B0C3] font-medium truncate max-w-[60px] text-center">
             {hasMyStory ? 'My Status' : 'Add Status'}
           </span>
         </div>
@@ -100,13 +100,13 @@ export default function StoriesRail({
                 title={`View ${story.name}'s status`}
               >
                 <div
-                  className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full p-[2.5px] transition-all group-hover:scale-105 active:scale-95 ${
+                  className={`w-12 h-12 rounded-full p-[2px] transition-transform group-hover:scale-105 active:scale-95 ${
                     isViewed
-                      ? 'border border-slate-600 bg-transparent'
-                      : 'bg-gradient-to-tr from-pink-500 via-purple-500 to-indigo-500 shadow-lg shadow-pink-500/20 animate-pulse'
+                      ? 'border border-white/15 bg-transparent'
+                      : 'bg-gradient-to-tr from-indigo-500 to-emerald-400'
                   }`}
                 >
-                  <div className="w-full h-full rounded-full overflow-hidden bg-[#161C28] border-2 border-[#0A0D14]">
+                  <div className="w-full h-full rounded-full overflow-hidden bg-[#171D2B] border-2 border-[#0B0E14]">
                     <img
                       src={story.avatar || DEFAULT_AVATAR_DATA_URL}
                       alt=""
@@ -119,7 +119,7 @@ export default function StoriesRail({
                   </div>
                 </div>
               </button>
-              <span className="text-[10px] text-[#A8B2C7] font-medium truncate max-w-[64px] text-center">
+              <span className="text-[10px] text-[#A6B0C3] font-medium truncate max-w-[64px] text-center">
                 {story.name.split(' ')[0]}
               </span>
             </div>
@@ -127,9 +127,8 @@ export default function StoriesRail({
         })}
 
         {otherStories.length === 0 && (
-          <div className="flex items-center gap-2 pl-2 text-[11px] text-[#5A6376] italic shrink-0">
-            <Sparkles className="w-3 h-3 text-indigo-400/60" />
-            <span>Stories disappear after 24h</span>
+          <div className="flex items-center gap-1.5 pl-1 text-[11px] text-[#6C7689] shrink-0">
+            <span>Share 24h status updates with your team</span>
           </div>
         )}
       </div>

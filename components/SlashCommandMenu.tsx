@@ -70,17 +70,17 @@ export default function SlashCommandMenu({
   return (
     <div
       ref={menuRef}
-      className="absolute bottom-full left-0 right-0 mb-2 sm:mb-3 z-50 max-h-52 sm:max-h-72 overflow-y-auto scroll rounded-2xl bg-[#0f172a]/95 backdrop-blur-xl border border-slate-700/70 shadow-2xl shadow-indigo-950/50 p-2"
+      className="absolute bottom-full left-0 right-0 mb-2 z-50 max-h-56 sm:max-h-72 overflow-y-auto scroll rounded-xl bg-[#111622]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-1.5"
     >
-      <div className="flex items-center justify-between px-3 py-1.5 mb-1 border-b border-slate-800 text-[11px] font-medium text-slate-400">
+      <div className="flex items-center justify-between px-3 py-1.5 mb-1 border-b border-white/[0.06] text-[11px] font-medium text-[#8A94A6]">
         <div className="flex items-center gap-1.5 text-indigo-400">
-          <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-          <span>LMC Bot Commands</span>
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Slash Commands</span>
         </div>
-        <span className="text-slate-400">Tab / ↵ to choose • Esc to close</span>
+        <span className="text-[#6C7689]">Tab / Enter to select • Esc to dismiss</span>
       </div>
 
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         {commands.map((cmd, idx) => {
           const isSelected = idx === selectedIndex;
           return (
@@ -89,35 +89,35 @@ export default function SlashCommandMenu({
               data-index={idx}
               type="button"
               onClick={() => onSelectCommand(cmd)}
-              className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-left transition-all ${
+              className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
                 isSelected
-                  ? 'bg-gradient-to-r from-indigo-600/30 via-purple-600/25 to-pink-600/20 border border-indigo-500/40 text-white shadow-sm'
-                  : 'hover:bg-slate-800/60 text-slate-300 border border-transparent'
+                  ? 'bg-indigo-500/15 border border-indigo-500/30 text-white'
+                  : 'hover:bg-white/[0.04] text-[#A6B0C3] border border-transparent'
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <div
                   className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                    isSelected ? 'bg-indigo-500/30' : 'bg-slate-800'
+                    isSelected ? 'bg-indigo-500/20' : 'bg-white/[0.04]'
                   }`}
                 >
                   {renderIcon(cmd.icon)}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm text-indigo-300 font-mono">
+                    <span className="font-semibold text-xs sm:text-sm text-indigo-300 font-mono">
                       {cmd.command}
                     </span>
-                    <span className="text-xs text-slate-300 font-mono hidden sm:inline">
+                    <span className="text-xs text-[#6C7689] font-mono hidden sm:inline">
                       {cmd.syntax.replace(cmd.command, '').trim()}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400 truncate">{cmd.description}</p>
+                  <p className="text-[11px] text-[#8A94A6] truncate">{cmd.description}</p>
                 </div>
               </div>
 
               <div className="shrink-0 flex items-center gap-1.5">
-                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/60 text-slate-300">
+                <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-white/[0.05] border border-white/[0.08] text-[#A6B0C3]">
                   {cmd.badge}
                 </span>
               </div>

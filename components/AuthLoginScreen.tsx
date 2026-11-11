@@ -98,13 +98,13 @@ export default function AuthLoginScreen({
     reader.onload = () => {
       if (typeof reader.result === 'string') {
         setAvatarDataUrl(reader.result);
-        triggerToast('Profile photo uploaded! 📸');
+        triggerToast('Profile photo updated');
       }
     };
     reader.readAsDataURL(file);
   };
 
-  // Handle new user registration (Instagram Style)
+  // Handle new user registration (Permanent Onboarding)
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanUsername = username.trim().toLowerCase().replace(/^@/, '').replace(/[^a-z0-9_]/g, '');
@@ -116,7 +116,7 @@ export default function AuthLoginScreen({
     }
 
     if (!usernameCheck.available) {
-      triggerToast(`@${cleanUsername} is already taken. Please pick another!`);
+      triggerToast(`@${cleanUsername} is already taken. Please pick another.`);
       return;
     }
 
@@ -139,7 +139,7 @@ export default function AuthLoginScreen({
     } catch {}
 
     onLoginSuccess(newUser);
-    triggerToast(`Welcome to LMC Chats, @${cleanUsername}! 🎉`);
+    triggerToast(`Welcome to LMC Chats, @${cleanUsername}`);
   };
 
   // Handle returning user sign in
@@ -156,54 +156,52 @@ export default function AuthLoginScreen({
     );
 
     if (!matched) {
-      setSigninError(`No account found with username @${clean}. Please register!`);
+      setSigninError(`No account found for @${clean}. Please register a new profile.`);
       return;
     }
 
     onLoginSuccess(matched);
-    triggerToast(`Welcome back, @${matched.username}! 👋`);
+    triggerToast(`Signed in as @${matched.username}`);
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-5 bg-[#080B11] overflow-y-auto scroll select-none">
-      {/* Background Ambience */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-600/15 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-10 right-10 w-72 h-72 bg-purple-600/10 rounded-full blur-[100px] pointer-events-none" />
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-5 bg-[#0B0E14] overflow-y-auto scroll select-none">
+      {/* Subtle Ambient Light */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-72 bg-indigo-600/10 rounded-full blur-[130px] pointer-events-none" />
 
-      {/* Main Card (Instagram / Telegram Onboarding Style) */}
-      <div className="relative w-full max-w-md bg-[#101422]/95 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 sm:p-7 shadow-2xl animate-msg-in my-auto max-h-[92vh] overflow-y-auto scroll">
+      {/* Main Card */}
+      <div className="relative w-full max-w-md bg-[#111622] border border-white/10 rounded-2xl p-6 sm:p-7 shadow-2xl animate-msg-in my-auto max-h-[92vh] overflow-y-auto scroll">
         {/* Brand & Header */}
-        <div className="text-center mb-5">
-          <div className="relative w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-2.5">
-            <div className="absolute -inset-1 bg-gradient-to-tr from-pink-500 via-purple-500 to-indigo-500 rounded-full blur opacity-75 animate-pulse" />
+        <div className="text-center mb-6">
+          <div className="w-14 h-14 mx-auto mb-3 rounded-2xl overflow-hidden bg-[#171D2B] border border-white/10 p-1 shadow-lg">
             <img
               src="/logo.png"
               alt="LMC Chats"
-              className="relative w-full h-full object-cover rounded-full border-2 border-white/20 shadow-xl"
+              className="w-full h-full object-cover rounded-xl"
             />
           </div>
-          <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-            {mode === 'register' ? 'Create Your Account' : 'Welcome Back'}
+          <h1 className="text-xl font-bold text-white tracking-tight">
+            {mode === 'register' ? 'Create Your Account' : 'Sign In to LMC Chats'}
           </h1>
-          <p className="text-xs text-[#8A94A6] mt-1 max-w-xs mx-auto">
+          <p className="text-xs text-[#8A94A6] mt-1 max-w-xs mx-auto leading-relaxed">
             {mode === 'register'
-              ? 'Join your college squad on LMC Chats — instant, encrypted & real-time.'
-              : 'Enter your permanent username to access your chats.'}
+              ? 'Set up your permanent workspace handle to join channels and direct messages.'
+              : 'Enter your registered username to access your conversations.'}
           </p>
         </div>
 
         {/* Tab Toggle: New Profile vs Existing Account */}
-        <div className="flex bg-[#0A0D14] p-1 rounded-2xl border border-white/5 mb-5">
+        <div className="flex bg-[#0B0E14] p-1 rounded-xl border border-white/[0.08] mb-5">
           <button
             type="button"
             onClick={() => {
               setMode('register');
               setSigninError('');
             }}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
               mode === 'register'
-                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md'
-                : 'text-[#7A8396] hover:text-white'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-[#8A94A6] hover:text-white'
             }`}
           >
             <User className="w-3.5 h-3.5" />
@@ -215,10 +213,10 @@ export default function AuthLoginScreen({
               setMode('signin');
               setSigninError('');
             }}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
               mode === 'signin'
-                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md'
-                : 'text-[#7A8396] hover:text-white'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-[#8A94A6] hover:text-white'
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
@@ -226,20 +224,20 @@ export default function AuthLoginScreen({
           </button>
         </div>
 
-        {/* REGISTRATION FORM (Instagram Onboarding Style) */}
+        {/* REGISTRATION FORM */}
         {mode === 'register' ? (
           <form onSubmit={handleRegisterSubmit} className="space-y-4">
             {/* 1. Display / Full Name */}
             <div>
-              <label className="text-xs font-semibold text-[#A8B2C7] block mb-1.5">
-                Full Name / Display Name
+              <label className="text-xs font-medium text-[#A6B0C3] block mb-1.5">
+                Full Name
               </label>
               <input
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="e.g. Aarav Sharma"
-                className="w-full bg-[#0A0D14] border border-[#232B3E] focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-[#5A6376] outline-none transition-colors"
+                className="w-full bg-[#0B0E14] border border-white/10 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-[#5A6376] outline-none transition-colors"
                 required
               />
             </div>
@@ -247,16 +245,15 @@ export default function AuthLoginScreen({
             {/* 2. Permanent Username Input */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-[#A8B2C7] flex items-center gap-1">
-                  <AtSign className="w-3 h-3 text-indigo-400" />
-                  <span>Choose Your Username</span>
+                <label className="text-xs font-medium text-[#A6B0C3] flex items-center gap-1">
+                  <span>Username</span>
                 </label>
                 <span className="text-[10px] text-amber-400/90 font-medium flex items-center gap-1">
                   <Lock className="w-2.5 h-2.5" /> Permanent Handle
                 </span>
               </div>
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-indigo-400">@</span>
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-medium text-indigo-400">@</span>
                 <input
                   type="text"
                   value={username}
@@ -264,12 +261,12 @@ export default function AuthLoginScreen({
                     setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))
                   }
                   placeholder="choose_unique_handle"
-                  className={`w-full bg-[#0A0D14] border rounded-xl pl-8 pr-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-[#5A6376] outline-none transition-colors font-mono ${
+                  className={`w-full bg-[#0B0E14] border rounded-xl pl-8 pr-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-[#5A6376] outline-none transition-colors font-mono ${
                     username
                       ? usernameCheck.available
                         ? 'border-emerald-500/60 focus:border-emerald-500'
                         : 'border-rose-500/60 focus:border-rose-500'
-                      : 'border-[#232B3E] focus:border-indigo-500'
+                      : 'border-white/10 focus:border-indigo-500'
                   }`}
                   required
                 />
@@ -278,7 +275,7 @@ export default function AuthLoginScreen({
               {/* Live Availability Notice */}
               {username ? (
                 <p
-                  className={`text-[11px] font-semibold flex items-center gap-1 mt-1.5 px-1 ${
+                  className={`text-[11px] font-medium flex items-center gap-1 mt-1.5 px-0.5 ${
                     usernameCheck.available ? 'text-emerald-400' : 'text-rose-400'
                   }`}
                 >
@@ -290,16 +287,16 @@ export default function AuthLoginScreen({
                   <span>{usernameCheck.message}</span>
                 </p>
               ) : (
-                <p className="text-[10px] text-[#7A8396] mt-1 px-1 flex items-center gap-1">
-                  <span>💡 Letters, numbers & underscores (3–20 chars). Cannot be changed later.</span>
+                <p className="text-[11px] text-[#6C7689] mt-1 px-0.5">
+                  3-20 characters: lowercase letters, numbers, and underscores. Permanent once created.
                 </p>
               )}
             </div>
 
-            {/* 3. Avatar Selection (Instagram / Bitmoji Style) */}
-            <div className="p-3 bg-[#0A0D14] rounded-2xl border border-white/5 space-y-2.5">
+            {/* 3. Avatar Selection */}
+            <div className="p-3.5 bg-[#0B0E14] rounded-xl border border-white/[0.08] space-y-3">
               <div className="flex items-center gap-3">
-                <div className="relative w-12 h-12 rounded-full overflow-hidden p-0.5 border-2 border-indigo-500 shrink-0 shadow-md bg-[#161C28]">
+                <div className="relative w-11 h-11 rounded-full overflow-hidden border border-indigo-500/50 shrink-0 bg-[#171D2B]">
                   <img
                     src={avatarDataUrl || DEFAULT_AVATAR_DATA_URL}
                     alt=""
@@ -307,21 +304,21 @@ export default function AuthLoginScreen({
                   />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-white">Profile Avatar</p>
-                  <p className="text-[10px] text-[#7A8396] truncate">Pick a 3D character or upload photo</p>
-                  <div className="flex items-center gap-2 mt-1">
+                  <p className="text-xs font-semibold text-white">Profile Avatar</p>
+                  <p className="text-[11px] text-[#6C7689] truncate">Select a preset, customize, or upload</p>
+                  <div className="flex items-center gap-2.5 mt-1">
                     <button
                       type="button"
                       onClick={() => setShowAvatarStudio(true)}
-                      className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors"
+                      className="text-[11px] font-medium text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors"
                     >
-                      <Sparkles className="w-3 h-3 text-amber-300" />
-                      <span>3D Studio</span>
+                      <Palette className="w-3 h-3" />
+                      <span>Avatar Studio</span>
                     </button>
-                    <span className="text-[#3A4356]">•</span>
-                    <label className="text-[11px] font-bold text-pink-400 hover:text-pink-300 flex items-center gap-1 cursor-pointer transition-colors">
+                    <span className="text-white/10">•</span>
+                    <label className="text-[11px] font-medium text-slate-300 hover:text-white flex items-center gap-1 cursor-pointer transition-colors">
                       <Camera className="w-3 h-3" />
-                      <span>Upload</span>
+                      <span>Upload Photo</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -333,8 +330,8 @@ export default function AuthLoginScreen({
                 </div>
               </div>
 
-              {/* Instant 1-Tap Presets */}
-              <div className="grid grid-cols-6 gap-1.5 pt-1 border-t border-white/5">
+              {/* Instant Presets */}
+              <div className="grid grid-cols-6 gap-2 pt-2 border-t border-white/[0.06]">
                 {PRESET_AVATARS.map((p, idx) => {
                   const pUrl = svgToDataUrl(renderAvatarSvgString(p.config));
                   const isSelected = avatarDataUrl === pUrl;
@@ -348,8 +345,8 @@ export default function AuthLoginScreen({
                       }}
                       className={`relative aspect-square rounded-full p-0.5 transition-all overflow-hidden border-2 ${
                         isSelected
-                          ? 'border-indigo-500 scale-105 shadow-md ring-2 ring-indigo-500/40'
-                          : 'border-transparent hover:border-white/30 opacity-80 hover:opacity-100'
+                          ? 'border-indigo-500 ring-2 ring-indigo-500/30'
+                          : 'border-transparent hover:border-white/25 opacity-75 hover:opacity-100'
                       }`}
                       title={p.name}
                     >
@@ -360,28 +357,28 @@ export default function AuthLoginScreen({
               </div>
             </div>
 
-            {/* 4. Bio / College Status Quote */}
+            {/* 4. Bio */}
             <div>
-              <label className="text-xs font-semibold text-[#A8B2C7] block mb-1">
-                Bio / College Status <span className="text-[10px] text-[#7A8396] font-normal">(Optional)</span>
+              <label className="text-xs font-medium text-[#A6B0C3] block mb-1.5">
+                Bio <span className="text-[11px] text-[#6C7689] font-normal">(Optional)</span>
               </label>
               <input
                 type="text"
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
-                placeholder="e.g. BTech '26 ⚡ Campus vibes & Chai lover"
+                placeholder="Role, batch, or short status note..."
                 maxLength={80}
-                className="w-full bg-[#0A0D14] border border-[#232B3E] focus:border-indigo-500 rounded-xl px-3.5 py-2 text-xs text-white placeholder-[#5A6376] outline-none transition-colors"
+                className="w-full bg-[#0B0E14] border border-white/10 focus:border-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-[#5A6376] outline-none transition-colors"
               />
             </div>
 
-            {/* Submit / Enter Chats Button */}
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={!username.trim() || !usernameCheck.available}
-              className="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 disabled:opacity-40 text-white font-bold py-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.98] mt-2"
+              className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white font-semibold py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99] mt-2"
             >
-              <span>Complete Setup & Start Chatting</span>
+              <span>Complete Setup & Enter Chat</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
@@ -389,11 +386,11 @@ export default function AuthLoginScreen({
           /* RETURNING USER SIGN IN FORM */
           <form onSubmit={handleSigninSubmit} className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-[#A8B2C7] block mb-1.5">
-                Your Registered Username
+              <label className="text-xs font-medium text-[#A6B0C3] block mb-1.5">
+                Registered Username
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-indigo-400">@</span>
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-medium text-indigo-400">@</span>
                 <input
                   type="text"
                   value={signinUsername}
@@ -402,30 +399,30 @@ export default function AuthLoginScreen({
                     setSigninError('');
                   }}
                   placeholder="enter_your_username"
-                  className="w-full bg-[#0A0D14] border border-[#232B3E] focus:border-indigo-500 rounded-xl pl-8 pr-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-[#5A6376] outline-none transition-colors font-mono"
+                  className="w-full bg-[#0B0E14] border border-white/10 focus:border-indigo-500 rounded-xl pl-8 pr-3.5 py-2.5 text-xs sm:text-sm text-white placeholder-[#5A6376] outline-none transition-colors font-mono"
                   required
                   autoFocus
                 />
               </div>
               {signinError && (
-                <p className="text-xs text-rose-400 mt-1.5 px-1 font-medium">{signinError}</p>
+                <p className="text-xs text-rose-400 mt-1.5 px-0.5 font-medium">{signinError}</p>
               )}
             </div>
 
             <button
               type="submit"
               disabled={!signinUsername.trim()}
-              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-40 text-white font-bold py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.98]"
+              className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99]"
             >
               <ShieldCheck className="w-4 h-4" />
-              <span>Sign In to Account</span>
+              <span>Sign In</span>
             </button>
 
             {/* Quick list of registered accounts on this device */}
             {registeredUsers.length > 0 && (
-              <div className="pt-3 border-t border-white/5 space-y-2">
-                <p className="text-[10px] text-[#7A8396] uppercase font-bold tracking-wider">
-                  Select Existing Profile
+              <div className="pt-3 border-t border-white/[0.08] space-y-2">
+                <p className="text-[10px] text-[#6C7689] uppercase font-semibold tracking-wider">
+                  Saved Profiles
                 </p>
                 <div className="space-y-1.5 max-h-36 overflow-y-auto scroll">
                   {registeredUsers.map((u) => (
@@ -434,23 +431,23 @@ export default function AuthLoginScreen({
                       type="button"
                       onClick={() => {
                         onLoginSuccess(u);
-                        triggerToast(`Signed in as @${u.username}! 🚀`);
+                        triggerToast(`Signed in as @${u.username}`);
                       }}
-                      className="w-full flex items-center justify-between p-2 rounded-xl bg-[#0A0D14] hover:bg-white/5 border border-white/5 transition-all text-left"
+                      className="w-full flex items-center justify-between p-2 rounded-xl bg-[#0B0E14] hover:bg-white/[0.04] border border-white/[0.06] transition-all text-left"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <img
                           src={u.avatar || DEFAULT_AVATAR_DATA_URL}
                           alt=""
-                          className="w-7 h-7 rounded-full object-cover bg-[#161C28] border border-white/10 shrink-0"
+                          className="w-7 h-7 rounded-full object-cover bg-[#171D2B] border border-white/10 shrink-0"
                         />
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-white truncate">{u.name}</p>
-                          <p className="text-[10px] text-indigo-400 font-mono truncate">@{u.username}</p>
+                          <p className="text-xs font-semibold text-white truncate">{u.name}</p>
+                          <p className="text-[11px] text-[#818CF8] font-mono truncate">@{u.username}</p>
                         </div>
                       </div>
-                      <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
-                        Login
+                      <span className="text-[11px] font-medium text-slate-300 bg-white/[0.06] px-2.5 py-1 rounded-lg">
+                        Continue
                       </span>
                     </button>
                   ))}
@@ -470,7 +467,7 @@ export default function AuthLoginScreen({
             setAvatarDataUrl(dataUrl);
             setAvatarStudioConfig(config);
             setShowAvatarStudio(false);
-            triggerToast('Avatar customized! ✨');
+            triggerToast('Avatar updated');
           }}
         />
       )}

@@ -171,6 +171,100 @@ function sanitizeGroupMembers(members: string[]): string[] {
   return cleanList;
 }
 
+function getMessageDateKey(isoDate?: string): string {
+  if (!isoDate) return '';
+  const d = new Date(isoDate);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function formatMessageDateLabel(isoDate?: string): string {
+  if (!isoDate) return 'Today';
+  const d = new Date(isoDate);
+  if (isNaN(d.getTime())) return 'Today';
+  const now = new Date();
+  const todayKey = getMessageDateKey(now.toISOString());
+  const yest = new Date(now);
+  yest.setDate(now.getDate() - 1);
+  const yesterdayKey = getMessageDateKey(yest.toISOString());
+  const msgKey = getMessageDateKey(isoDate);
+  if (msgKey === todayKey) return 'Today';
+  if (msgKey === yesterdayKey) return 'Yesterday';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function renderFormattedMessage(text: string, isMe: boolean): React.ReactNode {
+  if (!text) return null;
+  const tokenRegex = /(https?:\/\/[^\s<]+)|(\*\*[^*\n]+?\*\*)|(`[^`\n]+?`)|(@[a-zA-Z0-9_]{2,30})/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let keyIdx = 0;
+
+  while ((match = tokenRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    const token = match[0];
+    if (match[1]) {
+      // URL
+      parts.push(
+        <a
+          key={`tok-${keyIdx++}`}
+          href={token}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className={`underline underline-offset-2 break-all transition-opacity hover:opacity-80 ${
+            isMe ? 'text-white font-medium' : 'text-indigo-300 font-medium'
+          }`}
+        >
+          {token}
+        </a>
+      );
+    } else if (match[2]) {
+      // Bold **text**
+      parts.push(
+        <strong key={`tok-${keyIdx++}`} className="font-semibold">
+          {token.slice(2, -2)}
+        </strong>
+      );
+    } else if (match[3]) {
+      // Inline code `code`
+      parts.push(
+        <code
+          key={`tok-${keyIdx++}`}
+          className={`font-mono text-[12px] px-1.5 py-0.5 rounded border ${
+            isMe
+              ? 'bg-black/25 border-white/15 text-white'
+              : 'bg-[#0B0E17] border-white/10 text-indigo-200'
+          }`}
+        >
+          {token.slice(1, -1)}
+        </code>
+      );
+    } else if (match[4]) {
+      // @mention
+      parts.push(
+        <span
+          key={`tok-${keyIdx++}`}
+          className={`font-medium px-1 py-0.2 rounded ${
+            isMe ? 'bg-white/15 text-white' : 'bg-indigo-500/15 text-indigo-300'
+          }`}
+        >
+          {token}
+        </span>
+      );
+    }
+    lastIndex = tokenRegex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  return parts.length > 0 ? parts : text;
+}
+
 export default function Home() {
   // Current user state
   const [user, setUser] = useState<CurrentUser>({
@@ -367,7 +461,10 @@ export default function Home() {
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [infoMediaTab, setInfoMediaTab] = useState<'media' | 'links'>('media');
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
+  const chatStreamRef = useRef<HTMLDivElement>(null);
   const streamEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -377,6 +474,110 @@ export default function Home() {
       setToastMessage(null);
     }, 2400);
   };
+
+  const handleCopyMessage = useCallback((msgId: string, content: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(content).catch(() => {});
+    }
+    setCopiedMsgId(msgId);
+    triggerToast('Message copied');
+    setTimeout(() => {
+      setCopiedMsgId((curr) => (curr === msgId ? null : curr));
+    }, 1500);
+  }, []);
+
+  const handleStreamScroll = useCallback(() => {
+    const el = chatStreamRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowScrollToBottom(distanceFromBottom > 180);
+  }, []);
+
+  // Global keyboard shortcuts: Ctrl/Cmd+K Quick Switcher & Esc dismissal
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        if (!isLoggedIn) return;
+        e.preventDefault();
+        setShowInstagramSearch((prev) => !prev);
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        if (reactionPopForMsg) {
+          setReactionPopForMsg(null);
+        } else if (isSlashMenuOpen) {
+          setIsSlashMenuOpen(false);
+        } else if (showEmojiPicker) {
+          setShowEmojiPicker(false);
+        } else if (mobileHeaderMenuOpen) {
+          setMobileHeaderMenuOpen(false);
+        } else if (showStatusMenu) {
+          setShowStatusMenu(false);
+        } else if (showUserSearchDropdown || mobileSearchOpen) {
+          setShowUserSearchDropdown(false);
+          setMobileSearchOpen(false);
+        } else if (showInstagramSearch) {
+          setShowInstagramSearch(false);
+        } else if (showNewChatModal) {
+          setShowNewChatModal(false);
+        } else if (showNewGroupModal) {
+          setShowNewGroupModal(false);
+        } else if (showAddMemberModal) {
+          setShowAddMemberModal(false);
+        } else if (showDiscoverChannels) {
+          setShowDiscoverChannels(false);
+        } else if (showSettingsModal) {
+          setShowSettingsModal(false);
+        } else if (showChatThemeModal) {
+          setShowChatThemeModal(false);
+        } else if (showMusicBotModal) {
+          setShowMusicBotModal(false);
+        } else if (showCreateStoryModal) {
+          setShowCreateStoryModal(false);
+        } else if (showPWAInstallModal) {
+          setShowPWAInstallModal(false);
+        } else if (showAdminModal) {
+          setShowAdminModal(false);
+        } else if (viewingProfile) {
+          setViewingProfile(null);
+        } else if (viewingStory) {
+          setViewingStory(null);
+        } else if (infoOpen) {
+          setInfoOpen(false);
+        } else if (replyingToMessage) {
+          setReplyingToMessage(null);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [
+    isLoggedIn,
+    reactionPopForMsg,
+    isSlashMenuOpen,
+    showEmojiPicker,
+    mobileHeaderMenuOpen,
+    showStatusMenu,
+    showUserSearchDropdown,
+    mobileSearchOpen,
+    showInstagramSearch,
+    showNewChatModal,
+    showNewGroupModal,
+    showAddMemberModal,
+    showDiscoverChannels,
+    showSettingsModal,
+    showChatThemeModal,
+    showMusicBotModal,
+    showCreateStoryModal,
+    showPWAInstallModal,
+    showAdminModal,
+    viewingProfile,
+    viewingStory,
+    infoOpen,
+    replyingToMessage,
+  ]);
 
   // Request Browser Notification Permission
   const requestNotificationPermission = useCallback(async () => {
@@ -1496,8 +1697,9 @@ export default function Home() {
     }
   }, [activeGroupId]);
 
-  // Auto-scroll on new messages
+  // Auto-scroll on new messages & reset scroll button on room switch
   useEffect(() => {
+    setShowScrollToBottom(false);
     streamEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, activeGroupId]);
 
@@ -3664,7 +3866,7 @@ export default function Home() {
     <div className="flex h-screen h-[100dvh] w-full overflow-hidden bg-[#0B0E17] text-[#E9ECF4] relative font-sans select-text">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[220] flex items-center gap-2 bg-[#1A2234]/95 backdrop-blur-md border border-white/10 px-4 py-2.5 rounded-2xl shadow-2xl text-xs sm:text-sm animate-msg-in">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[220] flex items-center gap-2 bg-[#141926]/95 backdrop-blur-md border border-white/[0.1] px-4 py-2.5 rounded-xl shadow-2xl text-xs sm:text-sm animate-msg-in">
           <Info className="w-4 h-4 text-[#818CF8]" />
           <span>{toastMessage}</span>
         </div>
@@ -3701,7 +3903,7 @@ export default function Home() {
           {/* Caller Center */}
           <div className="flex flex-col items-center my-auto w-full max-w-md">
             {activeCall.type === 'video' ? (
-              <div className="relative w-full aspect-[3/4] max-h-[60vh] rounded-3xl overflow-hidden bg-black border-2 border-white/10 shadow-2xl flex items-center justify-center">
+              <div className="relative w-full aspect-[3/4] max-h-[60vh] rounded-2xl overflow-hidden bg-black border border-white/10 shadow-2xl flex items-center justify-center">
                 {/* Remote Video Stream */}
                 <video
                   ref={remoteVideoRef}
@@ -3716,19 +3918,19 @@ export default function Home() {
                   autoPlay
                   playsInline
                   muted
-                  className={`absolute top-3 right-3 w-24 h-32 rounded-2xl object-cover border-2 border-white/30 shadow-2xl z-10 ${activeCall.isVideoOff ? 'hidden' : 'block'
+                  className={`absolute top-3 right-3 w-24 h-32 rounded-xl object-cover border border-white/25 shadow-2xl z-10 ${activeCall.isVideoOff ? 'hidden' : 'block'
                     }`}
                 />
 
-                <div className="absolute top-3 left-3 bg-black/60 px-2.5 py-1 rounded-full text-[10px] font-semibold text-white z-10 flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <div className="absolute top-3 left-3 bg-black/60 px-2.5 py-1 rounded-full text-[10px] font-semibold text-white z-10 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
                   <span>{activeCall.statusText || 'Live WebRTC HD'}</span>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col items-center">
                 <div className="relative mb-6">
-                  <div className="w-32 h-32 rounded-full overflow-hidden bg-[#162044] p-2 border-4 border-[#6366F1]/50 shadow-2xl animate-pulse">
+                  <div className="w-32 h-32 rounded-full overflow-hidden bg-[#162044] p-2 border-2 border-[#6366F1]/50 shadow-2xl">
                     <img
                       src={activeCall.targetAvatar}
                       alt={activeCall.targetName}
@@ -3738,9 +3940,9 @@ export default function Home() {
                   <span className="absolute bottom-1 right-2 w-5 h-5 rounded-full bg-[#22C55E] border-2 border-[#0A0D14]" />
                 </div>
                 <h3 className="text-xl font-bold text-white mb-1">{activeCall.targetName}</h3>
-                <p className="text-xs text-[#818CF8] font-semibold flex items-center gap-1">
+                <p className="text-xs text-[#818CF8] font-semibold flex items-center gap-1.5">
                   {activeCall.statusText === 'Connected (Live)' && (
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
                   )}
                   <span>{activeCall.statusText || (activeCall.duration > 0 ? 'Connected' : 'Connecting...')}</span>
                 </p>
@@ -3784,7 +3986,7 @@ export default function Home() {
       {/* USER PROFILE CARD MODAL (When clicking someone's avatar/name/search result) */}
       {viewingProfile && (
         <div className="fixed inset-0 z-[210] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-msg-in">
-          <div className="w-full max-w-sm bg-[#131722] border border-[#232B3E] rounded-3xl p-6 shadow-2xl relative flex flex-col items-center text-center">
+          <div className="w-full max-w-sm bg-[#111622] border border-white/[0.08] rounded-2xl p-6 shadow-2xl relative flex flex-col items-center text-center">
             <button
               onClick={() => setViewingProfile(null)}
               className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white"
@@ -3901,7 +4103,7 @@ export default function Home() {
                   handleStartDm(targetUser);
                   setViewingProfile(null);
                 }}
-                className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 active:scale-95 transition-all"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 active:scale-95 transition-all"
               >
                 <MessageSquare className="w-4 h-4" />
                 <span>Direct Message (DM)</span>
@@ -3914,12 +4116,12 @@ export default function Home() {
                   if (typeof window !== 'undefined') {
                     const link = `${window.location.origin}/?user=${encodeURIComponent(handle)}`;
                     navigator.clipboard.writeText(link);
-                    triggerToast(`Copied @${handle}'s profile link! 📋`);
+                    triggerToast(`Copied @${handle}'s profile link`);
                   }
                 }}
-                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                className="w-full bg-white/5 hover:bg-white/10 border border-white/[0.08] text-white py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
               >
-                <LinkIcon className="w-3.5 h-3.5 text-pink-400" />
+                <LinkIcon className="w-3.5 h-3.5 text-indigo-400" />
                 <span>Share Profile Link</span>
               </button>
             </div>
@@ -4059,8 +4261,8 @@ export default function Home() {
                           setAvatarStudioConfig(p.config);
                         }}
                         className={`relative aspect-square rounded-full p-0.5 transition-all overflow-hidden bg-[#161C28] border-2 ${isSelected
-                            ? 'border-indigo-500 ring-2 ring-indigo-500/50 scale-105 shadow-md'
-                            : 'border-transparent hover:border-white/30 opacity-85 hover:opacity-100'
+                          ? 'border-indigo-500 ring-2 ring-indigo-500/50 scale-105 shadow-md'
+                          : 'border-transparent hover:border-white/30 opacity-85 hover:opacity-100'
                           }`}
                         title={p.name + ' - ' + p.tag}
                       >
@@ -4113,10 +4315,10 @@ export default function Home() {
                   }
                   placeholder="your_handle"
                   className={`w-full bg-[#0D1017] border rounded-xl pl-8 pr-3.5 py-2.5 text-sm text-white placeholder-[#5A6376] outline-none transition-colors ${profileUsernameInput
-                      ? usernameAvailability.available
-                        ? 'border-emerald-500/60 focus:border-emerald-500'
-                        : 'border-rose-500/60 focus:border-rose-500'
-                      : 'border-[#232B3E] focus:border-[#6366F1]'
+                    ? usernameAvailability.available
+                      ? 'border-emerald-500/60 focus:border-emerald-500'
+                      : 'border-rose-500/60 focus:border-rose-500'
+                    : 'border-[#232B3E] focus:border-[#6366F1]'
                     }`}
                   required
                 />
@@ -4154,8 +4356,8 @@ export default function Home() {
               type="submit"
               disabled={!profileUsernameInput || !usernameAvailability.available}
               className={`w-full font-semibold py-3 rounded-xl text-sm transition-all shadow-lg flex items-center justify-center gap-2 ${profileUsernameInput && usernameAvailability.available
-                  ? 'bg-[#6366F1] hover:bg-[#5457E5] active:scale-[0.98] text-white shadow-[#6366F1]/25'
-                  : 'bg-[#1C2230] text-[#5A6376] cursor-not-allowed'
+                ? 'bg-[#6366F1] hover:bg-[#5457E5] active:scale-[0.98] text-white shadow-[#6366F1]/25'
+                : 'bg-[#1C2230] text-[#5A6376] cursor-not-allowed'
                 }`}
             >
               Save Profile & ID <Send className="w-4 h-4" />
@@ -4291,7 +4493,7 @@ export default function Home() {
         <div className="fixed inset-0 z-[190] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
           <form
             onSubmit={handleCreateGroup}
-            className="w-full max-w-sm bg-[#131722] border border-[#232B3E] rounded-3xl p-5 sm:p-6 shadow-2xl animate-msg-in max-h-[90vh] overflow-y-auto scroll"
+            className="w-full max-w-sm bg-[#111622] border border-white/[0.08] rounded-2xl p-5 sm:p-6 shadow-2xl animate-msg-in max-h-[90vh] overflow-y-auto scroll"
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-white flex items-center gap-2">
@@ -4307,7 +4509,7 @@ export default function Home() {
             </div>
 
             {/* Public vs Private Selector */}
-            <div className="grid grid-cols-2 gap-2 mb-3 bg-[#0D1017] p-1.5 rounded-xl border border-[#232B3E]">
+            <div className="grid grid-cols-2 gap-2 mb-3 bg-[#0D1017] p-1.5 rounded-xl border border-white/[0.08]">
               <button
                 type="button"
                 onClick={() => setNewGroupIsPrivate(false)}
@@ -4322,7 +4524,7 @@ export default function Home() {
                 className={`py-2 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${newGroupIsPrivate ? 'bg-[#6366F1] text-white shadow' : 'text-[#7A8396] hover:text-white'
                   }`}
               >
-                <Lock className="w-3.5 h-3.5" /> Private 🔒
+                <Lock className="w-3.5 h-3.5" /> Private
               </button>
             </div>
 
@@ -4381,8 +4583,8 @@ export default function Home() {
       {/* 1. WHATSAPP & TELEGRAM CHAT CONVERSATIONS LIST (Primary screen on mobile when !activeGroupId, Left panel on desktop) */}
       <div
         className={`h-full shrink-0 transition-all select-none relative z-30 ${!activeGroupId
-            ? 'w-full md:w-[360px] lg:w-[400px]'
-            : 'hidden md:block md:w-[360px] lg:w-[400px]'
+          ? 'w-full md:w-[360px] lg:w-[400px]'
+          : 'hidden md:block md:w-[360px] lg:w-[400px]'
           }`}
       >
         <WhatsAppChatsList
@@ -4497,7 +4699,7 @@ export default function Home() {
                 }}
                 className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs hover:bg-white/5 text-white font-semibold transition-colors"
               >
-                <Settings className="w-3.5 h-3.5 text-emerald-400" />
+                <Settings className="w-3.5 h-3.5 text-indigo-400" />
                 <span>Settings & Preferences</span>
               </button>
 
@@ -4523,25 +4725,20 @@ export default function Home() {
           }`}
       >
         {!activeGroup ? (
-          /* WhatsApp Web / Telegram Desktop Welcome Screen */
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none bg-[#090C13]">
-            <div className="relative mb-6">
-              <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-emerald-500/20 via-indigo-500/20 to-purple-500/20 border border-white/10 grid place-items-center shadow-2xl">
-                <MessageSquare className="w-10 h-10 text-emerald-400" />
-              </div>
-              <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-indigo-500 text-white grid place-items-center text-xs shadow-md">
-                ⚡
-              </span>
+          /* Enterprise Messenger Workspace Welcome Screen */
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center select-none bg-[#0B0E14]">
+            <div className="w-16 h-16 rounded-2xl bg-indigo-600/15 border border-indigo-500/25 grid place-items-center mb-5 shadow-lg">
+              <MessageSquare className="w-8 h-8 text-indigo-400" />
             </div>
-            <h2 className="text-xl sm:text-2xl font-black text-white mb-2">LMC Chats Web</h2>
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-2">LMC Chats Workspace</h2>
             <p className="text-xs sm:text-sm text-[#7A8396] max-w-sm mb-6 leading-relaxed">
-              Send and receive messages with your squad in real-time. Select a chat from the left or click New Chat to start talking.
+              Select a conversation from the sidebar, start a new direct message, or jump anywhere using the quick switcher.
             </p>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center justify-center gap-3">
               <button
                 type="button"
                 onClick={() => setShowNewChatModal(true)}
-                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-emerald-600/30 active:scale-95 transition-all"
+                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 active:scale-95 transition-all"
               >
                 <Plus className="w-4 h-4" />
                 <span>New Chat</span>
@@ -4549,15 +4746,16 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setShowInstagramSearch(true)}
-                className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 border border-white/10 active:scale-95 transition-all"
+                className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 border border-white/[0.08] active:scale-95 transition-all"
               >
-                <Search className="w-4 h-4" />
-                <span>Search Squad</span>
+                <Search className="w-4 h-4 text-[#A8B2C7]" />
+                <span>Quick Switcher</span>
+                <kbd className="text-[10px] font-mono bg-white/5 border border-white/10 px-1.5 py-0.5 rounded text-[#8E98AB]">⌘K</kbd>
               </button>
             </div>
-            <div className="mt-12 flex items-center gap-2 text-[11px] text-[#5A6376]">
+            <div className="mt-10 flex items-center gap-2 text-[11px] text-[#5A6376]">
               <Lock className="w-3.5 h-3.5 text-emerald-400/80" />
-              <span>End-to-end encrypted • Real-time Sync • WebRTC Voice & Video</span>
+              <span>End-to-end signed • Real-time Sync • WebRTC Voice & Video</span>
             </div>
           </div>
         ) : (
@@ -4642,7 +4840,7 @@ export default function Home() {
                                 e.stopPropagation();
                                 handleJoinGroup(activeGroup.id);
                               }}
-                              className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-[10px] shadow-sm flex items-center gap-1 active:scale-95 transition-all shrink-0"
+                              className="px-2 py-0.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[10px] flex items-center gap-1 active:scale-95 transition-all shrink-0"
                               title="Join this channel"
                             >
                               <Plus className="w-2.5 h-2.5" />
@@ -4651,11 +4849,11 @@ export default function Home() {
                           )}
                         </h1>
                         {activeTypers.length > 0 ? (
-                          <p className="text-[10px] sm:text-[11px] text-indigo-400 font-semibold flex items-center gap-1.5 truncate animate-pulse">
+                          <p className="text-[10px] sm:text-[11px] text-indigo-400 font-medium flex items-center gap-1.5 truncate">
                             <span className="flex gap-0.5 items-center">
-                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                              <span className="typing-dot w-1 h-1 rounded-full bg-indigo-400" />
+                              <span className="typing-dot w-1 h-1 rounded-full bg-indigo-400" />
+                              <span className="typing-dot w-1 h-1 rounded-full bg-indigo-400" />
                             </span>
                             <span>
                               {activeTypers.length === 1
@@ -4670,16 +4868,12 @@ export default function Home() {
                               .split('_')
                               .find((u) => u.toLowerCase() !== (user.username || user.name || '').toLowerCase());
                             const dmPresence = dmPartnerHandle ? presenceMap[dmPartnerHandle.toLowerCase()] : null;
-                            const partner = registeredUsers.find(
-                              (u) => u.username.toLowerCase() === (dmPartnerHandle || '').toLowerCase()
-                            );
-                            const partnerId = partner?.id || (dmPartnerHandle ? `usr_${dmPartnerHandle}` : '');
 
                             return (
                               <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] truncate">
                                 {dmPresence?.is_online ? (
-                                  <span className="text-emerald-400 font-semibold flex items-center gap-1 shrink-0">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                  <span className="text-emerald-400 font-medium flex items-center gap-1 shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                                     <span>Online</span>
                                   </span>
                                 ) : (
@@ -4691,15 +4885,7 @@ export default function Home() {
                                 {dmPartnerHandle && (
                                   <>
                                     <span className="text-[#5A6376]">•</span>
-                                    <span className="text-indigo-400 font-mono font-medium truncate">@{dmPartnerHandle}</span>
-                                  </>
-                                )}
-                                {partnerId && (
-                                  <>
-                                    <span className="text-[#5A6376]">•</span>
-                                    <span className="text-[#A8B2C7] font-mono text-[9px] bg-white/5 px-1.5 py-0.2 rounded shrink-0">
-                                      ID: {partnerId}
-                                    </span>
+                                    <span className="text-[#8E98AB] font-mono truncate">@{dmPartnerHandle}</span>
                                   </>
                                 )}
                               </div>
@@ -4722,7 +4908,7 @@ export default function Home() {
                                 <span>{Math.max(1, uniqueGrpMembers.length)} members</span>
                                 <span>•</span>
                                 <span className="flex items-center gap-1 text-emerald-400 font-medium">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
                                   {Math.max(1, onlineInGrp)} online
                                 </span>
                               </p>
@@ -4796,7 +4982,7 @@ export default function Home() {
                               }}
                               className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
                             >
-                              <Search className="w-4 h-4 text-pink-400" />
+                              <Search className="w-4 h-4 text-[#A8B2C7]" />
                               <span>Search in Chat</span>
                             </button>
 
@@ -4809,7 +4995,7 @@ export default function Home() {
                               }}
                               className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#E9ECF4] hover:bg-white/5 transition-all text-left"
                             >
-                              <Palette className="w-4 h-4 text-purple-400" />
+                              <Palette className="w-4 h-4 text-[#A8B2C7]" />
                               <span>Wallpaper & Colors</span>
                             </button>
 
@@ -4965,17 +5151,17 @@ export default function Home() {
 
             {/* Join Channel Banner if user is viewing as guest */}
             {!isJoinedToActiveGroup && (
-              <div className="bg-gradient-to-r from-indigo-950/90 via-purple-950/70 to-indigo-950/90 border-b border-indigo-500/30 px-3.5 py-2.5 flex items-center justify-between gap-2 shrink-0 animate-msg-in">
+              <div className="bg-[#141926] border-b border-white/[0.08] px-3.5 py-2.5 flex items-center justify-between gap-2 shrink-0 animate-msg-in">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping shrink-0" />
-                  <p className="text-xs text-indigo-200 truncate">
-                    Viewing <span className="font-bold text-white">#{activeGroup.name}</span>. Join to chat & react!
+                  <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0" />
+                  <p className="text-xs text-[#C5CCE0] truncate">
+                    Viewing <span className="font-semibold text-white">#{activeGroup.name}</span>. Join to chat & react.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleJoinGroup(activeGroup.id)}
-                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 active:scale-95 transition-all shrink-0 flex items-center gap-1"
+                  className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs active:scale-95 transition-all shrink-0 flex items-center gap-1"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Join Channel</span>
@@ -4984,171 +5170,214 @@ export default function Home() {
             )}
 
             {/* Message Stream */}
-            <div
-              className="flex-1 overflow-y-auto scroll p-3 sm:p-6 space-y-4 transition-all duration-300 relative"
-              style={getWallpaperStyle(wallpaperPreset, customWallpaperImage)}
-            >
-              <div className="flex items-center justify-center my-2">
-                <span className="text-[10px] font-semibold text-[#7A8396] bg-white/5 px-3 py-1 rounded-full">
-                  Today
-                </span>
-              </div>
+            <div className="relative flex-1 min-h-0 flex flex-col">
+              <div
+                ref={chatStreamRef}
+                onScroll={handleStreamScroll}
+                className="flex-1 overflow-y-auto scroll p-3 sm:p-6 space-y-1 transition-all duration-300 relative"
+                style={getWallpaperStyle(wallpaperPreset, customWallpaperImage)}
+              >
+                {displayedMessages.length === 0 ? (
+                  <div className="h-full min-h-[260px] flex flex-col items-center justify-center text-center px-4 select-none">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-600/15 border border-indigo-500/25 grid place-items-center text-indigo-400 mb-3">
+                      {isDmMode ? <MessageSquare className="w-5 h-5" /> : <Hash className="w-5 h-5" />}
+                    </div>
+                    <h3 className="text-sm font-semibold text-white mb-1">
+                      {isDmMode ? `Direct conversation with ${activeGroup.name}` : `Welcome to #${activeGroup.name}`}
+                    </h3>
+                    <p className="text-xs text-[#7A8396] max-w-xs leading-relaxed">
+                      {activeGroup.description || 'Send a message, upload media, or type / to trigger bot commands.'}
+                    </p>
+                  </div>
+                ) : null}
 
-              {displayedMessages.map((msg) => {
-                const isMe = Boolean(
-                  (user.name && msg.sender_name && msg.sender_name.toLowerCase() === user.name.toLowerCase()) ||
-                  (user.username && msg.sender_username && msg.sender_username.toLowerCase() === user.username.toLowerCase()) ||
-                  (user.id && (msg.user_id === user.id || msg.sender_id === user.id))
-                );
-                return (
-                  <div
-                    key={msg.id}
-                    id={`msg-${msg.id}`}
-                    className={`flex gap-2.5 sm:gap-3 group relative animate-msg-in transition-colors rounded-2xl p-1 ${isMe ? 'flex-row-reverse' : 'flex-row'
-                      }`}
-                  >
-                    {!isMe && (
-                      <button
-                        onClick={() => {
-                          const matched = registeredUsers.find(
-                            (u) =>
-                              (msg.sender_username && u.username.toLowerCase() === msg.sender_username.toLowerCase()) ||
-                              u.name.toLowerCase() === msg.sender_name.toLowerCase()
-                          );
-                          setViewingProfile({
-                            id: matched?.id || `usr_${msg.sender_name.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
-                            name: msg.sender_name,
-                            username: msg.sender_username || matched?.username,
-                            avatar: msg.sender_avatar,
-                            bio: msg.sender_bio || matched?.bio,
-                            status: matched?.status || 'online',
-                          });
-                        }}
-                        className="w-8 h-8 rounded-full overflow-hidden bg-[#161C28] p-0.5 shrink-0 mt-1 border border-white/10 hover:scale-105 transition-transform"
-                        title={`View @${msg.sender_username || msg.sender_name}'s profile`}
+                {displayedMessages.map((msg, idx) => {
+                  const isMe = Boolean(
+                    (user.name && msg.sender_name && msg.sender_name.toLowerCase() === user.name.toLowerCase()) ||
+                    (user.username && msg.sender_username && msg.sender_username.toLowerCase() === user.username.toLowerCase()) ||
+                    (user.id && (msg.user_id === user.id || msg.sender_id === user.id))
+                  );
+                  const prevMsg = idx > 0 ? displayedMessages[idx - 1] : null;
+                  const currDateKey = getMessageDateKey(msg.created_at);
+                  const prevDateKey = prevMsg ? getMessageDateKey(prevMsg.created_at) : '';
+                  const showDateDivider = idx === 0 || (Boolean(currDateKey) && currDateKey !== prevDateKey);
+                  const currSenderKey = (msg.sender_username || msg.sender_name || '').toLowerCase();
+                  const prevSenderKey = prevMsg ? (prevMsg.sender_username || prevMsg.sender_name || '').toLowerCase() : '';
+                  const timeDiffMs = prevMsg ? new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime() : Infinity;
+                  const isGroupedWithPrev = Boolean(
+                    !showDateDivider &&
+                    prevMsg &&
+                    currSenderKey &&
+                    currSenderKey === prevSenderKey &&
+                    !msg.reply_to &&
+                    !msg.burn_after_read &&
+                    !prevMsg.burn_after_read &&
+                    timeDiffMs >= 0 &&
+                    timeDiffMs < 3 * 60 * 1000
+                  );
+
+                  return (
+                    <React.Fragment key={msg.id}>
+                      {showDateDivider && (
+                        <div className="flex items-center justify-center my-4 select-none">
+                          <span className="text-[11px] font-medium text-[#8E98AB] bg-[#141926]/90 border border-white/[0.06] px-3 py-0.5 rounded-full shadow-sm">
+                            {formatMessageDateLabel(msg.created_at)}
+                          </span>
+                        </div>
+                      )}
+
+                      <div
+                        id={`msg-${msg.id}`}
+                        className={`flex gap-2.5 sm:gap-3 group relative animate-msg-in transition-colors rounded-xl px-1 ${
+                          isGroupedWithPrev ? 'py-0.5' : 'pt-2 pb-0.5'
+                        } ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
                       >
-                        <img
-                          src={msg.sender_avatar || DEFAULT_AVATAR_DATA_URL}
-                          alt=""
-                          onError={(e) => {
-                            e.currentTarget.onerror = null;
-                            e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
-                          }}
-                          className="w-full h-full object-cover rounded-full"
-                        />
-                      </button>
-                    )}
-
-                    <div className={`flex flex-col max-w-[85%] sm:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
-                      {!isMe && (
-                        <button
-                          onClick={() => {
-                            const matched = registeredUsers.find(
-                              (u) =>
-                                (msg.sender_username && u.username.toLowerCase() === msg.sender_username.toLowerCase()) ||
-                                u.name.toLowerCase() === msg.sender_name.toLowerCase()
-                            );
-                            setViewingProfile({
-                              id: matched?.id || `usr_${msg.sender_name.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
-                              name: msg.sender_name,
-                              username: msg.sender_username || matched?.username,
-                              avatar: msg.sender_avatar,
-                              bio: msg.sender_bio || matched?.bio,
-                              status: matched?.status || 'online',
-                            });
-                          }}
-                          className="flex items-center gap-1.5 mb-1 px-1 hover:underline text-left group"
-                        >
-                          <span className="text-xs font-bold text-[#DDE2EE] group-hover:text-white">{msg.sender_name}</span>
-                          {msg.sender_username && (
-                            <span className="text-[11px] text-[#818CF8] font-mono">@{msg.sender_username}</span>
-                          )}
-                          <time className="text-[10px] text-[#7A8396]">
-                            {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </time>
-                        </button>
-                      )}
-
-                      {/* Quoted Message Reply Context */}
-                      {msg.reply_to && (
-                        <div
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const el = document.getElementById(`msg-${msg.reply_to?.id}`);
-                            if (el) {
-                              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                              el.classList.add('ring-2', 'ring-indigo-400', 'bg-indigo-500/10');
-                              setTimeout(() => {
-                                el.classList.remove('ring-2', 'ring-indigo-400', 'bg-indigo-500/10');
-                              }, 2000);
-                            }
-                          }}
-                          className={`mb-1 p-2 rounded-xl text-left cursor-pointer border-l-2 transition-all max-w-full shadow-sm ${isMe
-                              ? 'bg-indigo-950/70 border-indigo-300 text-white hover:bg-indigo-900/80'
-                              : 'bg-[#181E2E] border-indigo-400 text-[#E9ECF4] hover:bg-[#20273B]'
-                            }`}
-                          title="Click to jump to quoted message"
-                        >
-                          <p className="text-[10px] font-bold text-indigo-300 truncate flex items-center gap-1">
-                            <Reply className="w-2.5 h-2.5" />
-                            <span>{msg.reply_to.sender_name}</span>
-                          </p>
-                          <p className="text-[11px] text-[#A8B2C7] truncate mt-0.5 max-w-xs">
-                            {msg.reply_to.content || (msg.reply_to.msg_type === 'audio' ? '🎙️ Voice Note' : msg.reply_to.msg_type === 'image' ? '📷 Photo' : '📎 Attachment')}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Message Content */}
-                      {msg.msg_type === 'text' && (
-                        <div
-                          style={getBubbleStyle(bubbleTheme, isMe)}
-                          className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed break-words shadow-md select-text ${msg.burn_after_read
-                              ? isMe
-                                ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white border border-amber-400/40 shadow-amber-500/20 rounded-tr-sm'
-                                : 'bg-[#18131B] text-[#F3E8FF] border border-amber-500/40 shadow-amber-500/10 rounded-tl-sm'
-                              : isMe
-                                ? `${getBubbleClass(bubbleTheme)} rounded-tr-sm transition-colors`
-                                : 'bg-[#141824] text-[#E9ECF4] border border-[#232B3E] rounded-tl-sm'
-                            }`}
-                        >
-                          {msg.content}
-                          {msg.burn_after_read && (
-                            <GhostBurnTimer
-                              messageId={msg.id}
-                              totalSeconds={msg.burn_seconds || 10}
-                              onBurn={handleBurnMessage}
-                            />
-                          )}
-
-                          {/* WhatsApp & Telegram Double Ticks + Time */}
-                          <div className={`flex items-center gap-1 mt-1 text-[10px] select-none ${isMe ? 'justify-end text-white/70' : 'justify-end text-[#7A8396]'}`}>
-                            <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            {isMe && (() => {
-                              const isDm = activeGroupId.startsWith('dm_');
-                              const otherUser = isDm
-                                ? activeGroupId.replace('dm_', '').split('_').find((u) => u.toLowerCase() !== (user.username || user.name || '').toLowerCase())
-                                : null;
-                              const isSeen = otherUser
-                                ? (msg.read_by || []).some((r) => r.toLowerCase() === otherUser.toLowerCase())
-                                : (msg.read_by || []).length > 1;
-
-                              if (isSeen) {
-                                return (
-                                  <span title={isDm ? "Seen" : "Read by members"} className="inline-flex items-center">
-                                    <CheckCheck className="w-3.5 h-3.5 text-[#38BDF8] shrink-0" />
-                                  </span>
+                        {!isMe && (
+                          isGroupedWithPrev ? (
+                            <div className="w-8 shrink-0" aria-hidden="true" />
+                          ) : (
+                            <button
+                              onClick={() => {
+                                const matched = registeredUsers.find(
+                                  (u) =>
+                                    (msg.sender_username && u.username.toLowerCase() === msg.sender_username.toLowerCase()) ||
+                                    u.name.toLowerCase() === msg.sender_name.toLowerCase()
                                 );
-                              }
-                              return (
-                                <span title="Delivered" className="inline-flex items-center">
-                                  <CheckCheck className="w-3.5 h-3.5 text-white/60 shrink-0" />
-                                </span>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                      )}
+                                setViewingProfile({
+                                  id: matched?.id || `usr_${msg.sender_name.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+                                  name: msg.sender_name,
+                                  username: msg.sender_username || matched?.username,
+                                  avatar: msg.sender_avatar,
+                                  bio: msg.sender_bio || matched?.bio,
+                                  status: matched?.status || 'online',
+                                });
+                              }}
+                              className="w-8 h-8 rounded-full overflow-hidden bg-[#161C28] p-0.5 shrink-0 mt-0.5 border border-white/10 hover:scale-105 transition-transform"
+                              title={`View @${msg.sender_username || msg.sender_name}'s profile`}
+                            >
+                              <img
+                                src={msg.sender_avatar || DEFAULT_AVATAR_DATA_URL}
+                                alt=""
+                                onError={(e) => {
+                                  e.currentTarget.onerror = null;
+                                  e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
+                                }}
+                                className="w-full h-full object-cover rounded-full"
+                              />
+                            </button>
+                          )
+                        )}
+
+                        <div className={`flex flex-col max-w-[85%] sm:max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
+                          {!isMe && !isGroupedWithPrev && (
+                            <button
+                              onClick={() => {
+                                const matched = registeredUsers.find(
+                                  (u) =>
+                                    (msg.sender_username && u.username.toLowerCase() === msg.sender_username.toLowerCase()) ||
+                                    u.name.toLowerCase() === msg.sender_name.toLowerCase()
+                                );
+                                setViewingProfile({
+                                  id: matched?.id || `usr_${msg.sender_name.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+                                  name: msg.sender_name,
+                                  username: msg.sender_username || matched?.username,
+                                  avatar: msg.sender_avatar,
+                                  bio: msg.sender_bio || matched?.bio,
+                                  status: matched?.status || 'online',
+                                });
+                              }}
+                              className="flex items-center gap-1.5 mb-1 px-0.5 hover:underline text-left group"
+                            >
+                              <span className="text-xs font-semibold text-[#DDE2EE] group-hover:text-white">{msg.sender_name}</span>
+                              {msg.sender_username && (
+                                <span className="text-[11px] text-[#818CF8] font-mono">@{msg.sender_username}</span>
+                              )}
+                              <time className="text-[10px] text-[#7A8396]">
+                                {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </time>
+                            </button>
+                          )}
+
+                          {/* Quoted Message Reply Context */}
+                          {msg.reply_to && (
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const el = document.getElementById(`msg-${msg.reply_to?.id}`);
+                                if (el) {
+                                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                  el.classList.add('ring-2', 'ring-indigo-400', 'bg-indigo-500/10');
+                                  setTimeout(() => {
+                                    el.classList.remove('ring-2', 'ring-indigo-400', 'bg-indigo-500/10');
+                                  }, 2000);
+                                }
+                              }}
+                              className={`mb-1 p-2 rounded-xl text-left cursor-pointer border-l-2 transition-all max-w-full shadow-sm ${isMe
+                                ? 'bg-indigo-950/70 border-indigo-300 text-white hover:bg-indigo-900/80'
+                                : 'bg-[#181E2E] border-indigo-400 text-[#E9ECF4] hover:bg-[#20273B]'
+                                }`}
+                              title="Click to jump to quoted message"
+                            >
+                              <p className="text-[10px] font-bold text-indigo-300 truncate flex items-center gap-1">
+                                <Reply className="w-2.5 h-2.5" />
+                                <span>{msg.reply_to.sender_name}</span>
+                              </p>
+                              <p className="text-[11px] text-[#A8B2C7] truncate mt-0.5 max-w-xs">
+                                {msg.reply_to.content || (msg.reply_to.msg_type === 'audio' ? 'Voice Note' : msg.reply_to.msg_type === 'image' ? 'Photo' : 'Attachment')}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Message Content */}
+                          {msg.msg_type === 'text' && (
+                            <div
+                              style={getBubbleStyle(bubbleTheme, isMe)}
+                              className={`px-3.5 py-2 rounded-2xl text-sm leading-relaxed break-words shadow-sm select-text ${msg.burn_after_read
+                                ? isMe
+                                  ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white border border-amber-400/40 rounded-tr-sm'
+                                  : 'bg-[#18131B] text-[#F3E8FF] border border-amber-500/40 rounded-tl-sm'
+                                : isMe
+                                  ? `${getBubbleClass(bubbleTheme)} rounded-tr-sm transition-colors`
+                                  : 'bg-[#141926] text-[#E9ECF4] border border-white/[0.08] rounded-tl-sm'
+                                }`}
+                            >
+                              <div className="whitespace-pre-wrap">{renderFormattedMessage(msg.content || '', isMe)}</div>
+                              {msg.burn_after_read && (
+                                <GhostBurnTimer
+                                  messageId={msg.id}
+                                  totalSeconds={msg.burn_seconds || 10}
+                                  onBurn={handleBurnMessage}
+                                />
+                              )}
+
+                              {/* Double Ticks + Time */}
+                              <div className={`flex items-center gap-1 mt-1 text-[10px] select-none ${isMe ? 'justify-end text-white/70' : 'justify-end text-[#7A8396]'}`}>
+                                <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                {isMe && (() => {
+                                  const isDm = activeGroupId.startsWith('dm_');
+                                  const otherUser = isDm
+                                    ? activeGroupId.replace('dm_', '').split('_').find((u) => u.toLowerCase() !== (user.username || user.name || '').toLowerCase())
+                                    : null;
+                                  const isSeen = otherUser
+                                    ? (msg.read_by || []).some((r) => r.toLowerCase() === otherUser.toLowerCase())
+                                    : (msg.read_by || []).length > 1;
+
+                                  if (isSeen) {
+                                    return (
+                                      <span title={isDm ? "Seen" : "Read by members"} className="inline-flex items-center">
+                                        <CheckCheck className="w-3.5 h-3.5 text-[#38BDF8] shrink-0" />
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <span title="Delivered" className="inline-flex items-center">
+                                      <CheckCheck className="w-3.5 h-3.5 text-white/60 shrink-0" />
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          )}
 
                       {/* Voice Note Audio Memo */}
                       {msg.msg_type === 'audio' && msg.media_url && (
@@ -5332,6 +5561,22 @@ export default function Home() {
                           <Reply className="w-3.5 h-3.5" />
                         </button>
 
+                        {/* 1-Click Copy message text */}
+                        {msg.content && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopyMessage(msg.id, msg.content)}
+                            className="opacity-75 sm:opacity-0 sm:group-hover:opacity-100 hover:opacity-100 p-1.5 rounded-full text-[#7A8396] hover:text-white transition-all text-xs touch-manipulation active:scale-110"
+                            title="Copy message text"
+                          >
+                            {copiedMsgId === msg.id ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        )}
+
                         {(isAdminOfActiveGroup || isMe) && (
                           <button
                             onClick={() => handleDeleteMessage(msg.id)}
@@ -5344,24 +5589,38 @@ export default function Home() {
                       </div>
                     </div>
                   </div>
-                );
-              })}
-              {/* Real-time Floating Typing Indicator Bubble */}
-              {activeTypers.length > 0 && (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-[#141826]/90 border border-indigo-500/30 text-indigo-300 text-xs w-fit shadow-lg animate-msg-in mb-2">
-                  <span className="flex gap-1 items-center">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </span>
-                  <span className="text-[11px] font-semibold">
-                    {activeTypers.length === 1
-                      ? `${activeTypers[0].name} is typing...`
-                      : `${activeTypers.map((t) => t.name).join(', ')} are typing...`}
-                  </span>
-                </div>
+                    </React.Fragment>
+                  );
+                })}
+                {/* Real-time Floating Typing Indicator Bubble */}
+                {activeTypers.length > 0 && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#141926]/95 border border-white/[0.08] text-indigo-300 text-xs w-fit shadow-md animate-msg-in mb-2">
+                    <span className="flex gap-1 items-center">
+                      <span className="typing-dot w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                      <span className="typing-dot w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                      <span className="typing-dot w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                    </span>
+                    <span className="text-[11px] font-medium">
+                      {activeTypers.length === 1
+                        ? `${activeTypers[0].name} is typing...`
+                        : `${activeTypers.map((t) => t.name).join(', ')} are typing...`}
+                    </span>
+                  </div>
+                )}
+                <div ref={streamEndRef} />
+              </div>
+
+              {/* Floating Scroll-to-Bottom Button */}
+              {showScrollToBottom && (
+                <button
+                  type="button"
+                  onClick={() => streamEndRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                  className="absolute bottom-4 right-4 sm:right-6 z-30 w-9 h-9 rounded-full bg-[#141926]/95 hover:bg-[#1C2333] border border-white/[0.12] text-[#E9ECF4] shadow-xl grid place-items-center transition-all active:scale-95 animate-msg-in"
+                  title="Jump to latest messages"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
               )}
-              <div ref={streamEndRef} />
             </div>
 
             {/* Reaction Quick Bar Popover */}
@@ -5415,7 +5674,7 @@ export default function Home() {
 
               {/* UNIFIED EMOJI, GIF & STICKER DRAWER */}
               {showEmojiPicker && (
-                <div className="absolute bottom-full mb-3 right-2.5 sm:right-16 left-2.5 sm:left-auto w-[calc(100vw-20px)] sm:w-[380px] max-h-[60vh] bg-[#141824]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-3.5 shadow-2xl z-50 animate-msg-in flex flex-col">
+                <div className="absolute bottom-full mb-3 right-2.5 sm:right-16 left-2.5 sm:left-auto w-[calc(100vw-20px)] sm:w-[380px] max-h-[60vh] bg-[#111622]/95 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-3.5 shadow-2xl z-50 animate-msg-in flex flex-col">
                   {/* Top Navigation Tabs */}
                   <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/10">
                     <div className="flex gap-1 bg-black/40 p-1 rounded-xl">
@@ -5604,9 +5863,9 @@ export default function Home() {
 
               {/* Ghost Mode Active Banner */}
               {ghostModeActive && (
-                <div className="max-w-4xl mx-auto mb-2 px-3 py-1.5 bg-gradient-to-r from-amber-950/70 via-orange-950/50 to-amber-950/70 border border-amber-500/40 rounded-xl flex items-center justify-between text-xs text-amber-300 font-semibold animate-msg-in shadow-md">
+                <div className="max-w-4xl mx-auto mb-2 px-3 py-1.5 bg-amber-950/50 border border-amber-500/30 rounded-xl flex items-center justify-between text-xs text-amber-300 font-medium animate-msg-in">
                   <span className="flex items-center gap-1.5">
-                    <Flame className="w-3.5 h-3.5 text-amber-400 animate-bounce" />
+                    <Flame className="w-3.5 h-3.5 text-amber-400" />
                     <span>Ghost Mode (Burn-on-Read): Message burns from screen & database 10s after read</span>
                   </span>
                   <button
@@ -5621,7 +5880,7 @@ export default function Home() {
 
               {/* Replying Banner Above Input */}
               {replyingToMessage && (
-                <div className="max-w-4xl mx-auto flex items-center justify-between px-3.5 py-2 bg-[#131724] border border-white/10 rounded-2xl mb-1.5 animate-msg-in shadow-md">
+                <div className="max-w-4xl mx-auto flex items-center justify-between px-3.5 py-2 bg-[#141926] border border-white/[0.08] rounded-2xl mb-1.5 animate-msg-in shadow-md">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-1 h-8 rounded-full bg-indigo-500 shrink-0" />
                     <div className="min-w-0">
@@ -5630,7 +5889,7 @@ export default function Home() {
                         <span>Replying to {replyingToMessage.sender_name}</span>
                       </p>
                       <p className="text-xs text-[#A8B2C7] truncate mt-0.5 max-w-sm">
-                        {replyingToMessage.content || (replyingToMessage.msg_type === 'audio' ? '🎙️ Voice Note' : replyingToMessage.msg_type === 'image' ? '📷 Photo' : '📎 Attachment')}
+                        {replyingToMessage.content || (replyingToMessage.msg_type === 'audio' ? 'Voice Note' : replyingToMessage.msg_type === 'image' ? 'Photo' : 'Attachment')}
                       </p>
                     </div>
                   </div>
@@ -5647,24 +5906,24 @@ export default function Home() {
 
               {/* Composer Input Bar or Join Channel CTA */}
               {!isJoinedToActiveGroup ? (
-                <div className="max-w-4xl mx-auto flex items-center justify-between p-3.5 rounded-2xl bg-[#131722] border border-[#232B3E] shadow-xl animate-msg-in">
+                <div className="max-w-4xl mx-auto flex items-center justify-between p-3.5 rounded-2xl bg-[#141926] border border-white/[0.08] shadow-xl animate-msg-in">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 grid place-items-center text-indigo-400 shrink-0">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-600/15 border border-indigo-500/25 grid place-items-center text-indigo-400 shrink-0">
                       <Users className="w-5 h-5" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs sm:text-sm font-bold text-white truncate">
+                      <p className="text-xs sm:text-sm font-semibold text-white truncate">
                         Join #{activeGroup.name} to send messages
                       </p>
                       <p className="text-[10px] sm:text-xs text-[#7A8396] truncate">
-                        Tap join to chat with members, share photos, and send voice notes
+                        Join to chat with members, share photos, and send voice notes
                       </p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleJoinGroup(activeGroup.id)}
-                    className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:opacity-95 text-white font-bold text-xs sm:text-sm shadow-md active:scale-95 transition-all shrink-0 flex items-center gap-1.5"
+                    className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm active:scale-95 transition-all shrink-0 flex items-center gap-1.5"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Join Channel</span>
@@ -5675,17 +5934,17 @@ export default function Home() {
                   onSubmit={(e) => {
                     e.preventDefault();
                     if (isCurrentUserBanned) {
-                      triggerToast('🚫 You are banned from sending messages in this channel');
+                      triggerToast('You are banned from sending messages in this channel');
                       return;
                     }
                     if (activeGroup?.is_read_only && !isAdminOfActiveGroup) {
-                      triggerToast('🔒 Channel is in Admin Read-Only mode');
+                      triggerToast('Channel is in Admin Read-Only mode');
                       return;
                     }
                     if (!inputText.trim()) return;
                     handleSendMessage(inputText, 'text');
                   }}
-                  className="relative max-w-4xl mx-auto flex items-end gap-1.5 sm:gap-2 bg-[#121622]/90 backdrop-blur-md border border-white/10 focus-within:border-[#6366F1]/50 rounded-2xl p-1.5 sm:p-2 transition-all shadow-lg"
+                  className="relative max-w-4xl mx-auto flex items-end gap-1.5 sm:gap-2 bg-[#121622]/90 backdrop-blur-md border border-white/[0.08] focus-within:border-[#6366F1]/50 rounded-2xl p-1.5 sm:p-2 transition-all shadow-lg"
                 >
                   {/* Telegram-style Slash Autocomplete Menu ("LMC Bot 🤖") */}
                   <SlashCommandMenu
@@ -5728,7 +5987,7 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={handleFinishVoiceRecording}
-                          className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition-all"
+                          className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center gap-1.5 active:scale-95 transition-all"
                           title="Send voice note"
                         >
                           <Send className="w-3.5 h-3.5" />
@@ -5843,13 +6102,13 @@ export default function Home() {
                             setGhostModeActive(nextState);
                             triggerToast(
                               nextState
-                                ? '🔥 Ghost Mode ON: Messages burn 10s after read!'
+                                ? 'Ghost Mode ON: Messages burn 10s after read'
                                 : 'Ghost Mode OFF'
                             );
                           }}
                           className={`p-1.5 sm:p-2 rounded-xl transition-all ${ghostModeActive
-                              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-md shadow-amber-500/20 animate-pulse'
-                              : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                            : 'text-[#A8B2C7] hover:text-white hover:bg-white/5'
                             }`}
                           title="Burn-on-Read Ghost Mode (Auto self-destruct in 10s)"
                         >
@@ -5875,8 +6134,8 @@ export default function Home() {
                             type="submit"
                             disabled={isSending}
                             className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl grid place-items-center text-white transition-all shadow-md ml-0.5 sm:ml-1 ${ghostModeActive
-                                ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 active:scale-95 shadow-amber-500/30'
-                                : 'bg-[#6366F1] hover:bg-[#5457E5] active:scale-95 shadow-[#6366F1]/30'
+                              ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 active:scale-95 shadow-amber-500/30'
+                              : 'bg-[#6366F1] hover:bg-[#5457E5] active:scale-95 shadow-[#6366F1]/30'
                               }`}
                             title="Send message"
                           >
@@ -6076,8 +6335,8 @@ export default function Home() {
                           const displayUsername = matchedUser?.username
                             ? `@${matchedUser.username}`
                             : isCurrent && user.username
-                            ? `@${user.username}`
-                            : `@${cleanHandle}`;
+                              ? `@${user.username}`
+                              : `@${cleanHandle}`;
 
                           const isDicebear = (url?: string) => Boolean(url && url.includes('dicebear.com'));
                           const cleanUserAvatar = isDicebear(user.avatar) ? DEFAULT_AVATAR_DATA_URL : (user.avatar || DEFAULT_AVATAR_DATA_URL);
@@ -6315,7 +6574,7 @@ export default function Home() {
         isInstalled={isAppInstalled}
         onInstallSuccess={() => {
           setIsAppInstalled(true);
-          triggerToast('🎉 LMC Chats App installed successfully!');
+          triggerToast('LMC Chats App installed');
         }}
       />
 

@@ -78,32 +78,33 @@ export default function CreateStoryModal({
   const EMOJI_LIST = ['🔥', '✨', '❤️', '😂', '🚀', '⚡', '🎉', '💯', '🍕', '😎', '☕', '🌟'];
 
   return (
-    <div className="fixed inset-0 z-[220] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-msg-in overflow-hidden">
-      <div className="w-full max-w-md bg-[#111520] border border-[#232B3E] rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] relative">
+    <div className="fixed inset-0 z-[220] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-msg-in overflow-hidden">
+      <div className="w-full max-w-md bg-[#111622] border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] relative">
         {/* Modal Header */}
-        <div className="px-5 py-3.5 border-b border-white/10 flex items-center justify-between shrink-0">
+        <div className="px-5 py-3.5 border-b border-white/[0.08] bg-[#141926] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-pink-400" />
-            <h3 className="text-sm font-bold text-white tracking-wide">Add Status / Story</h3>
+            <Type className="w-4 h-4 text-indigo-400" />
+            <h3 className="text-sm font-bold text-white tracking-tight">Publish Status Update</h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 grid place-items-center text-[#7A8396] hover:text-white transition-colors"
+            className="w-7 h-7 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] grid place-items-center text-[#8A94A6] hover:text-white transition-colors"
+            title="Close"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Tab Selector: Text vs Photo */}
-        <div className="flex p-2 bg-[#0B0E17] border-b border-white/10 gap-2 shrink-0">
+        <div className="flex p-1.5 bg-[#0B0E14] border-b border-white/[0.06] gap-1.5 shrink-0">
           <button
             type="button"
             onClick={() => setStoryType('text')}
-            className={`flex-1 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
               storyType === 'text'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-[#7A8396] hover:text-white hover:bg-white/5'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-[#8A94A6] hover:text-white hover:bg-white/[0.04]'
             }`}
           >
             <Type className="w-3.5 h-3.5" />
@@ -112,10 +113,10 @@ export default function CreateStoryModal({
           <button
             type="button"
             onClick={() => setStoryType('image')}
-            className={`flex-1 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
+            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
               storyType === 'image'
-                ? 'bg-pink-600 text-white shadow-md'
-                : 'text-[#7A8396] hover:text-white hover:bg-white/5'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-[#8A94A6] hover:text-white hover:bg-white/[0.04]'
             }`}
           >
             <ImageIcon className="w-3.5 h-3.5" />
@@ -245,7 +246,7 @@ export default function CreateStoryModal({
                 (storyType === 'text' && !textContent.trim()) ||
                 (storyType === 'image' && !imagePreview)
               }
-              className="w-full bg-gradient-to-r from-pink-600 to-indigo-600 hover:from-pink-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-pink-600/30 active:scale-[0.98] transition-all"
+              className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] transition-all"
             >
               <Check className="w-4 h-4" />
               <span>{isSubmitting ? 'Publishing...' : 'Share Status (24 Hours)'}</span>

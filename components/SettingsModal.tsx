@@ -151,7 +151,7 @@ export default function SettingsModal({
         setCustomImage(reader.result);
         setCurrentWallpaper('custom');
         onUpdateTheme('custom', reader.result, currentBubble);
-        triggerToast('Custom wallpaper applied! ✨');
+        triggerToast('Custom wallpaper applied');
       }
     };
     reader.readAsDataURL(file);
@@ -164,7 +164,7 @@ export default function SettingsModal({
       return;
     }
     onUpdateProfile(nameInput.trim(), bioInput.trim(), selectedAvatar);
-    triggerToast('Profile updated successfully! ✅');
+    triggerToast('Profile updated');
   };
 
   const handleSelectWallpaper = (wpId: WallpaperPresetId) => {
@@ -189,11 +189,11 @@ export default function SettingsModal({
 
   return (
     <div className="fixed inset-0 z-[220] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md animate-msg-in">
-      <div className="w-full max-w-2xl bg-[#0F1420] border border-white/10 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div className="w-full max-w-2xl bg-[#111622] border border-white/[0.08] rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between shrink-0 bg-[#131929]">
+        <div className="px-5 py-4 border-b border-white/[0.08] flex items-center justify-between shrink-0 bg-[#141926]">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-emerald-500 grid place-items-center text-white shadow-md">
+            <div className="w-8 h-8 rounded-xl bg-indigo-600/15 border border-indigo-500/25 grid place-items-center text-indigo-400">
               <Settings className="w-4 h-4" />
             </div>
             <div>
@@ -278,10 +278,10 @@ export default function SettingsModal({
                           onOpenAvatarStudio();
                           onClose();
                         }}
-                        className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-md shadow-indigo-600/25 flex items-center gap-1.5 active:scale-95 transition-all"
+                        className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center gap-1.5 active:scale-95 transition-all"
                       >
-                        <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                        <span>3D Bitmoji Studio</span>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Avatar Studio</span>
                       </button>
 
                       <button
@@ -349,7 +349,7 @@ export default function SettingsModal({
                         onClick={() => {
                           if (typeof navigator !== 'undefined') {
                             navigator.clipboard?.writeText(userIdText);
-                            triggerToast('User ID copied to clipboard! 📋');
+                            triggerToast('User ID copied to clipboard');
                           }
                         }}
                         className="p-1 hover:text-white transition-colors"
@@ -526,44 +526,44 @@ export default function SettingsModal({
                       <p className="text-[11px] text-[#7A8396]">Play subtle pop sounds on incoming chat messages</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onToggleSoundOrNotification();
-                      triggerToast(soundMuted ? 'Sound alerts enabled 🔔' : 'Sound alerts muted 🔕');
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      soundMuted
-                        ? 'bg-white/5 text-[#7A8396] hover:text-white'
-                        : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    }`}
-                  >
-                    {soundMuted ? 'Muted' : 'Enabled'}
-                  </button>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-[#141A28] border border-white/5 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-purple-500/15 text-purple-400 grid place-items-center">
-                      <Smartphone className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-white">Browser Push Notifications</h4>
-                      <p className="text-[11px] text-[#7A8396]">
-                        Status: <span className="font-semibold text-white capitalize">{notificationPermission}</span>
-                      </p>
-                    </div>
-                  </div>
-                  {notificationPermission !== 'granted' ? (
                     <button
                       type="button"
                       onClick={() => {
                         onToggleSoundOrNotification();
+                        triggerToast(soundMuted ? 'Sound alerts enabled' : 'Sound alerts muted');
                       }}
-                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs shadow-md shadow-indigo-600/30 active:scale-95 transition-all"
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                        soundMuted
+                          ? 'bg-white/5 text-[#7A8396] hover:text-white'
+                          : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
+                      }`}
                     >
-                      Enable
+                      {soundMuted ? 'Muted' : 'Enabled'}
                     </button>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-[#141A28] border border-white/[0.06] flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-500/15 text-indigo-400 grid place-items-center">
+                        <Smartphone className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-white">Browser Push Notifications</h4>
+                        <p className="text-[11px] text-[#7A8396]">
+                          Status: <span className="font-semibold text-white capitalize">{notificationPermission}</span>
+                        </p>
+                      </div>
+                    </div>
+                    {notificationPermission !== 'granted' ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onToggleSoundOrNotification();
+                        }}
+                        className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs active:scale-95 transition-all"
+                      >
+                        Enable
+                      </button>
                   ) : (
                     <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
                       <Check className="w-3.5 h-3.5" />
@@ -594,7 +594,7 @@ export default function SettingsModal({
                         onInstallPwa();
                         onClose();
                       }}
-                      className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shadow-md shadow-emerald-500/30 active:scale-95 transition-all"
+                      className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs active:scale-95 transition-all"
                     >
                       Install
                     </button>

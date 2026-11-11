@@ -1,9 +1,22 @@
 import type { Metadata, Viewport } from 'next';
+import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-mono',
+});
+
 export const metadata: Metadata = {
-  title: 'LMC Chats — Real-Time Group & Private Chat PWA',
-  description: 'LMC Chats — Private & Public groups with Memes, Stickers & Media',
+  title: 'LMC Chats — Real-Time Group & Private Messenger',
+  description: 'Fast, real-time workspace messaging with encrypted channels, direct messages, voice notes, and WebRTC calls.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -27,12 +40,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark h-full bg-[#0B0E14] text-[#E9ECF4]">
+    <html lang="en" className={`dark h-full bg-[#0B0E14] text-[#EEF1F7] ${inter.variable} ${jetbrainsMono.variable}`}>
       <head>
         <link rel="icon" href="/logo.png" type="image/png" />
         <link rel="apple-touch-icon" href="/logo.png" />
       </head>
-      <body className="h-full antialiased overflow-hidden select-none touch-manipulation">
+      <body className="h-full font-sans antialiased overflow-hidden select-none touch-manipulation">
         {children}
       </body>
     </html>

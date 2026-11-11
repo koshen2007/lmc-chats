@@ -57,37 +57,34 @@ export default function PWAInstallModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-msg-in">
-      <div className="relative w-full max-w-md bg-[#0F1420] border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Modal Top Header with Glow */}
-        <div className="relative p-6 bg-gradient-to-br from-[#182138] via-[#101626] to-[#0A0D15] border-b border-white/10 flex flex-col items-center text-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-msg-in">
+      <div className="relative w-full max-w-md bg-[#111622] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Modal Header */}
+        <div className="relative p-6 bg-[#141926] border-b border-white/[0.08] flex flex-col items-center text-center">
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-[#7A8396] hover:text-white grid place-items-center transition-colors"
+            className="absolute top-4 right-4 w-7 h-7 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-[#8A94A6] hover:text-white grid place-items-center transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
 
           {/* App Icon */}
           <div className="relative mb-3">
-            <div className="w-16 h-16 rounded-2xl overflow-hidden bg-[#182138] border-2 border-indigo-500/40 shadow-xl shadow-indigo-500/20 p-1">
+            <div className="w-14 h-14 rounded-2xl overflow-hidden bg-[#171D2B] border border-white/10 shadow-lg p-1">
               <img
                 src="/logo.png"
                 alt="LMC Chats"
                 className="w-full h-full object-contain rounded-xl"
               />
             </div>
-            <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-[#0F1420] grid place-items-center text-white">
-              <Sparkles className="w-2.5 h-2.5" />
-            </span>
           </div>
 
-          <h2 className="text-lg font-black text-white tracking-tight">
-            Install LMC Chats App
+          <h2 className="text-base font-bold text-white tracking-tight">
+            Install LMC Chats Desktop & Mobile App
           </h2>
           <p className="text-xs text-[#8A94A6] max-w-xs mt-1">
-            Experience lightning fast messaging, instant push alerts, and fullscreen mode.
+            Fast standalone launch, push notifications, and native fullscreen workspace.
           </p>
         </div>
 
@@ -181,10 +178,10 @@ export default function PWAInstallModal({
               type="button"
               disabled={installing}
               onClick={handleInstallClick}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-400 hover:to-pink-400 text-white font-bold text-xs shadow-lg shadow-indigo-500/25 active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50"
+              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-sm active:scale-95 transition-all flex items-center gap-1.5 disabled:opacity-50"
             >
               <Download className="w-4 h-4" />
-              <span>{installing ? 'Installing...' : 'Install App 🚀'}</span>
+              <span>{installing ? 'Installing...' : 'Install App'}</span>
             </button>
           )}
         </div>

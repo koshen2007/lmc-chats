@@ -7,19 +7,15 @@ import {
   Plus,
   Hash,
   Lock,
-  Camera,
   CheckCheck,
-  Check,
-  Compass,
-  Users,
   Settings,
   X,
   MessageCircle,
   Bell,
-  BellOff,
-  Sparkles,
-  Palette,
-  Download,
+  Mic,
+  Image as ImageIcon,
+  Film,
+  Sticker,
 } from 'lucide-react';
 import { Group, Message } from '@/lib/supabase';
 import { UserProfile } from '@/lib/users';
@@ -198,9 +194,7 @@ export default function WhatsAppChatsList({
         id: dmRoomId,
         type: 'dm',
         name: profile?.name || `@${targetHandle}`,
-        avatar:
-          profile?.avatar ||
-          `https://api.dicebear.com/7.x/notionists/svg?seed=${targetHandle}&backgroundColor=b6e3f4,d1d4f9`,
+        avatar: profile?.avatar || DEFAULT_AVATAR_DATA_URL,
         username: targetHandle,
         isOnline,
         lastSeenText: presence?.last_seen_text || 'Offline',
@@ -284,8 +278,8 @@ export default function WhatsAppChatsList({
   const renderMessageSnippet = (item: ChatConversationItem) => {
     if (!item.lastMessage) {
       return (
-        <span className="text-[#5A6376] italic text-xs">
-          {item.type === 'dm' ? 'Tap to start conversation' : 'No messages yet'}
+        <span className="text-[#6C7689] text-xs">
+          {item.type === 'dm' ? 'Start a conversation' : 'No messages yet'}
         </span>
       );
     }
@@ -295,27 +289,30 @@ export default function WhatsAppChatsList({
       (sender_username && sender_username.toLowerCase() === myHandle) ||
       (sender_name && sender_name.toLowerCase() === (currentUser.name || '').toLowerCase());
 
-    let iconPrefix = null;
+    let mediaTag: { icon: React.ReactNode; label: string } | null = null;
     let snippet = content;
 
     if (msg_type === 'audio') {
-      iconPrefix = '🎙️ Voice note';
+      mediaTag = { icon: <Mic className="w-3 h-3" />, label: 'Voice message' };
       snippet = '';
     } else if (msg_type === 'image') {
-      iconPrefix = '📷 Photo';
+      mediaTag = { icon: <ImageIcon className="w-3 h-3" />, label: 'Photo' };
     } else if (msg_type === 'sticker') {
-      iconPrefix = '🏷️ Sticker';
+      mediaTag = { icon: <Sticker className="w-3 h-3" />, label: 'Sticker' };
     } else if (msg_type === 'gif') {
-      iconPrefix = '👾 GIF';
+      mediaTag = { icon: <Film className="w-3 h-3" />, label: 'GIF' };
     }
 
     return (
-      <div className="flex items-center gap-1 text-xs text-[#8A94A6] truncate">
+      <div className="flex items-center gap-1.5 text-xs text-[#8A94A6] truncate">
         {isSentByMe && (
-          <CheckCheck className="w-3.5 h-3.5 text-[#38BDF8] shrink-0" />
+          <CheckCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
         )}
-        {iconPrefix ? (
-          <span className="text-indigo-400 font-medium shrink-0">{iconPrefix}</span>
+        {mediaTag ? (
+          <span className="text-indigo-300 font-medium inline-flex items-center gap-1 shrink-0">
+            {mediaTag.icon}
+            <span>{mediaTag.label}</span>
+          </span>
         ) : null}
         <span className="truncate">{snippet}</span>
       </div>
@@ -326,18 +323,18 @@ export default function WhatsAppChatsList({
   const groupsCount = allConversations.filter((c) => c.type === 'group').length;
 
   return (
-    <div className="h-full w-full flex flex-col bg-[#0A0D14] border-r border-[#1B212E] select-none relative">
-      {/* 1. App Bar Header (WhatsApp / Telegram style) */}
-      <div className="h-16 px-4 flex items-center justify-between border-b border-[#1A202E] bg-[#0E121B] shrink-0">
-        <div className="flex items-center gap-3">
+    <div className="h-full w-full flex flex-col bg-[#0B0E14] border-r border-white/[0.07] select-none relative">
+      {/* 1. App Bar Header */}
+      <div className="h-16 px-4 flex items-center justify-between border-b border-white/[0.07] bg-[#0F131C] shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
           {/* User Avatar with Status Menu Trigger */}
           <button
             type="button"
             onClick={onOpenStatusMenu}
-            className="relative group focus:outline-none"
-            title="Account & Status Menu"
+            className="relative group focus:outline-none shrink-0"
+            title="Account & Status"
           >
-            <div className="w-10 h-10 rounded-full overflow-hidden bg-[#161C28] border-2 border-white/10 group-hover:border-indigo-500 transition-colors">
+            <div className="w-9 h-9 rounded-full overflow-hidden bg-[#171D2B] border border-white/10 group-hover:border-indigo-500 transition-colors">
               <img
                 src={currentUser.avatar || DEFAULT_AVATAR_DATA_URL}
                 alt=""
@@ -349,7 +346,7 @@ export default function WhatsAppChatsList({
               />
             </div>
             <span
-              className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#0E121B] ${
+              className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[#0F131C] ${
                 currentUser.status === 'idle'
                   ? 'bg-amber-500'
                   : currentUser.status === 'dnd'
@@ -359,42 +356,42 @@ export default function WhatsAppChatsList({
             />
           </button>
 
-          <div>
-            <h2 className="text-base font-extrabold text-white tracking-tight flex items-center gap-1.5">
-              <span>Chats</span>
-              <span className="text-[10px] bg-white/10 text-slate-300 font-mono px-1.5 py-0.2 rounded-full">
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+              <span className="truncate">{currentUser.name || 'Messages'}</span>
+              <span className="text-[10px] bg-white/[0.07] text-[#A6B0C3] font-medium px-1.5 py-0.5 rounded-md">
                 {allConversations.length}
               </span>
             </h2>
-            <p className="text-[10px] text-[#7A8396] font-mono">
-              @{currentUser.username || 'user'} • ID: {currentUser.id || `usr_${currentUser.username}`}
+            <p className="text-[11px] text-[#6C7689] font-mono truncate">
+              @{currentUser.username || 'user'}
             </p>
           </div>
         </div>
 
-        {/* Sleek Action Buttons: Start New Chat & Unified Settings */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        {/* Sleek Action Buttons: Compose New Chat & Settings */}
+        <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
             onClick={onOpenNewChatModal}
-            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 grid place-items-center active:scale-95 transition-all shadow-sm"
-            title="Start New Chat"
+            className="w-8 h-8 rounded-lg bg-indigo-600/15 hover:bg-indigo-600/25 text-indigo-400 grid place-items-center active:scale-95 transition-all"
+            title="New Chat or Channel"
           >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <Plus className="w-4 h-4 stroke-[2.25]" />
           </button>
 
           <button
             type="button"
             onClick={onOpenSettingsModal}
-            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/5 hover:bg-white/10 text-[#A8B2C7] hover:text-white grid place-items-center active:scale-95 transition-all shadow-sm"
-            title="Settings & Preferences"
+            className="w-8 h-8 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-[#A6B0C3] hover:text-white grid place-items-center active:scale-95 transition-all"
+            title="Settings"
           >
             <Settings className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* 2. WhatsApp Stories / Status Rail */}
+      {/* 2. Stories / Status Rail */}
       <StoriesRail
         currentUser={currentUser}
         stories={stories}
@@ -403,37 +400,46 @@ export default function WhatsAppChatsList({
       />
 
       {/* 3. Search & Filter Section */}
-      <div className="p-3 space-y-2 border-b border-[#1A202E] bg-[#0A0D14]">
-        {/* Search Input */}
-        <div className="relative">
-          <Search className="w-3.5 h-3.5 text-[#5A6376] absolute left-3 top-1/2 -translate-y-1/2" />
+      <div className="p-3 space-y-2.5 border-b border-white/[0.07] bg-[#0B0E14]">
+        {/* Search Input with Quick Switcher Trigger */}
+        <div className="relative flex items-center">
+          <Search className="w-3.5 h-3.5 text-[#6C7689] absolute left-3 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search or start new chat..."
-            className="w-full bg-[#121622] border border-[#202738] focus:border-emerald-500/50 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-[#5A6376] outline-none transition-colors"
+            placeholder="Filter chats or search..."
+            className="w-full bg-[#111622] border border-white/[0.08] focus:border-indigo-500/60 rounded-xl pl-9 pr-16 py-2 text-xs text-white placeholder-[#5A6376] outline-none transition-colors"
           />
-          {searchQuery && (
+          {searchQuery ? (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#7A8396] hover:text-white"
+              className="absolute right-2.5 text-[#7A8396] hover:text-white"
             >
               <X className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onOpenInstagramSearch}
+              className="absolute right-2 px-1.5 py-0.5 rounded bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-[10px] font-mono text-[#8A94A6] hover:text-white transition-colors"
+              title="Global Directory & Quick Switcher (Ctrl+K)"
+            >
+              ⌘K
             </button>
           )}
         </div>
 
-        {/* WhatsApp-Style Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+        {/* Clean Unified Filter Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setFilterTab('all')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 ${
+            className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 ${
               filterTab === 'all'
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm'
-                : 'bg-white/5 text-[#7A8396] hover:text-white hover:bg-white/10'
+                ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                : 'bg-white/[0.04] text-[#8A94A6] hover:text-white hover:bg-white/[0.08] border border-transparent'
             }`}
           >
             All ({allConversations.length})
@@ -442,10 +448,10 @@ export default function WhatsAppChatsList({
           <button
             type="button"
             onClick={() => setFilterTab('dms')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 flex items-center gap-1 ${
+            className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 flex items-center gap-1 ${
               filterTab === 'dms'
-                ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 shadow-sm'
-                : 'bg-white/5 text-[#7A8396] hover:text-white hover:bg-white/10'
+                ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                : 'bg-white/[0.04] text-[#8A94A6] hover:text-white hover:bg-white/[0.08] border border-transparent'
             }`}
           >
             <MessageCircle className="w-3 h-3" />
@@ -455,23 +461,23 @@ export default function WhatsAppChatsList({
           <button
             type="button"
             onClick={() => setFilterTab('groups')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 flex items-center gap-1 ${
+            className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 flex items-center gap-1 ${
               filterTab === 'groups'
-                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40 shadow-sm'
-                : 'bg-white/5 text-[#7A8396] hover:text-white hover:bg-white/10'
+                ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                : 'bg-white/[0.04] text-[#8A94A6] hover:text-white hover:bg-white/[0.08] border border-transparent'
             }`}
           >
             <Hash className="w-3 h-3" />
-            <span>Groups ({groupsCount})</span>
+            <span>Channels ({groupsCount})</span>
           </button>
 
           <button
             type="button"
             onClick={() => setFilterTab('unread')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all shrink-0 ${
+            className={`px-3 py-1 rounded-lg text-[11px] font-semibold transition-all shrink-0 ${
               filterTab === 'unread'
-                ? 'bg-pink-500/20 text-pink-400 border border-pink-500/40 shadow-sm'
-                : 'bg-white/5 text-[#7A8396] hover:text-white hover:bg-white/10'
+                ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                : 'bg-white/[0.04] text-[#8A94A6] hover:text-white hover:bg-white/[0.08] border border-transparent'
             }`}
           >
             Unread
@@ -479,41 +485,41 @@ export default function WhatsAppChatsList({
         </div>
       </div>
 
-      {/* 4. Instagram / WhatsApp Pending DM Requests Notification Banner */}
+      {/* 4. Pending Message Requests Notification */}
       {pendingDmRequestsCount > 0 && (
         <div
           onClick={onViewDmRequests}
-          className="mx-3 my-2 p-2.5 rounded-xl bg-gradient-to-r from-indigo-900/40 to-pink-900/30 border border-indigo-500/30 flex items-center justify-between cursor-pointer hover:opacity-90 transition-opacity animate-pulse"
+          className="mx-3 mt-2.5 p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-between cursor-pointer hover:bg-indigo-500/15 transition-colors"
         >
           <div className="flex items-center gap-2">
-            <Bell className="w-4 h-4 text-indigo-400" />
-            <span className="text-xs font-bold text-white">
+            <Bell className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="text-xs font-semibold text-white">
               {pendingDmRequestsCount} Message Request{pendingDmRequestsCount > 1 ? 's' : ''}
             </span>
           </div>
-          <span className="text-[10px] text-indigo-300 font-semibold bg-white/10 px-2 py-0.5 rounded-full">
+          <span className="text-[11px] text-indigo-300 font-medium bg-indigo-500/20 px-2 py-0.5 rounded-md">
             Review
           </span>
         </div>
       )}
 
-      {/* 5. Scrollable Conversation Cards List (WhatsApp / Telegram style) */}
+      {/* 5. Scrollable Conversation List */}
       <div className="flex-1 overflow-y-auto divide-y divide-white/[0.04]">
         {filteredConversations.length === 0 ? (
           <div className="p-8 text-center flex flex-col items-center justify-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-white/5 text-[#7A8396] grid place-items-center">
-              <MessageSquare className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-xl bg-white/[0.04] border border-white/[0.08] text-[#6C7689] grid place-items-center">
+              <MessageSquare className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-white">No chats found</p>
-              <p className="text-[11px] text-[#5A6376] mt-0.5 max-w-[200px]">
-                {searchQuery ? `No results for "${searchQuery}"` : 'Start a new conversation with anyone.'}
+              <p className="text-xs font-semibold text-white">No conversations found</p>
+              <p className="text-[11px] text-[#6C7689] mt-0.5 max-w-[200px]">
+                {searchQuery ? `No results for "${searchQuery}"` : 'Start a direct message or join a channel.'}
               </p>
             </div>
             <button
               type="button"
               onClick={onOpenNewChatModal}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-md active:scale-95 transition-all mt-1 flex items-center gap-1.5"
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-sm active:scale-95 transition-all mt-1 flex items-center gap-1.5"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Start New Chat</span>
@@ -530,13 +536,13 @@ export default function WhatsAppChatsList({
                 onClick={() => onSelectChat(chat.id)}
                 className={`w-full flex items-center gap-3 px-3.5 py-3 transition-colors text-left relative focus:outline-none ${
                   isActive
-                    ? 'bg-[#151B2A] border-l-4 border-emerald-500 shadow-sm'
-                    : 'hover:bg-white/[0.04]'
+                    ? 'bg-indigo-500/[0.09] border-l-2 border-indigo-500'
+                    : 'hover:bg-white/[0.03] border-l-2 border-transparent'
                 }`}
               >
-                {/* Avatar with Online Presence Dot */}
+                {/* Avatar with Clean Online Dot */}
                 <div className="relative shrink-0">
-                  <div className="w-12 h-12 rounded-full overflow-hidden bg-[#161C28] border border-white/10 shadow-sm">
+                  <div className="w-11 h-11 rounded-full overflow-hidden bg-[#171D2B] border border-white/10">
                     <img
                       src={chat.avatar || '/logo.png'}
                       alt=""
@@ -550,16 +556,16 @@ export default function WhatsAppChatsList({
 
                   {chat.type === 'dm' ? (
                     chat.isOnline ? (
-                      <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#0A0D14] animate-pulse" />
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#0B0E14]" />
                     ) : (
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-slate-500 border-2 border-[#0A0D14]" />
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-slate-600 border-2 border-[#0B0E14]" />
                     )
                   ) : chat.isPrivate ? (
-                    <span className="absolute -bottom-0.5 -right-0.5 bg-[#0A0D14] p-0.5 rounded-full text-amber-400">
+                    <span className="absolute -bottom-0.5 -right-0.5 bg-[#0B0E14] p-0.5 rounded-full text-amber-400 border border-white/10">
                       <Lock className="w-2.5 h-2.5" />
                     </span>
                   ) : (
-                    <span className="absolute -bottom-0.5 -right-0.5 bg-[#0A0D14] p-0.5 rounded-full text-indigo-400">
+                    <span className="absolute -bottom-0.5 -right-0.5 bg-[#0B0E14] p-0.5 rounded-full text-indigo-400 border border-white/10">
                       <Hash className="w-2.5 h-2.5" />
                     </span>
                   )}
@@ -570,12 +576,12 @@ export default function WhatsAppChatsList({
                   <div className="flex items-center justify-between gap-1 mb-0.5">
                     <p
                       className={`text-[13px] font-semibold truncate ${
-                        isActive ? 'text-emerald-400' : 'text-white'
+                        isActive ? 'text-white' : 'text-[#EEF1F7]'
                       }`}
                     >
                       {chat.name}
                     </p>
-                    <span className="text-[10px] text-[#5A6376] shrink-0 font-medium">
+                    <span className="text-[10px] text-[#6C7689] shrink-0 font-medium">
                       {formatChatTime(chat.lastMessage?.created_at)}
                     </span>
                   </div>
@@ -585,7 +591,7 @@ export default function WhatsAppChatsList({
 
                     {/* Unread Counter Badge */}
                     {chat.unreadCount && chat.unreadCount > 0 ? (
-                      <span className="bg-emerald-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shrink-0">
+                      <span className="bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shrink-0">
                         {chat.unreadCount}
                       </span>
                     ) : null}
@@ -596,16 +602,6 @@ export default function WhatsAppChatsList({
           })
         )}
       </div>
-
-      {/* 6. WhatsApp-Style Floating Action Button (FAB) for Instant New Chat */}
-      <button
-        type="button"
-        onClick={onOpenNewChatModal}
-        className="absolute bottom-5 right-5 z-20 w-12 h-12 rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-[#0A0D14] font-bold shadow-xl shadow-emerald-500/30 grid place-items-center transition-all group"
-        title="Start New Chat (WhatsApp Style)"
-      >
-        <MessageSquare className="w-5 h-5 group-hover:scale-110 transition-transform" />
-      </button>
     </div>
   );
 }

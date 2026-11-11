@@ -73,15 +73,15 @@ export default function IncomingCallModal({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-msg-in">
-      <div className="relative w-full max-w-sm bg-[#101422] border border-indigo-500/30 rounded-3xl p-6 sm:p-7 shadow-2xl text-center flex flex-col items-center">
-        {/* Glowing ring animation around avatar */}
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-msg-in">
+      <div className="relative w-full max-w-sm bg-[#111622] border border-white/10 rounded-2xl p-6 sm:p-7 shadow-2xl text-center flex flex-col items-center">
+        {/* Clean Avatar Ring */}
         <div className="relative mb-4">
-          <div className="absolute -inset-2 bg-gradient-to-tr from-indigo-500 to-pink-500 rounded-full blur opacity-75 animate-ping" />
+          <div className="absolute -inset-2 bg-emerald-500/20 rounded-full animate-ping" />
           <img
             src={call.caller_avatar || '/logo.png'}
             alt={call.caller_name}
-            className="relative w-20 h-20 rounded-full object-cover border-4 border-indigo-500 shadow-xl"
+            className="relative w-20 h-20 rounded-full object-cover border-2 border-white/15 shadow-xl"
           />
         </div>
 
@@ -90,13 +90,13 @@ export default function IncomingCallModal({
         </h3>
         <p className="text-xs text-indigo-400 font-mono mt-0.5">@{call.caller}</p>
 
-        <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-slate-300">
+        <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.05] border border-white/10 text-xs text-slate-300">
           {call.type === 'video' ? (
-            <Video className="w-3.5 h-3.5 text-pink-400" />
+            <Video className="w-3.5 h-3.5 text-indigo-400" />
           ) : (
-            <Phone className="w-3.5 h-3.5 text-indigo-400" />
+            <Phone className="w-3.5 h-3.5 text-emerald-400" />
           )}
-          <span>Incoming {call.type === 'video' ? 'Video' : 'Audio'} Call...</span>
+          <span>Incoming {call.type === 'video' ? 'Video' : 'Voice'} Call...</span>
         </div>
 
         {/* Action Buttons */}
@@ -107,10 +107,10 @@ export default function IncomingCallModal({
             onClick={onDecline}
             className="flex flex-col items-center gap-1.5 group"
           >
-            <div className="w-14 h-14 rounded-full bg-rose-600 hover:bg-rose-500 text-white grid place-items-center shadow-lg shadow-rose-600/30 group-active:scale-95 transition-all">
+            <div className="w-14 h-14 rounded-full bg-rose-600 hover:bg-rose-500 text-white grid place-items-center shadow-lg shadow-rose-600/20 group-active:scale-95 transition-all">
               <PhoneOff className="w-6 h-6" />
             </div>
-            <span className="text-[11px] font-semibold text-rose-300">Decline</span>
+            <span className="text-[11px] font-medium text-rose-300">Decline</span>
           </button>
 
           {/* Accept Button */}
@@ -119,14 +119,14 @@ export default function IncomingCallModal({
             onClick={onAccept}
             className="flex flex-col items-center gap-1.5 group"
           >
-            <div className="w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white grid place-items-center shadow-lg shadow-emerald-600/30 group-active:scale-95 transition-all animate-bounce">
+            <div className="w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white grid place-items-center shadow-lg shadow-emerald-600/20 group-active:scale-95 transition-all">
               {call.type === 'video' ? (
                 <Video className="w-6 h-6" />
               ) : (
                 <Phone className="w-6 h-6" />
               )}
             </div>
-            <span className="text-[11px] font-semibold text-emerald-300">Accept</span>
+            <span className="text-[11px] font-medium text-emerald-300">Accept</span>
           </button>
         </div>
       </div>

@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Search, UserPlus, Check, Users, AlertCircle, Loader2 } from 'lucide-react';
 import { UserProfile } from '@/lib/users';
+import { DEFAULT_AVATAR_DATA_URL } from '@/lib/avatarStudio';
 
 interface AddMemberModalProps {
   channelName: string;
@@ -114,7 +115,7 @@ export default function AddMemberModal({
 
   return (
     <div className="fixed inset-0 z-[230] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-msg-in">
-      <div className="w-full max-w-md bg-[#111522] border border-[#232B3E] rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+      <div className="w-full max-w-md bg-[#111622] border border-white/[0.08] rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-[#141A2B]">
           <div className="flex items-center gap-3">
@@ -206,11 +207,11 @@ export default function AddMemberModal({
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="relative w-10 h-10 rounded-full overflow-hidden bg-[#1D2436] p-0.5 border border-white/10 shrink-0">
                       <img
-                        src={u.avatar || '/logo.png'}
+                        src={u.avatar || DEFAULT_AVATAR_DATA_URL}
                         alt={u.name}
                         onError={(e) => {
                           e.currentTarget.onerror = null;
-                          e.currentTarget.src = '/logo.png';
+                          e.currentTarget.src = DEFAULT_AVATAR_DATA_URL;
                         }}
                         className="w-full h-full object-cover rounded-full"
                       />

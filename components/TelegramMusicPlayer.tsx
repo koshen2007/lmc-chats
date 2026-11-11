@@ -153,13 +153,13 @@ export default function TelegramMusicPlayer({
               • {track.artist}
             </span>
 
-            {/* Telegram-style Animated Waveform EQ */}
+            {/* Subtle Waveform EQ */}
             {isPlaying && (
               <span className="flex items-end gap-0.5 h-3 shrink-0 ml-1">
-                <span className="w-0.5 h-full bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-0.5 h-2/3 bg-pink-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-0.5 h-4/5 bg-indigo-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                <span className="w-0.5 h-1/2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '450ms' }} />
+                <span className="w-0.5 h-full bg-indigo-400 rounded-full opacity-90" />
+                <span className="w-0.5 h-2/3 bg-indigo-300 rounded-full opacity-75" />
+                <span className="w-0.5 h-4/5 bg-indigo-400 rounded-full opacity-90" />
+                <span className="w-0.5 h-1/2 bg-indigo-300 rounded-full opacity-70" />
               </span>
             )}
 
